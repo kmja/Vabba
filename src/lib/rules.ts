@@ -95,23 +95,24 @@ export const DAY_BUDGET = {
    * so-called pappa-/mammamånader). Forfeited if unused — a key thing the
    * optimizer must warn about.
    *
-   * TODO(confirm): tier composition of the reserved block. We treat the reserved
-   * days as income-based (`sjukpenning`) here because that is how they are
-   * commonly described and it is the conservative assumption for "don't forfeit
-   * valuable days". Verify against FK before relying on payout exactness.
+   * These 90 days are on sjukpenningnivå (income-based) — confirmed June 2026
+   * against FK: "90 dagar på sjukpenningnivå är reserverade och kan inte föras
+   * över till den andra föräldern." Our model treats reserved days as
+   * `sjukpenning`, which matches.
    */
   reservedDaysPerParent: 90,
 
   /**
-   * Multiple birth bump: extra days per additional child beyond the first
-   * (twins = +180, triplets = +360, …).
-   *
-   * TODO(confirm): the tier split of the extra days. Sources commonly state the
-   * twin bump lands on sjukpenningnivå; the composition for triplets+ is less
-   * clear. We attribute the extra to `sjukpenning` and flag it. v1 is aimed at
-   * single births, so this is a best-effort convenience.
+   * Multiple birth bump: extra days per additional child beyond the first.
+   * Each additional child adds 180 days, split 90 sjukpenningnivå + 90
+   * lägstanivå (confirmed June 2026). So twins (2) = +180 (480/180 split totals
+   * below), triplets (3) = +360, etc. Unlike the reserved days, the extra days
+   * are freely transferable between the parents.
    */
-  multipleBirthExtraDaysPerChild: 180,
+  multipleBirthExtraPerChild: {
+    sjukpenning: 90,
+    lagsta: 90,
+  },
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -190,8 +191,7 @@ export const MONEY = {
 
   /**
    * Grundnivå: the floor amount paid on income-based days to a parent with
-   * little/no established SGI. TODO(confirm) the 2026 figure (was 250 kr; sources
-   * indicated it may be unchanged for 2026).
+   * little/no established SGI. Confirmed 250 kr/day for 2026 (unchanged).
    */
   grundnivaPerDay: 250,
 
@@ -212,13 +212,19 @@ export const SGI_PROTECTION = {
 
   /**
    * After the child turns 1, to keep SGI a parent must either work or draw
-   * föräldrapenning for at least this many days per week (whole days).
-   * Dropping below this risks SGI being recalculated downward.
-   *
-   * TODO(confirm): exact day/intensity wording with FK; this is the commonly
-   * cited "minst 5 dagar per vecka" guideline.
+   * föräldrapenning for at least this many WHOLE days per week (red days
+   * included) when fully on leave. Working part-time, you must instead draw
+   * föräldrapenning matching the reduction in working hours (e.g. 75 % work →
+   * 1.25 days/week, 50 % → 2.5 days/week). Confirmed June 2026.
    */
   minDaysPerWeekAfterAge1: 5,
+
+  /**
+   * Even if SGI is lowered, the föräldrapenning amount itself stays protected
+   * until the child turns 2 — take leave again before then and you keep the
+   * previous level. (Surfaced as context; not used in calculations.)
+   */
+  benefitAmountProtectedUntilAgeYears: 2,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -280,13 +286,14 @@ export interface TierTotals {
  */
 export function totalDaysForBirth(childrenInBirth = 1): TierTotals {
   const extraChildren = Math.max(0, Math.floor(childrenInBirth) - 1);
-  const extra = extraChildren * DAY_BUDGET.multipleBirthExtraDaysPerChild;
-  // See TODO(confirm) on DAY_BUDGET.multipleBirthExtraDaysPerChild — extra days
-  // are attributed to the income-based tier here.
+  const extraSjuk =
+    extraChildren * DAY_BUDGET.multipleBirthExtraPerChild.sjukpenning;
+  const extraLagsta =
+    extraChildren * DAY_BUDGET.multipleBirthExtraPerChild.lagsta;
   return {
-    total: DAY_BUDGET.totalPerChild + extra,
-    sjukpenning: DAY_BUDGET.sjukpenningDays + extra,
-    lagsta: DAY_BUDGET.lagstaDays,
+    total: DAY_BUDGET.totalPerChild + extraSjuk + extraLagsta,
+    sjukpenning: DAY_BUDGET.sjukpenningDays + extraSjuk,
+    lagsta: DAY_BUDGET.lagstaDays + extraLagsta,
   };
 }
 

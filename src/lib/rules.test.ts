@@ -90,19 +90,19 @@ describe("totalDaysForBirth", () => {
     });
   });
 
-  it("twins add 180 days (to the income-based tier in our model)", () => {
+  it("twins add 180 days, split 90 sjukpenning + 90 lägsta", () => {
     expect(totalDaysForBirth(2)).toEqual({
       total: 660,
-      sjukpenning: 570,
-      lagsta: 90,
+      sjukpenning: 480,
+      lagsta: 180,
     });
   });
 
-  it("triplets add 360 days", () => {
+  it("triplets add 360 days (90/90 per extra child)", () => {
     expect(totalDaysForBirth(3)).toEqual({
       total: 840,
-      sjukpenning: 750,
-      lagsta: 90,
+      sjukpenning: 570,
+      lagsta: 270,
     });
   });
 
