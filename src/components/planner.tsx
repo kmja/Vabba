@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { NumberField } from "@/components/number-field";
 import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { Timeline } from "@/components/timeline";
@@ -31,46 +32,6 @@ import { isPlannableBirthDate, optimize, type Objective } from "@/lib/optimizer"
 import { sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { toIsoDate } from "@/lib/dates";
 import { formatSek } from "@/lib/format";
-
-function NumberField({
-  id,
-  label,
-  value,
-  onChange,
-  min = 0,
-  step = 1,
-  placeholder,
-  hint,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  onChange: (n: number) => void;
-  min?: number;
-  step?: number;
-  placeholder?: string;
-  hint?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={min}
-        step={step}
-        placeholder={placeholder}
-        value={Number.isFinite(value) && value !== 0 ? value : ""}
-        onChange={(e) => {
-          const n = e.target.valueAsNumber;
-          onChange(Number.isNaN(n) ? 0 : Math.max(min, n));
-        }}
-      />
-      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
-    </div>
-  );
-}
 
 function ParentFieldset({
   idPrefix,
