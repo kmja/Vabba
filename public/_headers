@@ -1,0 +1,12 @@
+# Cloudflare Pages headers (https://developers.cloudflare.com/pages/configuration/headers/).
+# Next copies public/ into the exported out/ folder at build time.
+
+# Fingerprinted build assets never change — cache them hard.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Conservative security headers for every response.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
