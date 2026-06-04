@@ -61,6 +61,36 @@ npm run build    # production build
 In Claude Code on the web, `.claude/hooks/session-start.sh` runs `npm install`
 automatically on session start so tests, linting and the build work right away.
 
+## Deploy (Cloudflare Pages)
+
+The app builds to a fully static site (`output: "export"` in `next.config.ts`),
+so it deploys as plain static assets — no server runtime or Next adapter needed.
+`npm run build` emits the site to `out/`.
+
+**Build settings:**
+
+- Build command: `npm run build`
+- Build output directory: `out`
+- No environment variables required.
+
+**Via Git integration (recommended):** in the Cloudflare dashboard, Workers &
+Pages → Create → Pages → Connect to Git, then set the build command and output
+directory above. Every push deploys.
+
+**Via Wrangler CLI:**
+
+```bash
+npm run build
+npx wrangler pages deploy out --project-name=foraldradagar
+```
+
+`public/_headers` (copied into `out/` at build) sets immutable caching for the
+hashed `/_next/static` assets plus a few conservative security headers, which
+Cloudflare Pages applies automatically.
+
+> With static export there is no `next start`. To preview the production build
+> locally, serve the folder with any static server, e.g. `npx serve out`.
+
 ## Architecture
 
 The rulesets and the math are decoupled from React so they can be unit-tested in
