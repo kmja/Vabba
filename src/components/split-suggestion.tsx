@@ -177,6 +177,12 @@ export function SplitSuggestion({
           />
         </div>
 
+        {rec.doubleDays > 0 && (
+          <p className="text-foreground text-xs">
+            Inkluderar {rec.doubleDays} dubbeldagar då ni är lediga samtidigt —
+            det motsvarar {rec.doubleDays * 2} dagar ur den gemensamma potten.
+          </p>
+        )}
         <p className="text-muted-foreground text-xs">
           Förslaget fördelar alla återstående dagar — ni kan förstås ta ut färre.
           Ersättningen är en uppskattning före skatt. Eventuell föräldralön från

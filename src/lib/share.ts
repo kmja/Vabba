@@ -14,6 +14,8 @@ export interface ShareableState {
   detailedUsed: boolean;
   /** Benefit days drawn per week — stretches the leave's calendar duration. */
   daysPerWeek?: number;
+  /** Requested dubbeldagar (both parents home the same day). */
+  doubleDays?: number;
 }
 
 function toBase64Url(text: string): string {

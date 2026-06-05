@@ -121,6 +121,7 @@ const DEFAULT_STATE: ShareableState = {
   hasUsedDays: false,
   detailedUsed: false,
   daysPerWeek: 7,
+  doubleDays: 0,
 };
 
 export function Planner() {
@@ -154,6 +155,7 @@ export function Planner() {
 
   const { plan, objective, soloMode, hasUsedDays, detailedUsed } = form;
   const daysPerWeek = form.daysPerWeek ?? 7;
+  const doubleDays = form.doubleDays ?? 0;
 
   const setPlan = (updater: (p: PlanInput) => PlanInput) =>
     setForm((f) => ({ ...f, plan: updater(f.plan) }));
@@ -185,9 +187,9 @@ export function Planner() {
   const twoParent = useMemo(
     () =>
       valid && asOf && !soloMode
-        ? optimize(effectivePlan, { objective, asOf })
+        ? optimize(effectivePlan, { objective, asOf, doubleDays })
         : null,
-    [effectivePlan, valid, asOf, objective, soloMode],
+    [effectivePlan, valid, asOf, objective, soloMode, doubleDays],
   );
   const solo = useMemo(
     () =>
@@ -209,6 +211,7 @@ export function Planner() {
       hasUsedDays,
       detailedUsed,
       daysPerWeek,
+      doubleDays,
     });
     const url = `${window.location.origin}${window.location.pathname}#p=${encoded}`;
     try {
@@ -336,6 +339,19 @@ export function Planner() {
                 kombinera med jobb, helger och semester.
               </p>
             </div>
+
+            {!soloMode && (
+              <NumberField
+                id="double-days"
+                label="Dubbeldagar (båda hemma samtidigt)"
+                value={doubleDays}
+                min={0}
+                max={60}
+                stepper
+                onChange={(n) => setForm((f) => ({ ...f, doubleDays: n }))}
+                hint="Varje dubbeldag kostar 2 dagar ur potten (max 60, före 15 mån)."
+              />
+            )}
 
             <Separator />
 

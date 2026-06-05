@@ -215,3 +215,49 @@ describe("optimizeSolo (sole custody)", () => {
     expect(solo.remaining.remaining.lagsta).toBe(80);
   });
 });
+
+describe("dubbeldagar", () => {
+  const LATE = new Date(2026, 0, 1); // well past the 15-month window
+
+  it("adds the requested doubles to both parents and conserves the pool", () => {
+    const plan = freshPlan(40_000, 30_000);
+    const base = optimize(plan, { objective: "equal", asOf: SOON_AFTER_BIRTH });
+    const withD = optimize(plan, {
+      objective: "equal",
+      asOf: SOON_AFTER_BIRTH,
+      doubleDays: 10,
+    });
+
+    expect(withD.recommended.doubleDays).toBe(10);
+    expect(withD.recommended.allocation.A.sjukpenning).toBeGreaterThanOrEqual(10);
+    expect(withD.recommended.allocation.B.sjukpenning).toBeGreaterThanOrEqual(10);
+
+    // Total income-based days are conserved (carved out, then handed back).
+    const sjukBase =
+      base.recommended.allocation.A.sjukpenning +
+      base.recommended.allocation.B.sjukpenning;
+    const sjukWithD =
+      withD.recommended.allocation.A.sjukpenning +
+      withD.recommended.allocation.B.sjukpenning;
+    expect(sjukWithD).toBe(sjukBase);
+  });
+
+  it("caps doubles at the non-reserved pool / statutory max and warns", () => {
+    const res = optimize(freshPlan(40_000, 30_000), {
+      asOf: SOON_AFTER_BIRTH,
+      doubleDays: 999,
+    });
+    expect(res.recommended.doubleDays).toBeLessThanOrEqual(60);
+    expect(
+      res.recommended.warnings.some((w) => w.code === "doubleDaysLimited"),
+    ).toBe(true);
+  });
+
+  it("disallows doubles after the 15-month deadline", () => {
+    const res = optimize(freshPlan(40_000, 30_000), {
+      asOf: LATE,
+      doubleDays: 5,
+    });
+    expect(res.recommended.doubleDays).toBe(0);
+  });
+});

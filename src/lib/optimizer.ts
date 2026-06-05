@@ -67,6 +67,7 @@ export type WarningCode =
   | "timingAfterAge4"
   | "doubleDaysWindow"
   | "incomeAboveCap"
+  | "doubleDaysLimited"
   | "overAllocated";
 
 export interface PlanWarning {
@@ -93,6 +94,8 @@ export interface OptimizedPlan {
   allocatedTotals: Record<ParentId, number>;
   /** Reserved days that would still be forfeited under this plan, per parent. */
   forfeitedReserved: Record<ParentId, number>;
+  /** Dubbeldagar included (both parents home on the same day), per parent. */
+  doubleDays: number;
   warnings: PlanWarning[];
 }
 
@@ -100,6 +103,8 @@ export interface OptimizeOptions {
   objective?: Objective;
   /** Reference "today" for timing checks. Defaults to the current date. */
   asOf?: Date;
+  /** Requested dubbeldagar (both parents drawing a day simultaneously). */
+  doubleDays?: number;
 }
 
 export interface OptimizeResult {
@@ -169,6 +174,7 @@ function buildPlan(
   objective: Objective,
   remaining: RemainingSummary,
   asOf: Date,
+  doubleDays = 0,
 ): OptimizedPlan {
   const S = remaining.remaining.sjukpenning;
   const L = remaining.remaining.lagsta;
@@ -182,27 +188,44 @@ function buildPlan(
   const rateA = sjukpenningnivaDailyAmount(incomeA);
   const rateB = sjukpenningnivaDailyAmount(incomeB);
 
-  const sA = chooseSjukpenningSplitForA(objective, S, rA, rB, rateA, rateB);
-  const sB = S - sA;
+  // Dubbeldagar: both parents draw a day at the same time. They come from the
+  // non-reserved income-based pool (never the reserved days), are capped at the
+  // statutory max and only before the 15-month deadline. Each spends one day per
+  // parent (two from the family pool).
+  const requestedDouble = Math.max(0, Math.floor(doubleDays));
+  const transferable = Math.max(0, S - rA - rB);
+  const doubleStillOpen =
+    differenceInDays(asOf, planDeadlines(plan).doubleDaysDeadline) > 0;
+  const maxDouble = doubleStillOpen
+    ? Math.min(DOUBLE_DAYS.maxDays, Math.floor(transferable / 2))
+    : 0;
+  const effectiveDouble = Math.min(requestedDouble, maxDouble);
+
+  // Split the remaining single days after carving out the dubbeldagar.
+  const S2 = S - 2 * effectiveDouble;
+  const sA = chooseSjukpenningSplitForA(objective, S2, rA, rB, rateA, rateB);
+  const sB = S2 - sA;
   const lA = chooseLagstaSplitForA(L, sA, sB);
   const lB = L - lA;
 
   const allocation: Record<ParentId, TierCount> = {
-    A: { sjukpenning: sA, lagsta: lA },
-    B: { sjukpenning: sB, lagsta: lB },
+    A: { sjukpenning: sA + effectiveDouble, lagsta: lA },
+    B: { sjukpenning: sB + effectiveDouble, lagsta: lB },
   };
 
   const payoutA = payoutFor(allocation.A, incomeA);
   const payoutB = payoutFor(allocation.B, incomeB);
 
+  // Reserved days are single days, so forfeiture is judged on the split (the
+  // dubbeldagar added on top don't count toward the reserved block).
   const forfeitedReserved: Record<ParentId, number> = {
     A: Math.max(0, rA - sA),
     B: Math.max(0, rB - sB),
   };
 
   const allocatedTotals: Record<ParentId, number> = {
-    A: sA + lA,
-    B: sB + lB,
+    A: allocation.A.sjukpenning + lA,
+    B: allocation.B.sjukpenning + lB,
   };
 
   const warnings = buildWarnings(plan, {
@@ -214,12 +237,23 @@ function buildPlan(
     asOf,
   });
 
+  if (requestedDouble > effectiveDouble) {
+    warnings.push({
+      level: "warning",
+      code: "doubleDaysLimited",
+      message: doubleStillOpen
+        ? `Bara ${effectiveDouble} av ${requestedDouble} dubbeldagar får plats i den kvarvarande potten — dubbeldagar kan inte tas från de reserverade dagarna.`
+        : `Dubbeldagar kan bara tas innan barnet fyllt ${DOUBLE_DAYS.withinFirstMonths} månader.`,
+    });
+  }
+
   return {
     objective,
     allocation,
     payout: { A: payoutA, B: payoutB, total: payoutA.amount + payoutB.amount },
     allocatedTotals,
     forfeitedReserved,
+    doubleDays: effectiveDouble,
     warnings,
   };
 }
@@ -352,9 +386,10 @@ export function optimize(
   const asOf = options.asOf ?? new Date();
   const remaining = planRemaining(plan);
 
-  const recommended = buildPlan(plan, objective, remaining, asOf);
+  const doubleDays = options.doubleDays ?? 0;
+  const recommended = buildPlan(plan, objective, remaining, asOf, doubleDays);
   const alternatives = OBJECTIVES.filter((o) => o !== objective).map((o) =>
-    buildPlan(plan, o, remaining, asOf),
+    buildPlan(plan, o, remaining, asOf, doubleDays),
   );
 
   return { recommended, alternatives, remaining };
