@@ -25,6 +25,15 @@ export const metadata: Metadata = {
   },
   description: DESCRIPTION,
   applicationName: "Föräldradagar",
+  appleWebApp: {
+    capable: true,
+    title: "Föräldradagar",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
   openGraph: {
     title: "Föräldradagar – planera föräldrapenning och vab",
     description: DESCRIPTION,

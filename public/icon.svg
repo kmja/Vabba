@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Föräldradagar">
+  <!-- Brand mark: a calendar (matches the CalendarDays logo in the site header).
+       Green fills the whole canvas so it stays safe under maskable cropping;
+       the calendar sits well inside the central safe zone. Source of truth for
+       all raster icons — regenerate the PNGs with scripts/generate-icons.mjs. -->
+  <rect width="512" height="512" fill="#16a34a" />
+  <rect x="196" y="140" width="22" height="56" rx="11" fill="#ffffff" />
+  <rect x="294" y="140" width="22" height="56" rx="11" fill="#ffffff" />
+  <rect x="146" y="168" width="220" height="210" rx="30" fill="#ffffff" />
+  <rect x="146" y="214" width="220" height="10" fill="#16a34a" />
+  <g fill="#16a34a">
+    <rect x="179" y="248" width="34" height="34" rx="9" />
+    <rect x="239" y="248" width="34" height="34" rx="9" />
+    <rect x="299" y="248" width="34" height="34" rx="9" />
+    <rect x="179" y="306" width="34" height="34" rx="9" />
+    <rect x="239" y="306" width="34" height="34" rx="9" />
+    <rect x="299" y="306" width="34" height="34" rx="9" />
+  </g>
+</svg>
