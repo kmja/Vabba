@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   optimize,
+  optimizeSolo,
   OBJECTIVES,
   type Objective,
 } from "@/lib/optimizer";
@@ -190,5 +191,27 @@ describe("informational warnings", () => {
     if (recommended.allocatedTotals.B === 0) {
       expect(recommended.warnings.some((w) => w.code === "sgiGap")).toBe(true);
     }
+  });
+});
+
+describe("optimizeSolo (sole custody)", () => {
+  it("gives the single parent all remaining days and their value", () => {
+    const solo = optimizeSolo(freshPlan(40_000, 0), { asOf: SOON_AFTER_BIRTH });
+    expect(solo.remaining.remaining.total).toBe(480);
+    expect(solo.allocatedTotal).toBe(480);
+    expect(solo.payout.dailyRate).toBe(1020);
+    expect(solo.payout.amount).toBe(390 * 1020 + 90 * 180);
+    // No second parent => no reserved forfeiture and no dubbeldagar.
+    expect(solo.warnings.some((w) => w.code === "reservedForfeit")).toBe(false);
+    expect(solo.warnings.some((w) => w.code === "doubleDaysWindow")).toBe(false);
+  });
+
+  it("subtracts only parent A's own used days", () => {
+    const solo = optimizeSolo(
+      freshPlan(40_000, 0, { aUsed: { sjukpenning: 100, lagsta: 10 } }),
+      { asOf: SOON_AFTER_BIRTH },
+    );
+    expect(solo.remaining.remaining.sjukpenning).toBe(290);
+    expect(solo.remaining.remaining.lagsta).toBe(80);
   });
 });

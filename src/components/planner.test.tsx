@@ -57,4 +57,28 @@ describe("<Planner />", () => {
     fireEvent.change(birth, { target: { value: "" } });
     expect(screen.getByText(/Fyll i barnets födelsedatum/)).toBeTruthy();
   });
+
+  it("hides the used-day fields until toggled on", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    expect(container.querySelector("#a-used")).toBeNull();
+    fireEvent.click(container.querySelector("#has-used")!);
+    expect(container.querySelector("#a-used")).not.toBeNull();
+  });
+
+  it("solo mode hides parent B and gives the single parent every day", () => {
+    const { container } = render(<Planner />);
+    fireEvent.click(container.querySelector("#solo-mode")!);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "40000" },
+    });
+    expect(container.querySelector("#b-income")).toBeNull();
+    expect(screen.getByText("Din plan")).toBeTruthy();
+    expect(screen.getByText("480 dagar")).toBeTruthy();
+  });
 });

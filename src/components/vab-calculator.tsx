@@ -112,8 +112,10 @@ export function VabCalculator() {
               onChange={setIncome}
               hint={
                 grossMonthlyIncome > 0
-                  ? `Ger ca ${formatSek(result.dailyAmount)}/dag`
-                  : undefined
+                  ? result.sgiCapped
+                    ? `Över taket – ${formatSek(result.dailyAmount)}/dag (max)`
+                    : `Ger ca ${formatSek(result.dailyAmount)}/dag`
+                  : "Vet du bara nettolönen? Brutto ≈ netto × 1,5."
               }
             />
             <div className="grid grid-cols-2 gap-3">
@@ -148,6 +150,7 @@ export function VabCalculator() {
               label="Vab-dagar uttagna i år"
               value={daysUsedThisYear}
               placeholder="0"
+              stepper
               onChange={setUsed}
             />
             <FkSourceHint what="Uttagna vab-dagar" />

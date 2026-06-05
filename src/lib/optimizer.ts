@@ -34,6 +34,7 @@ import {
   type TierCount,
   type RemainingSummary,
   PARENT_IDS,
+  planBudget,
   planRemaining,
   reservedDaysAtRisk,
   planUsage,
@@ -357,6 +358,116 @@ export function optimize(
   );
 
   return { recommended, alternatives, remaining };
+}
+
+// -----------------------------------------------------------------------------
+// Solo (sole-custody) mode — one parent holds all the days, no reserved split
+// -----------------------------------------------------------------------------
+
+export interface SoloResult {
+  remaining: RemainingSummary;
+  /** Everything remaining goes to the single parent. */
+  payout: ParentPayout;
+  allocatedTotal: number;
+  warnings: PlanWarning[];
+}
+
+function buildSoloWarnings(
+  plan: PlanInput,
+  remaining: RemainingSummary,
+  asOf: Date,
+): PlanWarning[] {
+  const warnings: PlanWarning[] = [];
+
+  if (remaining.overAllocated.sjukpenning || remaining.overAllocated.lagsta) {
+    warnings.push({
+      level: "critical",
+      code: "overAllocated",
+      message:
+        "De dagar som redan är uttagna överstiger budgeten. Kontrollera de inmatade siffrorna.",
+    });
+  }
+
+  warnings.push({
+    level: "info",
+    code: "sgiProtection",
+    message: `För att behålla SGI bör du som är ledig ta ut minst ${SGI_PROTECTION.minDaysPerWeekAfterAge1} dagar per vecka (eller arbeta) efter att barnet fyllt 1 år.`,
+  });
+
+  const deadlines = planDeadlines(plan);
+  const daysUntilAge4 = differenceInDays(asOf, deadlines.sjukpenningDeadline);
+  const sjukRemaining = remaining.remaining.sjukpenning;
+  if (daysUntilAge4 <= 0) {
+    if (sjukRemaining > 0) {
+      warnings.push({
+        level: "warning",
+        code: "timingAfterAge4",
+        message: `Barnet har fyllt 4 år. Inkomstbaserade dagar går inte längre att ta ut fritt, och högst ${TIMING.maxDaysSavedFromAge4} sparade dagar kan användas fram till 12-årsdagen.`,
+      });
+    }
+  } else if (sjukRemaining > daysUntilAge4) {
+    warnings.push({
+      level: "warning",
+      code: "timingBeforeAge4",
+      message: `Det återstår ${sjukRemaining} inkomstbaserade dagar men bara ${daysUntilAge4} kalenderdagar tills barnet fyller 4 år. Alla hinner inte tas ut i tid — som mest ${TIMING.maxDaysSavedFromAge4} dagar får sparas efter 4-årsdagen.`,
+    });
+  }
+
+  if (isAboveSgiCap(plan.parents.A.grossMonthlyIncome)) {
+    warnings.push({
+      level: "info",
+      code: "incomeAboveCap",
+      message: `Du tjänar över taket (${formatCapShort()}). Dagarna värderas till högsta beloppet ${MONEY.maxSjukpenningPerDay} kr/dag och högre lön ökar inte föräldrapenningen.`,
+    });
+  }
+
+  return warnings;
+}
+
+/**
+ * Sole-custody planning: the single parent (A) is entitled to all the days, so
+ * there is no split, no reserved-day transfer and no dubbeldagar. Returns the
+ * remaining days and what they're worth to that parent.
+ */
+export function optimizeSolo(
+  plan: PlanInput,
+  options: { asOf?: Date } = {},
+): SoloResult {
+  const asOf = options.asOf ?? new Date();
+  const budget = planBudget(plan);
+  const usedSjuk = Math.max(0, plan.parents.A.daysUsed.sjukpenning);
+  const usedLagsta = Math.max(0, plan.parents.A.daysUsed.lagsta);
+
+  const remaining: RemainingSummary = {
+    budget,
+    used: {
+      sjukpenning: usedSjuk,
+      lagsta: usedLagsta,
+      total: usedSjuk + usedLagsta,
+    },
+    remaining: {
+      sjukpenning: Math.max(0, budget.sjukpenning - usedSjuk),
+      lagsta: Math.max(0, budget.lagsta - usedLagsta),
+      total: Math.max(0, budget.total - (usedSjuk + usedLagsta)),
+    },
+    overAllocated: {
+      sjukpenning: usedSjuk > budget.sjukpenning,
+      lagsta: usedLagsta > budget.lagsta,
+    },
+  };
+
+  const days: TierCount = {
+    sjukpenning: remaining.remaining.sjukpenning,
+    lagsta: remaining.remaining.lagsta,
+  };
+  const payout = payoutFor(days, plan.parents.A.grossMonthlyIncome);
+
+  return {
+    remaining,
+    payout,
+    allocatedTotal: days.sjukpenning + days.lagsta,
+    warnings: buildSoloWarnings(plan, remaining, asOf),
+  };
 }
 
 /** Validate that the child's birth date parses — handy guard for the UI. */
