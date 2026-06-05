@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Planner } from "@/components/planner";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 /**
  * Integration smoke test for the interactive (client) path. The pure logic is

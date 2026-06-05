@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Baby,
   CalendarDays,
@@ -23,14 +23,28 @@ import { Select } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { NumberField } from "@/components/number-field";
+import { FkSourceHint } from "@/components/fk-source-hint";
 import { computeVab, VAB_AGE, VAB_MONEY, VAB_RULES } from "@/lib/vab";
 import { formatDays, formatNumber, formatSek } from "@/lib/format";
+import { useLocalStorage } from "@/lib/use-local-storage";
 
 export function VabCalculator() {
-  const [grossMonthlyIncome, setIncome] = useState(0);
-  const [numberOfChildren, setChildren] = useState(1);
-  const [singleParent, setSingleParent] = useState(false);
-  const [daysUsedThisYear, setUsed] = useState(0);
+  // Inputs are persisted on the device so they survive reloads.
+  const [vab, setVab] = useLocalStorage("foraldradagar.vab.v1", {
+    grossMonthlyIncome: 0,
+    numberOfChildren: 1,
+    singleParent: false,
+    daysUsedThisYear: 0,
+  });
+  const { grossMonthlyIncome, numberOfChildren, singleParent, daysUsedThisYear } =
+    vab;
+  const setIncome = (n: number) =>
+    setVab((v) => ({ ...v, grossMonthlyIncome: n }));
+  const setChildren = (n: number) =>
+    setVab((v) => ({ ...v, numberOfChildren: n }));
+  const setSingleParent = (b: boolean) =>
+    setVab((v) => ({ ...v, singleParent: b }));
+  const setUsed = (n: number) => setVab((v) => ({ ...v, daysUsedThisYear: n }));
 
   const result = useMemo(
     () =>
@@ -85,7 +99,7 @@ export function VabCalculator() {
               <Baby className="size-5" /> Er situation
             </CardTitle>
             <CardDescription>
-              Allt räknas ut lokalt i webbläsaren. Inget sparas eller skickas.
+              Allt räknas ut och sparas lokalt i din webbläsare — inget skickas.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -136,6 +150,7 @@ export function VabCalculator() {
               placeholder="0"
               onChange={setUsed}
             />
+            <FkSourceHint what="Uttagna vab-dagar" />
           </CardContent>
         </Card>
       </div>
