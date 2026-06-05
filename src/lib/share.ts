@@ -12,6 +12,8 @@ export interface ShareableState {
   soloMode: boolean;
   hasUsedDays: boolean;
   detailedUsed: boolean;
+  /** Benefit days drawn per week — stretches the leave's calendar duration. */
+  daysPerWeek?: number;
 }
 
 function toBase64Url(text: string): string {

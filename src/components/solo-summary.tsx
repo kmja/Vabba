@@ -9,17 +9,25 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
-import { approxMonths, formatDays, formatNumber, formatSek } from "@/lib/format";
+import {
+  approxLeaveMonths,
+  approxLeaveWeeks,
+  formatDays,
+  formatNumber,
+  formatSek,
+} from "@/lib/format";
 
 /** Results card for sole-custody planning — all the days belong to one parent. */
 export function SoloSummary({
   payout,
   total,
   name,
+  daysPerWeek,
 }: {
   payout: ParentPayout;
   total: number;
   name: string;
+  daysPerWeek: number;
 }) {
   return (
     <Card>
@@ -45,7 +53,9 @@ export function SoloSummary({
         <div className="space-y-3 rounded-lg border p-4">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium">{name}</span>
-            <Badge variant="secondary">{approxMonths(total)}</Badge>
+            <Badge variant="secondary">
+              {approxLeaveMonths(total, daysPerWeek)}
+            </Badge>
           </div>
           <div>
             <div className="text-2xl font-semibold tabular-nums">
@@ -56,6 +66,12 @@ export function SoloSummary({
               {TIER_LABEL.sjukpenning.toLowerCase()} ·{" "}
               {formatNumber(payout.lagstaDays)} {TIER_LABEL.lagsta.toLowerCase()}
             </div>
+            {daysPerWeek !== 7 && total > 0 && (
+              <div className="text-muted-foreground mt-1 text-xs">
+                ≈ {approxLeaveWeeks(total, daysPerWeek)} veckor vid {daysPerWeek}{" "}
+                dagar/vecka
+              </div>
+            )}
           </div>
           <Separator />
           <p className="text-muted-foreground text-xs">

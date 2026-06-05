@@ -41,9 +41,22 @@ export function formatDays(value: number): string {
   return `${formatNumber(value)} ${value === 1 ? "dag" : "dagar"}`;
 }
 
-/** Rough leave duration in months, assuming 7 benefit days drawn per week. */
-export function approxMonths(days: number): string {
-  const months = days / 30.4;
+/** Rough leave duration in calendar weeks for `days` taken at `daysPerWeek`. */
+export function approxLeaveWeeks(days: number, daysPerWeek = 7): number {
+  const perWeek = daysPerWeek > 0 ? daysPerWeek : 7;
+  return Math.round(days / perWeek);
+}
+
+/** Rough leave duration in calendar months for `days` taken at `daysPerWeek`. */
+export function approxLeaveMonths(days: number, daysPerWeek = 7): string {
+  const perWeek = daysPerWeek > 0 ? daysPerWeek : 7;
+  const months = ((days / perWeek) * 7) / 30.4;
+  if (months <= 0) return "0 mån";
   if (months < 1) return "< 1 mån";
   return `≈ ${months.toFixed(months < 10 ? 1 : 0)} mån`;
+}
+
+/** Rough leave duration in months, assuming 7 benefit days drawn per week. */
+export function approxMonths(days: number): string {
+  return approxLeaveMonths(days, 7);
 }

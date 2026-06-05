@@ -20,7 +20,13 @@ import {
 } from "@/lib/optimizer";
 import { TIER_LABEL, netAfterTax } from "@/lib/rules";
 import type { ParentId, PlanInput } from "@/lib/calc";
-import { approxMonths, formatDays, formatNumber, formatSek } from "@/lib/format";
+import {
+  approxLeaveMonths,
+  approxLeaveWeeks,
+  formatDays,
+  formatNumber,
+  formatSek,
+} from "@/lib/format";
 
 const OBJECTIVE_ICON: Record<Objective, typeof TrendingUp> = {
   maxPayout: TrendingUp,
@@ -35,16 +41,20 @@ function ParentColumn({
   name,
   payout,
   total,
+  daysPerWeek,
 }: {
   name: string;
   payout: ParentPayout;
   total: number;
+  daysPerWeek: number;
 }) {
   return (
     <div className="flex-1 space-y-3 rounded-lg border p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{name}</span>
-        <Badge variant="secondary">{approxMonths(total)}</Badge>
+        <Badge variant="secondary">
+          {approxLeaveMonths(total, daysPerWeek)}
+        </Badge>
       </div>
       <div>
         <div className="text-2xl font-semibold tabular-nums">
@@ -55,6 +65,12 @@ function ParentColumn({
           {TIER_LABEL.sjukpenning.toLowerCase()} ·{" "}
           {formatNumber(payout.lagstaDays)} {TIER_LABEL.lagsta.toLowerCase()}
         </div>
+        {daysPerWeek !== 7 && total > 0 && (
+          <div className="text-muted-foreground text-xs">
+            ≈ {approxLeaveWeeks(total, daysPerWeek)} veckor vid {daysPerWeek}{" "}
+            dagar/vecka
+          </div>
+        )}
       </div>
       <Separator />
       <div className="flex items-baseline justify-between">
@@ -77,11 +93,13 @@ export function SplitSuggestion({
   objective,
   onObjectiveChange,
   plan,
+  daysPerWeek,
 }: {
   result: OptimizeResult;
   objective: Objective;
   onObjectiveChange: (o: Objective) => void;
   plan: PlanInput;
+  daysPerWeek: number;
 }) {
   const rec = result.recommended;
   const alt = result.alternatives[0];
@@ -149,11 +167,13 @@ export function SplitSuggestion({
             name={parentName(plan, "A")}
             payout={rec.payout.A}
             total={rec.allocatedTotals.A}
+            daysPerWeek={daysPerWeek}
           />
           <ParentColumn
             name={parentName(plan, "B")}
             payout={rec.payout.B}
             total={rec.allocatedTotals.B}
+            daysPerWeek={daysPerWeek}
           />
         </div>
 

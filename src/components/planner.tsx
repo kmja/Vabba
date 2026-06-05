@@ -120,6 +120,7 @@ const DEFAULT_STATE: ShareableState = {
   soloMode: false,
   hasUsedDays: false,
   detailedUsed: false,
+  daysPerWeek: 7,
 };
 
 export function Planner() {
@@ -152,6 +153,7 @@ export function Planner() {
   }, [setForm]);
 
   const { plan, objective, soloMode, hasUsedDays, detailedUsed } = form;
+  const daysPerWeek = form.daysPerWeek ?? 7;
 
   const setPlan = (updater: (p: PlanInput) => PlanInput) =>
     setForm((f) => ({ ...f, plan: updater(f.plan) }));
@@ -206,6 +208,7 @@ export function Planner() {
       soloMode,
       hasUsedDays,
       detailedUsed,
+      daysPerWeek,
     });
     const url = `${window.location.origin}${window.location.pathname}#p=${encoded}`;
     try {
@@ -304,6 +307,35 @@ export function Planner() {
                 />
               </>
             )}
+
+            <Separator />
+
+            {/* Leave pace — how long the days last in calendar time. */}
+            <div className="space-y-1.5">
+              <Label htmlFor="days-per-week">Uttag (dagar per vecka)</Label>
+              <Select
+                id="days-per-week"
+                value={daysPerWeek}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    daysPerWeek: Number(e.target.value),
+                  }))
+                }
+              >
+                <option value={7}>7 – heltid</option>
+                <option value={6}>6 dagar/vecka</option>
+                <option value={5}>5 dagar/vecka</option>
+                <option value={4}>4 dagar/vecka</option>
+                <option value={3}>3 dagar/vecka</option>
+                <option value={2}>2 dagar/vecka</option>
+                <option value={1}>1 dag/vecka</option>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                Färre dagar per vecka räcker längre i kalendertid — du kan
+                kombinera med jobb, helger och semester.
+              </p>
+            </div>
 
             <Separator />
 
@@ -421,6 +453,7 @@ export function Planner() {
                 payout={solo.payout}
                 total={solo.allocatedTotal}
                 name={soloName}
+                daysPerWeek={daysPerWeek}
               />
             ) : twoParent ? (
               <SplitSuggestion
@@ -428,6 +461,7 @@ export function Planner() {
                 objective={objective}
                 onObjectiveChange={setObjective}
                 plan={plan}
+                daysPerWeek={daysPerWeek}
               />
             ) : null}
             <WarningsList warnings={warnings} />
