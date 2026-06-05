@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Baby, Check, Share2, Users } from "lucide-react";
+import { Baby, Check, RotateCcw, Share2, Users } from "lucide-react";
 
 import {
   Card,
@@ -386,16 +386,27 @@ export function Planner() {
 
             <Separator />
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={share}
-            >
-              {copied ? <Check /> : <Share2 />}
-              {copied ? "Länk kopierad!" : "Dela plan (länk)"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={share}
+              >
+                {copied ? <Check /> : <Share2 />}
+                {copied ? "Kopierad!" : "Dela plan"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setForm(DEFAULT_STATE)}
+              >
+                <RotateCcw />
+                Börja om
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -18,7 +18,7 @@ import {
   type OptimizeResult,
   type ParentPayout,
 } from "@/lib/optimizer";
-import { TIER_LABEL } from "@/lib/rules";
+import { TIER_LABEL, netAfterTax } from "@/lib/rules";
 import type { ParentId, PlanInput } from "@/lib/calc";
 import { approxMonths, formatDays, formatNumber, formatSek } from "@/lib/format";
 
@@ -130,6 +130,9 @@ export function SplitSuggestion({
           </div>
           <div className="text-3xl font-bold tracking-tight tabular-nums">
             {formatSek(rec.payout.total)}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            ≈ {formatSek(netAfterTax(rec.payout.total))} efter skatt
           </div>
           {alt && diff !== 0 && (
             <div className="text-muted-foreground mt-1 text-xs">

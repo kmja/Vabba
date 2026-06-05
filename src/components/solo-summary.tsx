@@ -8,7 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { ParentPayout } from "@/lib/optimizer";
-import { TIER_LABEL, lagstanivaDailyAmount } from "@/lib/rules";
+import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
 import { approxMonths, formatDays, formatNumber, formatSek } from "@/lib/format";
 
 /** Results card for sole-custody planning — all the days belong to one parent. */
@@ -36,6 +36,9 @@ export function SoloSummary({
           </div>
           <div className="text-3xl font-bold tracking-tight tabular-nums">
             {formatSek(payout.amount)}
+          </div>
+          <div className="text-muted-foreground text-xs">
+            ≈ {formatSek(netAfterTax(payout.amount))} efter skatt
           </div>
         </div>
 

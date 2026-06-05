@@ -8,6 +8,7 @@ import {
   dailyAmountForTier,
   totalDaysForBirth,
   isAboveSgiCap,
+  netAfterTax,
 } from "@/lib/rules";
 
 describe("day budget invariants", () => {
@@ -115,5 +116,12 @@ describe("isAboveSgiCap", () => {
   it("flags incomes whose annualized value exceeds the cap", () => {
     expect(isAboveSgiCap(50_000)).toBe(true); // 600k > 592k
     expect(isAboveSgiCap(40_000)).toBe(false); // 480k < 592k
+  });
+});
+
+describe("netAfterTax", () => {
+  it("applies FK's default 30% withholding", () => {
+    expect(netAfterTax(1000)).toBe(700);
+    expect(netAfterTax(429_450)).toBe(300_615);
   });
 });

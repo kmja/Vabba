@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -14,14 +14,39 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const DESCRIPTION =
+  "Planeringshjälp för föräldrapenning och vab (vård av barn). Räkna ut dagar och fördelning lokalt i webbläsaren. Inte officiell rådgivning.";
+
 export const metadata: Metadata = {
   title: {
     default: "Föräldradagar – planera föräldrapenning och vab",
     template: "%s · Föräldradagar",
   },
-  description:
-    "Planeringshjälp för föräldrapenning och vab (vård av barn). Räkna ut dagar och fördelning lokalt i webbläsaren. Inte officiell rådgivning.",
+  description: DESCRIPTION,
+  applicationName: "Föräldradagar",
+  openGraph: {
+    title: "Föräldradagar – planera föräldrapenning och vab",
+    description: DESCRIPTION,
+    locale: "sv_SE",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Föräldradagar",
+    description: DESCRIPTION,
+  },
 };
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+};
+
+// Set the colour theme before paint so there's no flash. Reads a saved choice,
+// otherwise follows the OS preference. Mirrored by <ThemeToggle />.
+const THEME_INIT = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -31,9 +56,11 @@ export default function RootLayout({
   return (
     <html
       lang="sv"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <SiteHeader />
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
           {children}

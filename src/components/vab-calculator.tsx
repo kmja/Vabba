@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Clock,
   Info,
+  RotateCcw,
   Users,
   Wallet,
 } from "lucide-react";
@@ -22,20 +23,24 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { computeVab, VAB_AGE, VAB_MONEY, VAB_RULES } from "@/lib/vab";
+import { netAfterTax } from "@/lib/rules";
 import { formatDays, formatNumber, formatSek } from "@/lib/format";
 import { useLocalStorage } from "@/lib/use-local-storage";
 
+const VAB_DEFAULT = {
+  grossMonthlyIncome: 0,
+  numberOfChildren: 1,
+  singleParent: false,
+  daysUsedThisYear: 0,
+};
+
 export function VabCalculator() {
   // Inputs are persisted on the device so they survive reloads.
-  const [vab, setVab] = useLocalStorage("foraldradagar.vab.v1", {
-    grossMonthlyIncome: 0,
-    numberOfChildren: 1,
-    singleParent: false,
-    daysUsedThisYear: 0,
-  });
+  const [vab, setVab] = useLocalStorage("foraldradagar.vab.v1", VAB_DEFAULT);
   const { grossMonthlyIncome, numberOfChildren, singleParent, daysUsedThisYear } =
     vab;
   const setIncome = (n: number) =>
@@ -154,6 +159,16 @@ export function VabCalculator() {
               onChange={setUsed}
             />
             <FkSourceHint what="Uttagna vab-dagar" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => setVab(VAB_DEFAULT)}
+            >
+              <RotateCcw />
+              Börja om
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -200,6 +215,12 @@ export function VabCalculator() {
               </span>
               <span className="font-semibold tabular-nums">
                 {formatSek(result.remainingValue)}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground text-sm">≈ efter skatt</span>
+              <span className="text-muted-foreground tabular-nums">
+                {formatSek(netAfterTax(result.remainingValue))}
               </span>
             </div>
             <p className="text-muted-foreground text-xs">
