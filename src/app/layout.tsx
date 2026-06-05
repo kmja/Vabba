@@ -18,6 +18,7 @@ const DESCRIPTION =
   "Planeringshjälp för föräldrapenning och vab (vård av barn). Räkna ut dagar och fördelning lokalt i webbläsaren. Inte officiell rådgivning.";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://vabba.pages.dev"),
   title: {
     default: "Föräldradagar – planera föräldrapenning och vab",
     template: "%s · Föräldradagar",
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
     type: "website",
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Föräldradagar",
     description: DESCRIPTION,
   },
