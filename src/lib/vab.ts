@@ -115,6 +115,13 @@ export function isAboveVabSgiCap(grossMonthlyIncome: number): boolean {
   return grossMonthlyIncome * 12 > VAB_MONEY.sgiAnnualCap;
 }
 
+/**
+ * A monthly gross income guaranteed to sit just above the vab ceiling, for the
+ * "above the cap" shortcut (the exact figure is irrelevant above the cap).
+ */
+export const ABOVE_VAB_CAP_MONTHLY_INCOME =
+  Math.ceil(VAB_MONEY.sgiAnnualCap / 12) + 1;
+
 export type VabAgeStatus =
   | "underMinAge"
   | "standard"
@@ -135,6 +142,8 @@ export function vabAgeStatus(ageMonths: number): VabAgeStatus {
 
 export interface VabInput {
   grossMonthlyIncome: number;
+  /** When true, treat income as above the vab ceiling (maximum daily amount). */
+  incomeAboveCap?: boolean;
   numberOfChildren: number;
   singleParent: boolean;
   /** Vab days already used this calendar year (across the children). */
@@ -163,7 +172,10 @@ export function computeVab(input: VabInput): VabResult {
   const annualCapacity = children * daysPerChild;
   const used = Math.max(0, input.daysUsedThisYear);
   const remaining = Math.max(0, annualCapacity - used);
-  const dailyAmount = vabDailyAmount(input.grossMonthlyIncome);
+  const income = input.incomeAboveCap
+    ? ABOVE_VAB_CAP_MONTHLY_INCOME
+    : Math.max(0, input.grossMonthlyIncome);
+  const dailyAmount = vabDailyAmount(income);
 
   return {
     daysPerChild,
@@ -173,6 +185,6 @@ export function computeVab(input: VabInput): VabResult {
     overUsed: used > annualCapacity,
     dailyAmount,
     remainingValue: remaining * dailyAmount,
-    sgiCapped: isAboveVabSgiCap(input.grossMonthlyIncome),
+    sgiCapped: isAboveVabSgiCap(income),
   };
 }

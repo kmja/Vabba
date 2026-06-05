@@ -39,6 +39,7 @@ import {
   reservedDaysAtRisk,
   planUsage,
   planDeadlines,
+  resolveMonthlyIncome,
 } from "@/lib/calc";
 import { parseIsoDate, differenceInDays } from "@/lib/dates";
 
@@ -183,8 +184,8 @@ function buildPlan(
   const rA = reservedRisk.A;
   const rB = reservedRisk.B;
 
-  const incomeA = plan.parents.A.grossMonthlyIncome;
-  const incomeB = plan.parents.B.grossMonthlyIncome;
+  const incomeA = resolveMonthlyIncome(plan.parents.A);
+  const incomeB = resolveMonthlyIncome(plan.parents.B);
   const rateA = sjukpenningnivaDailyAmount(incomeA);
   const rateB = sjukpenningnivaDailyAmount(incomeB);
 
@@ -311,7 +312,7 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
   for (const id of PARENT_IDS) {
     const totalForParent =
       usage.byParent[id].total + ctx.allocatedTotals[id];
-    const hasIncome = plan.parents[id].grossMonthlyIncome > 0;
+    const hasIncome = resolveMonthlyIncome(plan.parents[id]) > 0;
     if (hasIncome && totalForParent === 0) {
       warnings.push({
         level: "warning",
@@ -357,7 +358,7 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
 
   // 6. Income above the SGI cap (extra income doesn't raise the benefit).
   for (const id of PARENT_IDS) {
-    if (isAboveSgiCap(plan.parents[id].grossMonthlyIncome)) {
+    if (isAboveSgiCap(resolveMonthlyIncome(plan.parents[id]))) {
       warnings.push({
         level: "info",
         code: "incomeAboveCap",
@@ -448,7 +449,7 @@ function buildSoloWarnings(
     });
   }
 
-  if (isAboveSgiCap(plan.parents.A.grossMonthlyIncome)) {
+  if (isAboveSgiCap(resolveMonthlyIncome(plan.parents.A))) {
     warnings.push({
       level: "info",
       code: "incomeAboveCap",
@@ -495,7 +496,7 @@ export function optimizeSolo(
     sjukpenning: remaining.remaining.sjukpenning,
     lagsta: remaining.remaining.lagsta,
   };
-  const payout = payoutFor(days, plan.parents.A.grossMonthlyIncome);
+  const payout = payoutFor(days, resolveMonthlyIncome(plan.parents.A));
 
   return {
     remaining,

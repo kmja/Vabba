@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
+import { IncomeField } from "@/components/income-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
@@ -37,7 +38,7 @@ import {
   optimizeSolo,
   type Objective,
 } from "@/lib/optimizer";
-import { isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
+import { isAboveSgiCap, MONEY, sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { formatSek } from "@/lib/format";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
@@ -82,13 +83,17 @@ function ParentFieldset({
   onChange: (next: ParentInput) => void;
 }) {
   const income = value.grossMonthlyIncome;
+  const aboveCap = value.incomeAboveCap ?? false;
   const rate = sjukpenningnivaDailyAmount(income);
-  const hint =
+  const amountHint =
     income > 0
       ? isAboveSgiCap(income)
         ? `Över taket – ${formatSek(rate)}/dag (högsta belopp)`
         : `Ger ca ${formatSek(rate)}/dag på sjukpenningnivå`
       : "Vet du bara nettolönen? Brutto ≈ netto × 1,5.";
+  const capHint = `Räknar med högsta beloppet, ${formatSek(
+    MONEY.maxSjukpenningPerDay,
+  )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
 
   return (
     <div className="space-y-3">
@@ -101,14 +106,15 @@ function ParentFieldset({
           onChange={(e) => onChange({ ...value, name: e.target.value })}
         />
       </div>
-      <NumberField
+      <IncomeField
         id={`${idPrefix}-income`}
         label="Bruttolön per månad (kr)"
         value={income}
-        step={1000}
-        placeholder="0"
-        onChange={(n) => onChange({ ...value, grossMonthlyIncome: n })}
-        hint={hint}
+        aboveCap={aboveCap}
+        onValueChange={(n) => onChange({ ...value, grossMonthlyIncome: n })}
+        onAboveCapChange={(b) => onChange({ ...value, incomeAboveCap: b })}
+        amountHint={amountHint}
+        capHint={capHint}
       />
     </div>
   );

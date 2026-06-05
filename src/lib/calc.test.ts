@@ -7,8 +7,10 @@ import {
   planRemaining,
   reservedDaysAtRisk,
   planDeadlines,
+  resolveMonthlyIncome,
   type PlanInput,
 } from "@/lib/calc";
+import { ABOVE_CAP_MONTHLY_INCOME } from "@/lib/rules";
 import { toIsoDate } from "@/lib/dates";
 
 function planWith(
@@ -104,6 +106,22 @@ describe("reservedDaysAtRisk", () => {
       planWith({ aUsed: { sjukpenning: 120, lagsta: 0 } }),
     );
     expect(risk.A).toBe(0);
+  });
+});
+
+describe("resolveMonthlyIncome", () => {
+  it("returns the entered income normally", () => {
+    expect(resolveMonthlyIncome(defaultParentInput(30_000))).toBe(30_000);
+  });
+
+  it("uses an above-cap income when flagged, ignoring the entered amount", () => {
+    expect(
+      resolveMonthlyIncome({ ...defaultParentInput(0), incomeAboveCap: true }),
+    ).toBe(ABOVE_CAP_MONTHLY_INCOME);
+  });
+
+  it("never goes negative", () => {
+    expect(resolveMonthlyIncome(defaultParentInput(-5))).toBe(0);
   });
 });
 

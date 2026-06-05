@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { NumberField } from "@/components/number-field";
+import { IncomeField } from "@/components/income-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { computeVab, VAB_AGE, VAB_MONEY, VAB_RULES } from "@/lib/vab";
 import { netAfterTax } from "@/lib/rules";
@@ -33,6 +34,7 @@ import { useLocalStorage } from "@/lib/use-local-storage";
 
 const VAB_DEFAULT = {
   grossMonthlyIncome: 0,
+  incomeAboveCap: false,
   numberOfChildren: 1,
   singleParent: false,
   daysUsedThisYear: 0,
@@ -41,10 +43,17 @@ const VAB_DEFAULT = {
 export function VabCalculator() {
   // Inputs are persisted on the device so they survive reloads.
   const [vab, setVab] = useLocalStorage("foraldradagar.vab.v1", VAB_DEFAULT);
-  const { grossMonthlyIncome, numberOfChildren, singleParent, daysUsedThisYear } =
-    vab;
+  const {
+    grossMonthlyIncome,
+    incomeAboveCap = false,
+    numberOfChildren,
+    singleParent,
+    daysUsedThisYear,
+  } = vab;
   const setIncome = (n: number) =>
     setVab((v) => ({ ...v, grossMonthlyIncome: n }));
+  const setAboveCap = (b: boolean) =>
+    setVab((v) => ({ ...v, incomeAboveCap: b }));
   const setChildren = (n: number) =>
     setVab((v) => ({ ...v, numberOfChildren: n }));
   const setSingleParent = (b: boolean) =>
@@ -55,11 +64,18 @@ export function VabCalculator() {
     () =>
       computeVab({
         grossMonthlyIncome,
+        incomeAboveCap,
         numberOfChildren,
         singleParent,
         daysUsedThisYear,
       }),
-    [grossMonthlyIncome, numberOfChildren, singleParent, daysUsedThisYear],
+    [
+      grossMonthlyIncome,
+      incomeAboveCap,
+      numberOfChildren,
+      singleParent,
+      daysUsedThisYear,
+    ],
   );
 
   const usedPct =
@@ -108,20 +124,23 @@ export function VabCalculator() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <NumberField
+            <IncomeField
               id="vab-income"
               label="Bruttolön per månad (kr)"
               value={grossMonthlyIncome}
-              step={1000}
-              placeholder="0"
-              onChange={setIncome}
-              hint={
+              aboveCap={incomeAboveCap}
+              onValueChange={setIncome}
+              onAboveCapChange={setAboveCap}
+              amountHint={
                 grossMonthlyIncome > 0
                   ? result.sgiCapped
                     ? `Över taket – ${formatSek(result.dailyAmount)}/dag (max)`
                     : `Ger ca ${formatSek(result.dailyAmount)}/dag`
                   : "Vet du bara nettolönen? Brutto ≈ netto × 1,5."
               }
+              capHint={`Räknar med högsta beloppet, ${formatSek(
+                VAB_MONEY.maxPerDay,
+              )}/dag (inkomst över ${formatSek(VAB_MONEY.sgiAnnualCap)}/år).`}
             />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

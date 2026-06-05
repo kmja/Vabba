@@ -16,6 +16,7 @@ import {
   DAY_BUDGET,
   TIMING,
   DOUBLE_DAYS,
+  ABOVE_CAP_MONTHLY_INCOME,
   totalDaysForBirth,
   type TierTotals,
 } from "@/lib/rules";
@@ -35,6 +36,12 @@ export interface ParentInput {
   name?: string;
   /** Gross monthly income in SEK (drives payout estimates). */
   grossMonthlyIncome: number;
+  /**
+   * When true, treat this parent's income as above the SGI cap and pay the
+   * maximum daily amount, ignoring `grossMonthlyIncome`. Lets the UI offer an
+   * "above the cap" shortcut instead of an exact salary.
+   */
+  incomeAboveCap?: boolean;
   /** Days already used by this parent, per tier (default 0/0). */
   daysUsed: TierCount;
 }
@@ -61,6 +68,18 @@ export function tierCountTotal(t: TierCount): number {
 
 export function defaultParentInput(grossMonthlyIncome = 0): ParentInput {
   return { grossMonthlyIncome, daysUsed: emptyTierCount() };
+}
+
+/**
+ * Effective monthly income for benefit maths. The "above the cap" shortcut
+ * resolves to an income just over the ceiling; otherwise the entered amount
+ * (never negative). Centralised so every consumer treats the shortcut the same
+ * way.
+ */
+export function resolveMonthlyIncome(parent: ParentInput): number {
+  return parent.incomeAboveCap
+    ? ABOVE_CAP_MONTHLY_INCOME
+    : Math.max(0, parent.grossMonthlyIncome);
 }
 
 /** A blank, valid plan — handy as initial UI state. */

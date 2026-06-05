@@ -302,6 +302,15 @@ export function isAboveSgiCap(grossMonthlyIncome: number): boolean {
   return grossMonthlyIncome * 12 > MONEY.sgiAnnualCap;
 }
 
+/**
+ * A monthly gross income guaranteed to sit just above the SGI cap. The "income
+ * is above the cap" shortcut uses this so a parent can opt into the maximum
+ * daily amount without entering an exact salary — above the cap the precise
+ * figure is irrelevant. Derived from the cap so it stays correct when the
+ * prisbasbelopp changes.
+ */
+export const ABOVE_CAP_MONTHLY_INCOME = Math.ceil(MONEY.sgiAnnualCap / 12) + 1;
+
 // -----------------------------------------------------------------------------
 // Tax (for net estimates only — not part of the benefit rules)
 // -----------------------------------------------------------------------------

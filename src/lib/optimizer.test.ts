@@ -9,6 +9,7 @@ import {
   defaultPlanInput,
   type PlanInput,
 } from "@/lib/calc";
+import { MONEY } from "@/lib/rules";
 
 function freshPlan(
   incomeA: number,
@@ -191,6 +192,24 @@ describe("informational warnings", () => {
     if (recommended.allocatedTotals.B === 0) {
       expect(recommended.warnings.some((w) => w.code === "sgiGap")).toBe(true);
     }
+  });
+});
+
+describe("income above the cap shortcut", () => {
+  it("pays the maximum daily rate regardless of the entered salary", () => {
+    const plan = freshPlan(0, 30_000);
+    plan.parents.A.incomeAboveCap = true; // 0 kr entered, but flagged over the cap
+    const { recommended } = optimize(plan, {
+      objective: "maxPayout",
+      asOf: SOON_AFTER_BIRTH,
+    });
+    // The over-cap parent is paid the published maximum and gets the bulk of
+    // the income-based days under maxPayout.
+    expect(recommended.payout.A.dailyRate).toBe(MONEY.maxSjukpenningPerDay);
+    expect(recommended.allocation.A.sjukpenning).toBe(300);
+    expect(recommended.warnings.some((w) => w.code === "incomeAboveCap")).toBe(
+      true,
+    );
   });
 });
 

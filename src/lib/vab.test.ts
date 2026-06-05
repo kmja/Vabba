@@ -85,4 +85,16 @@ describe("computeVab", () => {
     });
     expect(r.annualCapacity).toBe(240);
   });
+
+  it("pays the max daily amount when flagged above the cap, with no salary entered", () => {
+    const r = computeVab({
+      grossMonthlyIncome: 0,
+      incomeAboveCap: true,
+      numberOfChildren: 1,
+      singleParent: false,
+      daysUsedThisYear: 0,
+    });
+    expect(r.dailyAmount).toBe(VAB_MONEY.maxPerDay);
+    expect(r.sgiCapped).toBe(true);
+  });
 });

@@ -33,6 +33,22 @@ describe("share encode/decode", () => {
     expect(decodeState(encodeState(sample))?.plan.parents.A.name).toBe("Åsa");
   });
 
+  it("round-trips the income-above-cap flag", () => {
+    const withCap: ShareableState = {
+      ...sample,
+      plan: {
+        ...sample.plan,
+        parents: {
+          ...sample.plan.parents,
+          B: { ...sample.plan.parents.B, incomeAboveCap: true },
+        },
+      },
+    };
+    expect(
+      decodeState(encodeState(withCap))?.plan.parents.B.incomeAboveCap,
+    ).toBe(true);
+  });
+
   it("returns null for missing or corrupt input", () => {
     expect(decodeState("")).toBeNull();
     expect(decodeState("@@not-base64@@")).toBeNull();

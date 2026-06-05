@@ -68,6 +68,21 @@ describe("<Planner />", () => {
     expect(container.querySelector("#a-used")).not.toBeNull();
   });
 
+  it("lets a parent choose 'over the cap' instead of typing a salary", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "30000" },
+    });
+    // Switch parent A to the over-the-cap shortcut (first such toggle is A's).
+    fireEvent.click(screen.getAllByRole("tab", { name: "Över taket" })[0]);
+    // The free-text salary field is replaced by the max-amount note.
+    expect(container.querySelector("#a-income")).toBeNull();
+    expect(screen.getByText(/Räknar med högsta beloppet/)).toBeTruthy();
+  });
+
   it("solo mode hides parent B and gives the single parent every day", () => {
     const { container } = render(<Planner />);
     fireEvent.click(container.querySelector("#solo-mode")!);

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   DAY_BUDGET,
   MONEY,
+  ABOVE_CAP_MONTHLY_INCOME,
   estimateSgi,
   sjukpenningnivaDailyAmount,
   lagstanivaDailyAmount,
@@ -116,6 +117,15 @@ describe("isAboveSgiCap", () => {
   it("flags incomes whose annualized value exceeds the cap", () => {
     expect(isAboveSgiCap(50_000)).toBe(true); // 600k > 592k
     expect(isAboveSgiCap(40_000)).toBe(false); // 480k < 592k
+  });
+});
+
+describe("ABOVE_CAP_MONTHLY_INCOME", () => {
+  it("sits just above the cap and pays the maximum daily amount", () => {
+    expect(isAboveSgiCap(ABOVE_CAP_MONTHLY_INCOME)).toBe(true);
+    expect(sjukpenningnivaDailyAmount(ABOVE_CAP_MONTHLY_INCOME)).toBe(
+      MONEY.maxSjukpenningPerDay,
+    );
   });
 });
 
