@@ -34,7 +34,7 @@ const OBJECTIVE_ICON: Record<Objective, typeof TrendingUp> = {
 };
 
 function parentName(plan: PlanInput, id: ParentId): string {
-  return plan.parents[id].name?.trim() || `Förälder ${id}`;
+  return plan.parents[id].name?.trim() || `Vårdnadshavare ${id}`;
 }
 
 function ParentColumn({

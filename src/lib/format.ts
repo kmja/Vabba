@@ -60,3 +60,14 @@ export function approxLeaveMonths(days: number, daysPerWeek = 7): string {
 export function approxMonths(days: number): string {
   return approxLeaveMonths(days, 7);
 }
+
+/**
+ * Rough gross benefit per calendar month when drawing days at `dailyRate` at a
+ * given weekly pace. Föräldrapenning is paid per day taken, so monthly income
+ * scales with days/week. Uses 30.4 days/month to stay consistent with the
+ * duration helpers above.
+ */
+export function approxMonthlyGross(dailyRate: number, daysPerWeek = 7): number {
+  const perWeek = daysPerWeek > 0 ? daysPerWeek : 7;
+  return Math.round((dailyRate * perWeek * 30.4) / 7);
+}

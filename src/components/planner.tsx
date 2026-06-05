@@ -21,6 +21,7 @@ import { FkSourceHint } from "@/components/fk-source-hint";
 import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
+import { MonthlyEstimate } from "@/components/monthly-estimate";
 import { Timeline } from "@/components/timeline";
 import { WarningsList } from "@/components/warnings-list";
 import {
@@ -236,6 +237,8 @@ export function Planner() {
 
   const visibleIds: ParentId[] = soloMode ? ["A"] : ["A", "B"];
   const soloName = plan.parents.A.name?.trim() || "Du";
+  const nameA = plan.parents.A.name?.trim() || "Vårdnadshavare A";
+  const nameB = plan.parents.B.name?.trim() || "Vårdnadshavare B";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -300,7 +303,7 @@ export function Planner() {
 
             <ParentFieldset
               idPrefix="a"
-              fallbackName="Förälder A"
+              fallbackName="Vårdnadshavare A"
               value={plan.parents.A}
               onChange={(next) => setParent("A", next)}
             />
@@ -310,7 +313,7 @@ export function Planner() {
                 <Separator />
                 <ParentFieldset
                   idPrefix="b"
-                  fallbackName="Förälder B"
+                  fallbackName="Vårdnadshavare B"
                   value={plan.parents.B}
                   onChange={(next) => setParent("B", next)}
                 />
@@ -390,7 +393,8 @@ export function Planner() {
                   {visibleIds.map((id) => {
                     const p = plan.parents[id];
                     const who =
-                      p.name?.trim() || (soloMode ? "dig" : `Förälder ${id}`);
+                      p.name?.trim() ||
+                      (soloMode ? "dig" : `Vårdnadshavare ${id}`);
                     const suffix = visibleIds.length > 1 ? ` – ${who}` : "";
                     return detailedUsed ? (
                       <div key={id} className="grid grid-cols-2 gap-3">
@@ -483,6 +487,26 @@ export function Planner() {
                 objective={objective}
                 onObjectiveChange={setObjective}
                 plan={plan}
+                daysPerWeek={daysPerWeek}
+              />
+            ) : null}
+            {soloMode && solo ? (
+              <MonthlyEstimate
+                rows={[{ name: soloName, dailyRate: solo.payout.dailyRate }]}
+                daysPerWeek={daysPerWeek}
+              />
+            ) : twoParent ? (
+              <MonthlyEstimate
+                rows={[
+                  {
+                    name: nameA,
+                    dailyRate: twoParent.recommended.payout.A.dailyRate,
+                  },
+                  {
+                    name: nameB,
+                    dailyRate: twoParent.recommended.payout.B.dailyRate,
+                  },
+                ]}
                 daysPerWeek={daysPerWeek}
               />
             ) : null}

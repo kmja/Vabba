@@ -34,6 +34,7 @@ describe("<Planner />", () => {
     expect(screen.getByText("Dagar kvar att fördela")).toBeTruthy();
     expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
     expect(screen.getByText("Total uppskattad ersättning")).toBeTruthy();
+    expect(screen.getByText("Ungefär så mycket per månad")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
 
     // Max-payout default: higher earner (A) takes the bulk; B keeps reserved.
@@ -49,6 +50,18 @@ describe("<Planner />", () => {
 
     // Both parents now land on 240 days each.
     expect(screen.getAllByText("240 dagar")).toHaveLength(2);
+  });
+
+  it("flags the SGI weekly floor only when the pace drops below 5/week", () => {
+    const { container } = render(<Planner />);
+    fillBaseInputs(container);
+    // Default pace is 7 days/week — no SGI-floor caveat.
+    expect(screen.queryByText(/Tänk på SGI/)).toBeNull();
+    // Drop to 3 days/week: the caveat appears.
+    fireEvent.change(container.querySelector("#days-per-week")!, {
+      target: { value: "3" },
+    });
+    expect(screen.getByText(/Tänk på SGI/)).toBeTruthy();
   });
 
   it("shows the empty state before a birth date is entered", () => {

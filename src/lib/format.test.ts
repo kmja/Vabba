@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   approxLeaveMonths,
   approxLeaveWeeks,
+  approxMonthlyGross,
   approxMonths,
   formatDays,
 } from "@/lib/format";
@@ -28,6 +29,20 @@ describe("approxLeaveWeeks", () => {
   it("divides days by the weekly rate", () => {
     expect(approxLeaveWeeks(480, 5)).toBe(96);
     expect(approxLeaveWeeks(480, 7)).toBe(69);
+  });
+});
+
+describe("approxMonthlyGross", () => {
+  it("is a full month of days at 7 days/week", () => {
+    expect(approxMonthlyGross(1000, 7)).toBe(30_400); // 1000 * 30.4
+  });
+
+  it("scales down with a lower weekly pace", () => {
+    expect(approxMonthlyGross(1000, 5)).toBe(Math.round((1000 * 5 * 30.4) / 7));
+  });
+
+  it("guards against a zero pace", () => {
+    expect(approxMonthlyGross(1000, 0)).toBe(approxMonthlyGross(1000, 7));
   });
 });
 

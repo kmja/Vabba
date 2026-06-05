@@ -32,7 +32,7 @@ export interface TierCount {
 }
 
 export interface ParentInput {
-  /** Optional display name; UI falls back to "Förälder A/B". */
+  /** Optional display name; UI falls back to "Vårdnadshavare A/B". */
   name?: string;
   /** Gross monthly income in SEK (drives payout estimates). */
   grossMonthlyIncome: number;

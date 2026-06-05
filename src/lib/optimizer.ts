@@ -54,8 +54,8 @@ export const OBJECTIVE_LABEL: Record<Objective, string> = {
 
 export const OBJECTIVE_DESCRIPTION: Record<Objective, string> = {
   maxPayout:
-    "Lägg så många inkomstbaserade dagar som möjligt på den förälder som tjänar mest (utan att förlora reserverade dagar).",
-  equal: "Dela hemmatiden så jämnt som möjligt mellan föräldrarna.",
+    "Lägg så många inkomstbaserade dagar som möjligt på den vårdnadshavare som tjänar mest (utan att förlora reserverade dagar).",
+  equal: "Dela hemmatiden så jämnt som möjligt mellan vårdnadshavarna.",
 };
 
 export type WarningLevel = "info" | "warning" | "critical";
@@ -273,7 +273,7 @@ interface WarningContext {
 }
 
 function parentName(plan: PlanInput, id: ParentId): string {
-  return plan.parents[id].name?.trim() || `Förälder ${id}`;
+  return plan.parents[id].name?.trim() || `Vårdnadshavare ${id}`;
 }
 
 function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
@@ -298,7 +298,7 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
       warnings.push({
         level: "critical",
         code: "reservedForfeit",
-        message: `${parentName(plan, id)} förlorar ${lost} reserverade dagar i den här planen — de kan inte föras över till den andra föräldern.`,
+        message: `${parentName(plan, id)} förlorar ${lost} reserverade dagar i den här planen — de kan inte föras över till den andra vårdnadshavaren.`,
       });
     }
   }
@@ -307,7 +307,7 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
   warnings.push({
     level: "info",
     code: "sgiProtection",
-    message: `För att behålla SGI bör varje förälder som är ledig ta ut minst ${SGI_PROTECTION.minDaysPerWeekAfterAge1} dagar per vecka (eller arbeta) efter att barnet fyllt 1 år.`,
+    message: `Under barnets första år är SGI skyddad oavsett takt. Efter 1-årsdagen behåller varje vårdnadshavare som är ledig sin SGI genom att ta ut minst ${SGI_PROTECTION.minDaysPerWeekAfterAge1} dagar per vecka — eller arbeta resten av veckan.`,
   });
   for (const id of PARENT_IDS) {
     const totalForParent =
@@ -352,7 +352,7 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
     warnings.push({
       level: "info",
       code: "doubleDaysWindow",
-      message: `Ni kan ta ut upp till ${DOUBLE_DAYS.maxDays} dubbeldagar tills barnet är ${DOUBLE_DAYS.withinFirstMonths} månader. En dubbeldag förbrukar två dagar (en per förälder) och kan inte tas från de reserverade dagarna.`,
+      message: `Ni kan ta ut upp till ${DOUBLE_DAYS.maxDays} dubbeldagar tills barnet är ${DOUBLE_DAYS.withinFirstMonths} månader. En dubbeldag förbrukar två dagar (en per vårdnadshavare) och kan inte tas från de reserverade dagarna.`,
     });
   }
 
@@ -427,7 +427,7 @@ function buildSoloWarnings(
   warnings.push({
     level: "info",
     code: "sgiProtection",
-    message: `För att behålla SGI bör du som är ledig ta ut minst ${SGI_PROTECTION.minDaysPerWeekAfterAge1} dagar per vecka (eller arbeta) efter att barnet fyllt 1 år.`,
+    message: `Under barnets första år är SGI skyddad oavsett takt. Efter 1-årsdagen behåller du SGI genom att ta ut minst ${SGI_PROTECTION.minDaysPerWeekAfterAge1} dagar per vecka — eller arbeta resten av veckan.`,
   });
 
   const deadlines = planDeadlines(plan);
