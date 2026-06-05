@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { VabCalculator } from "@/components/vab-calculator";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 describe("<VabCalculator />", () => {
   it("shows the default annual allowance and reflects used days", () => {

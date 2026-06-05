@@ -15,23 +15,28 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
+import { FkSourceHint } from "@/components/fk-source-hint";
 import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { Timeline } from "@/components/timeline";
 import { WarningsList } from "@/components/warnings-list";
 import {
-  defaultParentInput,
+  defaultPlanInput,
   planDeadlines,
   planRemaining,
-  type ParentId,
   type ParentInput,
   type PlanInput,
   type TierCount,
 } from "@/lib/calc";
 import { isPlannableBirthDate, optimize, type Objective } from "@/lib/optimizer";
 import { sjukpenningnivaDailyAmount } from "@/lib/rules";
-import { toIsoDate } from "@/lib/dates";
 import { formatSek } from "@/lib/format";
+import { useLocalStorage } from "@/lib/use-local-storage";
+
+interface PlannerForm {
+  plan: PlanInput;
+  objective: Objective;
+}
 
 function ParentFieldset({
   idPrefix,
@@ -93,32 +98,27 @@ function ParentFieldset({
 }
 
 export function Planner() {
-  const [birthDate, setBirthDate] = useState("");
-  const [childrenInBirth, setChildrenInBirth] = useState(1);
-  const [parents, setParents] = useState<Record<ParentId, ParentInput>>({
-    A: defaultParentInput(),
-    B: defaultParentInput(),
+  // Form state is persisted on the device so it survives reloads.
+  const [form, setForm] = useLocalStorage<PlannerForm>("foraldradagar.fp.v1", {
+    plan: defaultPlanInput(""),
+    objective: "maxPayout",
   });
-  const [objective, setObjective] = useState<Objective>("maxPayout");
   const [asOf, setAsOf] = useState<Date | null>(null);
 
-  // Initialize "today" on the client only. Doing this on mount — rather than in
-  // a lazy useState initializer — keeps the server-rendered HTML free of any
-  // date, which avoids an SSR/timezone hydration mismatch. Runs exactly once.
+  // "Today" is read on the client only, to avoid an SSR/timezone hydration
+  // mismatch. Runs once on mount.
   useEffect(() => {
-    const now = new Date();
-    /* eslint-disable react-hooks/set-state-in-effect -- one-time client-only init of "today"; intentional, see comment above */
-    setAsOf(now);
-    setBirthDate((b) => b || toIsoDate(now));
-    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only init of "today"
+    setAsOf(new Date());
   }, []);
 
-  const plan: PlanInput = useMemo(
-    () => ({ birthDate, childrenInBirth, parents }),
-    [birthDate, childrenInBirth, parents],
-  );
+  const { plan, objective } = form;
+  const setPlan = (updater: (p: PlanInput) => PlanInput) =>
+    setForm((f) => ({ ...f, plan: updater(f.plan) }));
+  const setObjective = (next: Objective) =>
+    setForm((f) => ({ ...f, objective: next }));
 
-  const valid = isPlannableBirthDate(birthDate);
+  const valid = isPlannableBirthDate(plan.birthDate);
   const remaining = useMemo(
     () => (valid ? planRemaining(plan) : null),
     [plan, valid],
@@ -142,7 +142,7 @@ export function Planner() {
               <Baby className="size-5" /> Er situation
             </CardTitle>
             <CardDescription>
-              Allt räknas ut lokalt i webbläsaren. Inget sparas eller skickas.
+              Allt räknas ut och sparas lokalt i din webbläsare — inget skickas.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -152,16 +152,23 @@ export function Planner() {
                 <Input
                   id="birth-date"
                   type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  value={plan.birthDate}
+                  onChange={(e) =>
+                    setPlan((p) => ({ ...p, birthDate: e.target.value }))
+                  }
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="children">Antal barn</Label>
                 <Select
                   id="children"
-                  value={childrenInBirth}
-                  onChange={(e) => setChildrenInBirth(Number(e.target.value))}
+                  value={plan.childrenInBirth}
+                  onChange={(e) =>
+                    setPlan((p) => ({
+                      ...p,
+                      childrenInBirth: Number(e.target.value),
+                    }))
+                  }
                 >
                   <option value={1}>1 barn</option>
                   <option value={2}>2 (tvillingar)</option>
@@ -181,8 +188,10 @@ export function Planner() {
             <ParentFieldset
               idPrefix="a"
               fallbackName="Förälder A"
-              value={parents.A}
-              onChange={(next) => setParents((p) => ({ ...p, A: next }))}
+              value={plan.parents.A}
+              onChange={(next) =>
+                setPlan((p) => ({ ...p, parents: { ...p.parents, A: next } }))
+              }
             />
 
             <Separator />
@@ -190,9 +199,13 @@ export function Planner() {
             <ParentFieldset
               idPrefix="b"
               fallbackName="Förälder B"
-              value={parents.B}
-              onChange={(next) => setParents((p) => ({ ...p, B: next }))}
+              value={plan.parents.B}
+              onChange={(next) =>
+                setPlan((p) => ({ ...p, parents: { ...p.parents, B: next } }))
+              }
             />
+
+            <FkSourceHint what="Uttagna dagar" />
           </CardContent>
         </Card>
       </div>
