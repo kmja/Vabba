@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects (https://developers.cloudflare.com/pages/configuration/redirects/).
+# Vab now lives inside the planner wizard, so the old standalone page redirects home.
+/vab / 301

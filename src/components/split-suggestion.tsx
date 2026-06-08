@@ -1,4 +1,4 @@
-import { Scale, TrendingUp } from "lucide-react";
+import { Hourglass, Scale, TrendingUp } from "lucide-react";
 
 import {
   Card,
@@ -25,12 +25,14 @@ import {
   approxLeaveWeeks,
   formatDays,
   formatNumber,
+  formatPace,
   formatSek,
 } from "@/lib/format";
 
 const OBJECTIVE_ICON: Record<Objective, typeof TrendingUp> = {
   maxPayout: TrendingUp,
   equal: Scale,
+  minMonthly: Hourglass,
 };
 
 function parentName(plan: PlanInput, id: ParentId): string {
@@ -67,8 +69,8 @@ function ParentColumn({
         </div>
         {daysPerWeek !== 7 && total > 0 && (
           <div className="text-muted-foreground text-xs">
-            ≈ {approxLeaveWeeks(total, daysPerWeek)} veckor vid {daysPerWeek}{" "}
-            dagar/vecka
+            ≈ {approxLeaveWeeks(total, daysPerWeek)} veckor vid{" "}
+            {formatPace(daysPerWeek)} dagar/vecka
           </div>
         )}
       </div>
@@ -97,7 +99,8 @@ export function SplitSuggestion({
 }: {
   result: OptimizeResult;
   objective: Objective;
-  onObjectiveChange: (o: Objective) => void;
+  /** When omitted, the objective toggle is hidden (e.g. on the results page). */
+  onObjectiveChange?: (o: Objective) => void;
   plan: PlanInput;
   daysPerWeek: number;
 }) {
@@ -112,34 +115,36 @@ export function SplitSuggestion({
         <CardDescription>{OBJECTIVE_DESCRIPTION[objective]}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        {/* Objective toggle */}
-        <div
-          role="tablist"
-          aria-label="Mål för fördelningen"
-          className="bg-muted inline-flex w-full rounded-lg p-1 sm:w-auto"
-        >
-          {OBJECTIVES.map((o) => {
-            const Icon = OBJECTIVE_ICON[o];
-            const active = o === objective;
-            return (
-              <button
-                key={o}
-                role="tab"
-                aria-selected={active}
-                onClick={() => onObjectiveChange(o)}
-                className={cn(
-                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none",
-                  active
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                {OBJECTIVE_LABEL[o]}
-              </button>
-            );
-          })}
-        </div>
+        {/* Objective toggle (hidden on the results page) */}
+        {onObjectiveChange && (
+          <div
+            role="tablist"
+            aria-label="Mål för fördelningen"
+            className="bg-muted inline-flex w-full rounded-lg p-1 sm:w-auto"
+          >
+            {OBJECTIVES.map((o) => {
+              const Icon = OBJECTIVE_ICON[o];
+              const active = o === objective;
+              return (
+                <button
+                  key={o}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => onObjectiveChange?.(o)}
+                  className={cn(
+                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none",
+                    active
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {OBJECTIVE_LABEL[o]}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Total payout headline */}
         <div className="bg-secondary/40 rounded-lg border p-4 text-center">

@@ -71,3 +71,24 @@ export function approxMonthlyGross(dailyRate: number, daysPerWeek = 7): number {
   const perWeek = daysPerWeek > 0 ? daysPerWeek : 7;
   return Math.round((dailyRate * perWeek * 30.4) / 7);
 }
+
+/**
+ * Inverse of {@link approxMonthlyGross}: the leave pace (days/week) needed to
+ * reach `targetMonthly` gross at a given `dailyRate`. Fractional and clamped to
+ * a realistic 0.5–7 — the "prolong the leave" goal uses the slowest pace that
+ * still clears the target.
+ */
+export function paceForMonthlyTarget(
+  dailyRate: number,
+  targetMonthly: number,
+): number {
+  if (dailyRate <= 0 || targetMonthly <= 0) return 7;
+  const perWeek = (targetMonthly * 7) / (dailyRate * 30.4);
+  return Math.max(0.5, Math.min(7, perWeek));
+}
+
+/** Format a (possibly fractional) days-per-week pace, e.g. 3.5 → "3,5". */
+export function formatPace(daysPerWeek: number): string {
+  const rounded = Math.round(daysPerWeek * 10) / 10;
+  return numberFormatter.format(rounded);
+}

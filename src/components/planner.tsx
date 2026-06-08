@@ -1,125 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Baby, Check, RotateCcw, Share2, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { NumberField } from "@/components/number-field";
-import { IncomeField } from "@/components/income-field";
-import { FkSourceHint } from "@/components/fk-source-hint";
-import { RemainingTiers } from "@/components/remaining-tiers";
-import { SplitSuggestion } from "@/components/split-suggestion";
-import { SoloSummary } from "@/components/solo-summary";
-import { MonthlyEstimate } from "@/components/monthly-estimate";
-import { Timeline } from "@/components/timeline";
-import { WarningsList } from "@/components/warnings-list";
+import { Card, CardContent } from "@/components/ui/card";
+import { Wizard } from "@/components/wizard";
+import { Results } from "@/components/results";
+import type { MonthlyRow } from "@/components/monthly-estimate";
+import type { LeaveProjection } from "@/components/timeline";
 import {
   defaultPlanInput,
   emptyTierCount,
   planDeadlines,
-  type ParentId,
-  type ParentInput,
   type PlanInput,
-  type TierCount,
 } from "@/lib/calc";
-import {
-  isPlannableBirthDate,
-  optimize,
-  optimizeSolo,
-  type Objective,
-} from "@/lib/optimizer";
-import { isAboveSgiCap, MONEY, sjukpenningnivaDailyAmount } from "@/lib/rules";
-import { formatSek } from "@/lib/format";
+import { isPlannableBirthDate, optimize, optimizeSolo } from "@/lib/optimizer";
+import { lagstanivaDailyAmount } from "@/lib/rules";
+import { computeVab } from "@/lib/vab";
+import { addDays } from "@/lib/dates";
+import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
-
-function CheckRow({
-  id,
-  checked,
-  onChange,
-  children,
-}: {
-  id: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  children: ReactNode;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      className="flex cursor-pointer items-center gap-2 text-sm font-medium select-none"
-    >
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="accent-primary size-4"
-      />
-      {children}
-    </label>
-  );
-}
-
-function ParentFieldset({
-  idPrefix,
-  fallbackName,
-  value,
-  onChange,
-}: {
-  idPrefix: string;
-  fallbackName: string;
-  value: ParentInput;
-  onChange: (next: ParentInput) => void;
-}) {
-  const income = value.grossMonthlyIncome;
-  const aboveCap = value.incomeAboveCap ?? false;
-  const rate = sjukpenningnivaDailyAmount(income);
-  const amountHint =
-    income > 0
-      ? isAboveSgiCap(income)
-        ? `Över taket – ${formatSek(rate)}/dag (högsta belopp)`
-        : `Ger ca ${formatSek(rate)}/dag på sjukpenningnivå`
-      : "Vet du bara nettolönen? Brutto ≈ netto × 1,5.";
-  const capHint = `Räknar med högsta beloppet, ${formatSek(
-    MONEY.maxSjukpenningPerDay,
-  )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
-
-  return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label htmlFor={`${idPrefix}-name`}>Namn (valfritt)</Label>
-        <Input
-          id={`${idPrefix}-name`}
-          value={value.name ?? ""}
-          placeholder={fallbackName}
-          onChange={(e) => onChange({ ...value, name: e.target.value })}
-        />
-      </div>
-      <IncomeField
-        id={`${idPrefix}-income`}
-        label="Bruttolön per månad (kr)"
-        value={income}
-        aboveCap={aboveCap}
-        onValueChange={(n) => onChange({ ...value, grossMonthlyIncome: n })}
-        onAboveCapChange={(b) => onChange({ ...value, incomeAboveCap: b })}
-        amountHint={amountHint}
-        capHint={capHint}
-      />
-    </div>
-  );
-}
 
 const DEFAULT_STATE: ShareableState = {
   plan: defaultPlanInput(""),
@@ -129,10 +29,14 @@ const DEFAULT_STATE: ShareableState = {
   detailedUsed: false,
   daysPerWeek: 7,
   doubleDays: 0,
+  minMonthly: 20000,
+  vabEnabled: false,
+  vabChildren: 1,
+  vabDaysUsedThisYear: 0,
+  submitted: false,
 };
 
 export function Planner() {
-  // Persisted on the device; the same shape is also what we share via URL.
   const [form, setForm] = useLocalStorage<ShareableState>(
     "foraldradagar.fp.v2",
     DEFAULT_STATE,
@@ -160,18 +64,14 @@ export function Planner() {
     }
   }, [setForm]);
 
-  const { plan, objective, soloMode, hasUsedDays, detailedUsed } = form;
+  const { plan, objective, soloMode, hasUsedDays } = form;
   const daysPerWeek = form.daysPerWeek ?? 7;
   const doubleDays = form.doubleDays ?? 0;
-
-  const setPlan = (updater: (p: PlanInput) => PlanInput) =>
-    setForm((f) => ({ ...f, plan: updater(f.plan) }));
-  const setObjective = (next: Objective) =>
-    setForm((f) => ({ ...f, objective: next }));
-  const setParent = (id: ParentId, next: ParentInput) =>
-    setPlan((p) => ({ ...p, parents: { ...p.parents, [id]: next } }));
-  const setParentDays = (id: ParentId, daysUsed: TierCount) =>
-    setParent(id, { ...plan.parents[id], daysUsed });
+  const minMonthly = form.minMonthly ?? 20000;
+  const vabEnabled = form.vabEnabled ?? false;
+  const vabChildren = form.vabChildren ?? 1;
+  const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
+  const submitted = form.submitted ?? false;
 
   // When "already used days" is off, ignore any stored counts in the maths
   // (but keep them so toggling back on restores what was typed).
@@ -210,16 +110,99 @@ export function Planner() {
     ? (solo?.warnings ?? [])
     : (twoParent?.recommended.warnings ?? []);
 
+  const nameA = plan.parents.A.name?.trim() || "Vårdnadshavare A";
+  const nameB = plan.parents.B.name?.trim() || "Vårdnadshavare B";
+  const soloName = plan.parents.A.name?.trim() || "Du";
+
+  // A representative income-based rate for the "förläng ledigheten" goal: the
+  // family's blended kr/day across the income-based days they're allocated.
+  const representativeRate = useMemo(() => {
+    if (soloMode) return solo?.payout.dailyRate ?? 0;
+    const rec = twoParent?.recommended;
+    if (!rec) return 0;
+    const sjuk = rec.payout.A.sjukpenningDays + rec.payout.B.sjukpenningDays;
+    if (sjuk <= 0) return Math.max(rec.payout.A.dailyRate, rec.payout.B.dailyRate);
+    return (
+      (rec.payout.A.sjukpenningDays * rec.payout.A.dailyRate +
+        rec.payout.B.sjukpenningDays * rec.payout.B.dailyRate) /
+      sjuk
+    );
+  }, [soloMode, solo, twoParent]);
+
+  // For the pace, use the *lowest* income-based rate so the monthly floor holds
+  // for whichever caregiver is home (the average would leave the lower earner
+  // short).
+  const paceRate = useMemo(() => {
+    if (soloMode) return solo?.payout.dailyRate ?? 0;
+    const rec = twoParent?.recommended;
+    if (!rec) return 0;
+    return Math.min(rec.payout.A.dailyRate, rec.payout.B.dailyRate);
+  }, [soloMode, solo, twoParent]);
+
+  const effectivePace =
+    objective === "minMonthly" && paceRate > 0
+      ? paceForMonthlyTarget(paceRate, minMonthly)
+      : daysPerWeek;
+
+  const monthlyRows: MonthlyRow[] = useMemo(() => {
+    if (soloMode && solo) {
+      return [
+        {
+          name: soloName,
+          dailyRate: solo.payout.dailyRate,
+          days: solo.allocatedTotal,
+        },
+      ];
+    }
+    if (twoParent) {
+      const rec = twoParent.recommended;
+      return [
+        { name: nameA, dailyRate: rec.payout.A.dailyRate, days: rec.allocatedTotals.A },
+        { name: nameB, dailyRate: rec.payout.B.dailyRate, days: rec.allocatedTotals.B },
+      ];
+    }
+    return [];
+  }, [soloMode, solo, twoParent, soloName, nameA, nameB]);
+
+  // How the leave plays out in calendar time at the effective pace.
+  const projection: LeaveProjection | null = useMemo(() => {
+    if (!asOf || !deadlines || !remaining || remaining.remaining.total <= 0) {
+      return null;
+    }
+    const start = deadlines.birth > asOf ? deadlines.birth : asOf;
+    const p = effectivePace > 0 ? effectivePace : 7;
+    const incomeBasedEnds = addDays(
+      start,
+      Math.round((remaining.remaining.sjukpenning / p) * 7),
+    );
+    const leaveEnds = addDays(
+      incomeBasedEnds,
+      Math.round((remaining.remaining.lagsta / p) * 7),
+    );
+    return {
+      incomeBasedEnds,
+      leaveEnds,
+      incomeBasedMonthly: approxMonthlyGross(representativeRate, p),
+      lagstaMonthly: approxMonthlyGross(lagstanivaDailyAmount(), p),
+    };
+  }, [asOf, deadlines, remaining, effectivePace, representativeRate]);
+
+  const vabResult = useMemo(
+    () =>
+      vabEnabled
+        ? computeVab({
+            grossMonthlyIncome: plan.parents.A.grossMonthlyIncome,
+            incomeAboveCap: plan.parents.A.incomeAboveCap,
+            numberOfChildren: vabChildren,
+            singleParent: soloMode,
+            daysUsedThisYear: vabDaysUsedThisYear,
+          })
+        : null,
+    [vabEnabled, plan.parents.A, vabChildren, soloMode, vabDaysUsedThisYear],
+  );
+
   const share = async () => {
-    const encoded = encodeState({
-      plan,
-      objective,
-      soloMode,
-      hasUsedDays,
-      detailedUsed,
-      daysPerWeek,
-      doubleDays,
-    });
+    const encoded = encodeState(form);
     const url = `${window.location.origin}${window.location.pathname}#p=${encoded}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -235,293 +218,47 @@ export function Planner() {
     window.setTimeout(() => setCopied(false), 2000);
   };
 
-  const visibleIds: ParentId[] = soloMode ? ["A"] : ["A", "B"];
-  const soloName = plan.parents.A.name?.trim() || "Du";
-  const nameA = plan.parents.A.name?.trim() || "Vårdnadshavare A";
-  const nameB = plan.parents.B.name?.trim() || "Vårdnadshavare B";
-
-  return (
-    <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-      {/* Inputs */}
-      <div className="lg:sticky lg:top-6 lg:self-start">
+  if (submitted && valid) {
+    if (!asOf || !remaining || !deadlines) {
+      return (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Baby className="size-5" /> Er situation
-            </CardTitle>
-            <CardDescription>
-              Allt räknas ut och sparas lokalt i din webbläsare — inget skickas.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <CheckRow
-              id="solo-mode"
-              checked={soloMode}
-              onChange={(b) => setForm((f) => ({ ...f, soloMode: b }))}
-            >
-              Jag planerar själv (ensam vårdnad)
-            </CheckRow>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="birth-date">Födelsedatum</Label>
-                <Input
-                  id="birth-date"
-                  type="date"
-                  value={plan.birthDate}
-                  onChange={(e) =>
-                    setPlan((p) => ({ ...p, birthDate: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="children">Antal barn</Label>
-                <Select
-                  id="children"
-                  value={plan.childrenInBirth}
-                  onChange={(e) =>
-                    setPlan((p) => ({
-                      ...p,
-                      childrenInBirth: Number(e.target.value),
-                    }))
-                  }
-                >
-                  <option value={1}>1 barn</option>
-                  <option value={2}>2 (tvillingar)</option>
-                  <option value={3}>3 barn</option>
-                  <option value={4}>4 barn</option>
-                </Select>
-              </div>
-            </div>
-            {!valid && (
-              <p className="text-destructive text-xs">
-                Ange ett giltigt födelse- eller beräknat datum.
-              </p>
-            )}
-
-            <Separator />
-
-            <ParentFieldset
-              idPrefix="a"
-              fallbackName="Vårdnadshavare A"
-              value={plan.parents.A}
-              onChange={(next) => setParent("A", next)}
-            />
-
-            {!soloMode && (
-              <>
-                <Separator />
-                <ParentFieldset
-                  idPrefix="b"
-                  fallbackName="Vårdnadshavare B"
-                  value={plan.parents.B}
-                  onChange={(next) => setParent("B", next)}
-                />
-              </>
-            )}
-
-            <Separator />
-
-            {/* Leave pace — how long the days last in calendar time. */}
-            <div className="space-y-1.5">
-              <Label htmlFor="days-per-week">Uttag (dagar per vecka)</Label>
-              <Select
-                id="days-per-week"
-                value={daysPerWeek}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    daysPerWeek: Number(e.target.value),
-                  }))
-                }
-              >
-                <option value={7}>7 – heltid</option>
-                <option value={6}>6 dagar/vecka</option>
-                <option value={5}>5 dagar/vecka</option>
-                <option value={4}>4 dagar/vecka</option>
-                <option value={3}>3 dagar/vecka</option>
-                <option value={2}>2 dagar/vecka</option>
-                <option value={1}>1 dag/vecka</option>
-              </Select>
-              <p className="text-muted-foreground text-xs">
-                Färre dagar per vecka räcker längre i kalendertid — du kan
-                kombinera med jobb, helger och semester.
-              </p>
-            </div>
-
-            {!soloMode && (
-              <NumberField
-                id="double-days"
-                label="Dubbeldagar (båda hemma samtidigt)"
-                value={doubleDays}
-                min={0}
-                max={60}
-                stepper
-                onChange={(n) => setForm((f) => ({ ...f, doubleDays: n }))}
-                hint="Varje dubbeldag kostar 2 dagar ur potten (max 60, före 15 mån)."
-              />
-            )}
-
-            <Separator />
-
-            {/* Already-used days — hidden by default to keep the form light. */}
-            <div className="space-y-3">
-              <CheckRow
-                id="has-used"
-                checked={hasUsedDays}
-                onChange={(b) => setForm((f) => ({ ...f, hasUsedDays: b }))}
-              >
-                {soloMode
-                  ? "Jag har redan tagit ut dagar"
-                  : "Vi har redan tagit ut dagar"}
-              </CheckRow>
-
-              {hasUsedDays && (
-                <div className="space-y-3">
-                  <CheckRow
-                    id="detailed-used"
-                    checked={detailedUsed}
-                    onChange={(b) =>
-                      setForm((f) => ({ ...f, detailedUsed: b }))
-                    }
-                  >
-                    <span className="text-muted-foreground font-normal">
-                      Ange nivåer separat (sjukpenning/lägsta)
-                    </span>
-                  </CheckRow>
-
-                  {visibleIds.map((id) => {
-                    const p = plan.parents[id];
-                    const who =
-                      p.name?.trim() ||
-                      (soloMode ? "dig" : `Vårdnadshavare ${id}`);
-                    const suffix = visibleIds.length > 1 ? ` – ${who}` : "";
-                    return detailedUsed ? (
-                      <div key={id} className="grid grid-cols-2 gap-3">
-                        <NumberField
-                          id={`${id.toLowerCase()}-used-sjuk`}
-                          label={`Sjukpenningdagar${suffix}`}
-                          value={p.daysUsed.sjukpenning}
-                          stepper
-                          onChange={(n) =>
-                            setParentDays(id, {
-                              sjukpenning: n,
-                              lagsta: p.daysUsed.lagsta,
-                            })
-                          }
-                        />
-                        <NumberField
-                          id={`${id.toLowerCase()}-used-lagsta`}
-                          label={`Lägstanivådagar${suffix}`}
-                          value={p.daysUsed.lagsta}
-                          stepper
-                          onChange={(n) =>
-                            setParentDays(id, {
-                              sjukpenning: p.daysUsed.sjukpenning,
-                              lagsta: n,
-                            })
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <NumberField
-                        key={id}
-                        id={`${id.toLowerCase()}-used`}
-                        label={`Uttagna dagar${suffix}`}
-                        value={p.daysUsed.sjukpenning + p.daysUsed.lagsta}
-                        stepper
-                        onChange={(n) =>
-                          setParentDays(id, { sjukpenning: n, lagsta: 0 })
-                        }
-                      />
-                    );
-                  })}
-
-                  <FkSourceHint what="Uttagna dagar" />
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={share}
-              >
-                {copied ? <Check /> : <Share2 />}
-                {copied ? "Kopierad!" : "Dela plan"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setForm(DEFAULT_STATE)}
-              >
-                <RotateCcw />
-                Börja om
-              </Button>
-            </div>
+          <CardContent className="text-muted-foreground flex min-h-40 items-center justify-center py-12">
+            Laddar…
           </CardContent>
         </Card>
-      </div>
+      );
+    }
+    return (
+      <Results
+        soloMode={soloMode}
+        objective={objective}
+        plan={plan}
+        soloName={soloName}
+        twoParent={twoParent}
+        solo={solo}
+        remaining={remaining}
+        deadlines={deadlines}
+        asOf={asOf}
+        effectivePace={effectivePace}
+        monthlyRows={monthlyRows}
+        projection={projection ?? undefined}
+        vabResult={vabResult}
+        warnings={warnings}
+        onEdit={() => setForm((f) => ({ ...f, submitted: false }))}
+        onReset={() => setForm(DEFAULT_STATE)}
+        onShare={share}
+        copied={copied}
+      />
+    );
+  }
 
-      {/* Results */}
-      <div className="space-y-6">
-        {valid && asOf && remaining && deadlines ? (
-          <>
-            <RemainingTiers remaining={remaining} />
-            {soloMode && solo ? (
-              <SoloSummary
-                payout={solo.payout}
-                total={solo.allocatedTotal}
-                name={soloName}
-                daysPerWeek={daysPerWeek}
-              />
-            ) : twoParent ? (
-              <SplitSuggestion
-                result={twoParent}
-                objective={objective}
-                onObjectiveChange={setObjective}
-                plan={plan}
-                daysPerWeek={daysPerWeek}
-              />
-            ) : null}
-            {soloMode && solo ? (
-              <MonthlyEstimate
-                rows={[{ name: soloName, dailyRate: solo.payout.dailyRate }]}
-                daysPerWeek={daysPerWeek}
-              />
-            ) : twoParent ? (
-              <MonthlyEstimate
-                rows={[
-                  {
-                    name: nameA,
-                    dailyRate: twoParent.recommended.payout.A.dailyRate,
-                  },
-                  {
-                    name: nameB,
-                    dailyRate: twoParent.recommended.payout.B.dailyRate,
-                  },
-                ]}
-                daysPerWeek={daysPerWeek}
-              />
-            ) : null}
-            <WarningsList warnings={warnings} />
-            <Timeline deadlines={deadlines} asOf={asOf} />
-          </>
-        ) : (
-          <Card>
-            <CardContent className="text-muted-foreground flex min-h-40 flex-col items-center justify-center gap-2 py-12 text-center">
-              <Users className="size-8 opacity-40" />
-              <p>Fyll i barnets födelsedatum så visas en plan här.</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
+  return (
+    <Wizard
+      form={form}
+      setForm={setForm}
+      valid={valid}
+      onSubmit={() => setForm((f) => ({ ...f, submitted: true }))}
+      onReset={() => setForm(DEFAULT_STATE)}
+    />
   );
 }

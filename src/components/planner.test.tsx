@@ -10,103 +10,104 @@ afterEach(() => {
 });
 
 /**
- * Integration smoke test for the interactive (client) path. The pure logic is
- * covered exhaustively in lib/*.test.ts; here we only confirm the React layer
- * wires inputs → optimizer → rendered output without runtime errors.
+ * Integration smoke test for the wizard → results flow. The pure logic is
+ * covered exhaustively in lib/*.test.ts; here we confirm the React layer steps
+ * through inputs → optimizer → rendered results without runtime errors.
  */
-describe("<Planner />", () => {
-  function fillBaseInputs(container: HTMLElement) {
-    const birth = container.querySelector<HTMLInputElement>("#birth-date")!;
-    fireEvent.change(birth, { target: { value: "2025-01-15" } });
+function next() {
+  fireEvent.click(screen.getByRole("button", { name: /Nästa/ }));
+}
+
+function fillToResults(
+  container: HTMLElement,
+  opts: { incomeA?: string; incomeB?: string } = {},
+) {
+  fireEvent.change(container.querySelector("#birth-date")!, {
+    target: { value: "2025-01-15" },
+  });
+  next(); // → step 2
+  fireEvent.change(container.querySelector("#a-income")!, {
+    target: { value: opts.incomeA ?? "45000" },
+  });
+  fireEvent.change(container.querySelector("#b-income")!, {
+    target: { value: opts.incomeB ?? "30000" },
+  });
+  next(); // → step 3
+  return container;
+}
+
+describe("<Planner /> wizard", () => {
+  it("walks the steps and lands on a results page", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    next(); // step 3 → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+
+    expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
+    expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
+    expect(screen.getByText("Tidslinje")).toBeTruthy();
+    // Max-payout default: higher earner (A) takes the bulk; B keeps reserved.
+    expect(screen.getByText("300 dagar")).toBeTruthy();
+    expect(screen.getByText("180 dagar")).toBeTruthy();
+  });
+
+  it("blocks step 1 until a birth date is entered", () => {
+    render(<Planner />);
+    const nextBtn = screen.getByRole("button", { name: /Nästa/ });
+    expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("can reopen the inputs from the results page", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    next();
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
+    expect(container.querySelector("#birth-date")).not.toBeNull();
+  });
+
+  it("includes vab on the results page when enabled", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "40000" });
+    next(); // → step 4
+    fireEvent.click(container.querySelector("#vab-enabled")!);
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText("Vab – vård av sjukt barn")).toBeTruthy();
+  });
+
+  it("auto-computes the pace for the 'förläng ledigheten' goal", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next();
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
-  }
-
-  it("turns inputs into a suggested split, payout and timeline", () => {
-    const { container } = render(<Planner />);
-    fillBaseInputs(container);
-
-    // Results sections appear.
-    expect(screen.getByText("Dagar kvar att fördela")).toBeTruthy();
-    expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
-    expect(screen.getByText("Total uppskattad ersättning")).toBeTruthy();
-    expect(screen.getByText("Ungefär så mycket per månad")).toBeTruthy();
-    expect(screen.getByText("Tidslinje")).toBeTruthy();
-
-    // Max-payout default: higher earner (A) takes the bulk; B keeps reserved.
-    expect(screen.getByText("300 dagar")).toBeTruthy();
-    expect(screen.getByText("180 dagar")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Förläng ledigheten/ }),
+    );
+    fireEvent.change(container.querySelector("#min-monthly")!, {
+      target: { value: "15000" },
+    });
+    next(); // → step 3: no manual pace selector for this goal
+    expect(container.querySelector("#days-per-week")).toBeNull();
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
   });
 
-  it("rebalances to an even split when the objective changes", () => {
+  it("surfaces the SGI caveat when the pace drops below 5/week", () => {
     const { container } = render(<Planner />);
-    fillBaseInputs(container);
-
-    fireEvent.click(screen.getByRole("tab", { name: /Jämn fördelning/ }));
-
-    // Both parents now land on 240 days each.
-    expect(screen.getAllByText("240 dagar")).toHaveLength(2);
-  });
-
-  it("flags the SGI weekly floor only when the pace drops below 5/week", () => {
-    const { container } = render(<Planner />);
-    fillBaseInputs(container);
-    // Default pace is 7 days/week — no SGI-floor caveat.
-    expect(screen.queryByText(/Tänk på SGI/)).toBeNull();
-    // Drop to 3 days/week: the caveat appears.
+    fillToResults(container);
     fireEvent.change(container.querySelector("#days-per-week")!, {
       target: { value: "3" },
     });
+    next();
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     expect(screen.getByText(/Tänk på SGI/)).toBeTruthy();
-  });
-
-  it("shows the empty state before a birth date is entered", () => {
-    const { container } = render(<Planner />);
-    const birth = container.querySelector<HTMLInputElement>("#birth-date")!;
-    fireEvent.change(birth, { target: { value: "" } });
-    expect(screen.getByText(/Fyll i barnets födelsedatum/)).toBeTruthy();
-  });
-
-  it("hides the used-day fields until toggled on", () => {
-    const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
-    expect(container.querySelector("#a-used")).toBeNull();
-    fireEvent.click(container.querySelector("#has-used")!);
-    expect(container.querySelector("#a-used")).not.toBeNull();
-  });
-
-  it("lets a parent choose 'over the cap' instead of typing a salary", () => {
-    const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
-    fireEvent.change(container.querySelector("#a-income")!, {
-      target: { value: "30000" },
-    });
-    // Switch parent A to the over-the-cap shortcut (first such toggle is A's).
-    fireEvent.click(screen.getAllByRole("tab", { name: "Över taket" })[0]);
-    // The free-text salary field is replaced by the max-amount note.
-    expect(container.querySelector("#a-income")).toBeNull();
-    expect(screen.getByText(/Räknar med högsta beloppet/)).toBeTruthy();
-  });
-
-  it("solo mode hides parent B and gives the single parent every day", () => {
-    const { container } = render(<Planner />);
-    fireEvent.click(container.querySelector("#solo-mode")!);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
-    fireEvent.change(container.querySelector("#a-income")!, {
-      target: { value: "40000" },
-    });
-    expect(container.querySelector("#b-income")).toBeNull();
-    expect(screen.getByText("Din plan")).toBeTruthy();
-    expect(screen.getByText("480 dagar")).toBeTruthy();
   });
 });

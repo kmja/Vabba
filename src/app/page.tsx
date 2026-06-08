@@ -15,9 +15,9 @@ export default function Home() {
           Planera föräldrapenningen
         </h1>
         <p className="text-muted-foreground max-w-2xl">
-          Hitta en bra fördelning av era föräldradagar mellan två vårdnadshavare —
-          maximera ersättningen eller dela tiden jämnt, utan att förlora
-          reserverade dagar eller SGI.
+          Räkna ut föräldradagar och vab steg för steg — maximera ersättningen,
+          dela tiden jämnt eller förläng ledigheten, utan att förlora reserverade
+          dagar eller SGI.
         </p>
       </header>
 

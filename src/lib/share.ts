@@ -16,6 +16,16 @@ export interface ShareableState {
   daysPerWeek?: number;
   /** Requested dubbeldagar (both parents home the same day). */
   doubleDays?: number;
+  /** Target gross monthly compensation for the "förläng ledigheten" goal. */
+  minMonthly?: number;
+  /** Whether the vab (sick-child) step is included. */
+  vabEnabled?: boolean;
+  /** Number of children vab should cover (its own per-child allowance). */
+  vabChildren?: number;
+  /** Vab days already used this calendar year. */
+  vabDaysUsedThisYear?: number;
+  /** Wizard finished → land on the results view (vs. editing inputs). */
+  submitted?: boolean;
 }
 
 function toBase64Url(text: string): string {

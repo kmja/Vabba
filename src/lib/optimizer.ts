@@ -43,19 +43,26 @@ import {
 } from "@/lib/calc";
 import { parseIsoDate, differenceInDays } from "@/lib/dates";
 
-export type Objective = "maxPayout" | "equal";
+export type Objective = "maxPayout" | "equal" | "minMonthly";
 
-export const OBJECTIVES: readonly Objective[] = ["maxPayout", "equal"];
+export const OBJECTIVES: readonly Objective[] = [
+  "maxPayout",
+  "equal",
+  "minMonthly",
+];
 
 export const OBJECTIVE_LABEL: Record<Objective, string> = {
   maxPayout: "Maximera ersättning",
   equal: "Jämn fördelning",
+  minMonthly: "Förläng ledigheten",
 };
 
 export const OBJECTIVE_DESCRIPTION: Record<Objective, string> = {
   maxPayout:
     "Lägg så många inkomstbaserade dagar som möjligt på den vårdnadshavare som tjänar mest (utan att förlora reserverade dagar).",
   equal: "Dela hemmatiden så jämnt som möjligt mellan vårdnadshavarna.",
+  minMonthly:
+    "Dela dagarna jämnt och ta ut dem i långsammast möjliga takt som ändå ger minst ditt önskade månadsbelopp — så räcker ledigheten så länge som möjligt.",
 };
 
 export type WarningLevel = "info" | "warning" | "critical";
@@ -155,7 +162,8 @@ function chooseSjukpenningSplitForA(
     // Put income-based days on the higher-rate parent.
     return rateA >= rateB ? hi : lo;
   }
-  // "equal": aim for a 50/50 split of the income-based days, within bounds.
+  // "equal" / "minMonthly": aim for a 50/50 split of the income-based days,
+  // within bounds. (minMonthly only changes the leave *pace*, not the split.)
   return clamp(Math.round(S / 2), lo, hi);
 }
 

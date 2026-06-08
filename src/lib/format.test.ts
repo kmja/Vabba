@@ -6,6 +6,8 @@ import {
   approxMonthlyGross,
   approxMonths,
   formatDays,
+  formatPace,
+  paceForMonthlyTarget,
 } from "@/lib/format";
 
 describe("approxLeaveMonths", () => {
@@ -50,5 +52,26 @@ describe("formatDays", () => {
   it("uses the singular for a single day", () => {
     expect(formatDays(1)).toBe("1 dag");
     expect(formatDays(2)).toBe("2 dagar");
+  });
+});
+
+describe("paceForMonthlyTarget", () => {
+  it("inverts approxMonthlyGross", () => {
+    expect(paceForMonthlyTarget(1000, 30_400)).toBeCloseTo(7, 5);
+    expect(paceForMonthlyTarget(1000, 15_200)).toBeCloseTo(3.5, 5);
+  });
+
+  it("clamps to 0.5–7 and guards bad input", () => {
+    expect(paceForMonthlyTarget(1000, 999_999)).toBe(7);
+    expect(paceForMonthlyTarget(0, 20_000)).toBe(7);
+    expect(paceForMonthlyTarget(1000, 0)).toBe(7);
+    expect(paceForMonthlyTarget(100_000, 1000)).toBe(0.5);
+  });
+});
+
+describe("formatPace", () => {
+  it("formats fractional days/week with Swedish decimals", () => {
+    expect(formatPace(3.5)).toBe("3,5");
+    expect(formatPace(7)).toBe("7");
   });
 });

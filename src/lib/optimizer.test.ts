@@ -95,7 +95,10 @@ describe("objective trade-off", () => {
       objective: "maxPayout",
       asOf: SOON_AFTER_BIRTH,
     });
-    expect(result.alternatives.map((a) => a.objective)).toEqual(["equal"]);
+    expect(result.alternatives.map((a) => a.objective)).toEqual([
+      "equal",
+      "minMonthly",
+    ]);
   });
 });
 
@@ -192,6 +195,22 @@ describe("informational warnings", () => {
     if (recommended.allocatedTotals.B === 0) {
       expect(recommended.warnings.some((w) => w.code === "sgiGap")).toBe(true);
     }
+  });
+});
+
+describe("minMonthly objective", () => {
+  it("allocates the days exactly like an even split", () => {
+    const plan = freshPlan(45_000, 30_000);
+    const min = optimize(plan, {
+      objective: "minMonthly",
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    const equal = optimize(plan, {
+      objective: "equal",
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    expect(min.allocation).toEqual(equal.allocation);
+    expect(min.payout.total).toBe(equal.payout.total);
   });
 });
 

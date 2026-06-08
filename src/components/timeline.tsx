@@ -2,8 +2,10 @@ import {
   Baby,
   CircleAlert,
   Clock,
+  Coins,
   ShieldCheck,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,7 +19,19 @@ import {
 import { cn } from "@/lib/utils";
 import type { PlanDeadlines } from "@/lib/calc";
 import { addYears, monthsBetween } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatSek } from "@/lib/format";
+
+/**
+ * A projection of how the leave plays out in calendar time at the chosen pace:
+ * when the (valuable) income-based days run out and the monthly amount steps
+ * down to lägstanivå, and when the leave ends entirely.
+ */
+export interface LeaveProjection {
+  incomeBasedEnds: Date;
+  leaveEnds: Date;
+  incomeBasedMonthly: number;
+  lagstaMonthly: number;
+}
 
 interface Milestone {
   date: Date;
@@ -37,13 +51,15 @@ function childAgeLabel(ageMonths: number): string {
 export function Timeline({
   deadlines,
   asOf,
+  projection,
 }: {
   deadlines: PlanDeadlines;
   asOf: Date;
+  projection?: LeaveProjection;
 }) {
   const birth = deadlines.birth;
 
-  const milestones: Milestone[] = [
+  const legal: Milestone[] = [
     {
       date: birth,
       icon: Baby,
@@ -76,6 +92,29 @@ export function Timeline({
     },
   ];
 
+  const projected: Milestone[] = projection
+    ? [
+        {
+          date: projection.incomeBasedEnds,
+          icon: Coins,
+          title: "Inkomstbaserade dagar slut",
+          desc: `Ersättningen går ner till lägstanivå, ca ${formatSek(
+            projection.lagstaMonthly,
+          )}/mån i den här takten.`,
+        },
+        {
+          date: projection.leaveEnds,
+          icon: Wallet,
+          title: "Ledigheten tar slut",
+          desc: "Alla planerade föräldrapenningdagar är uttagna i den här takten.",
+        },
+      ]
+    : [];
+
+  const milestones = [...legal, ...projected].sort(
+    (a, b) => a.date.getTime() - b.date.getTime(),
+  );
+
   const span = monthsBetween(birth, deadlines.expiry) || 144;
   const ageMonths = monthsBetween(birth, asOf);
   const pos = (d: Date) =>
@@ -93,6 +132,20 @@ export function Timeline({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {projection && (
+          <div className="bg-secondary/40 rounded-lg border p-4">
+            <div className="text-sm font-medium">
+              Så fluktuerar ersättningen
+            </div>
+            <p className="text-muted-foreground mt-1 text-xs">
+              ≈ {formatSek(projection.incomeBasedMonthly)}/mån tills{" "}
+              {formatDate(projection.incomeBasedEnds)}, därefter ≈{" "}
+              {formatSek(projection.lagstaMonthly)}/mån på lägstanivå tills
+              ledigheten tar slut omkring {formatDate(projection.leaveEnds)}.
+            </p>
+          </div>
+        )}
+
         {/* Phase bar: income-based window (0–4 y) then saved-days window (4–12 y) */}
         <div className="space-y-2 pt-3">
           <div className="relative h-2.5 w-full rounded-full bg-muted">
