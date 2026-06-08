@@ -1,4 +1,5 @@
 import {
+  ArrowRightLeft,
   Baby,
   CalendarDays,
   CircleAlert,
@@ -27,6 +28,12 @@ export interface LeaveProjection {
   leaveEnds: Date;
   incomeBasedMonthly: number;
   lagstaMonthly: number;
+  /** Where the leave passes from the first caregiver to the second. */
+  handoff?: {
+    date: Date;
+    fromName: string;
+    toName: string;
+  };
 }
 
 type MilestoneVariant = "legal" | "projected" | "today";
@@ -126,6 +133,17 @@ export function Timeline({
 
   const projected: Milestone[] = projection
     ? [
+        ...(projection.handoff
+          ? [
+              {
+                date: projection.handoff.date,
+                icon: ArrowRightLeft,
+                title: "Byte av vårdnadshavare",
+                desc: `${projection.handoff.toName} tar över efter ${projection.handoff.fromName}.`,
+                variant: "projected" as MilestoneVariant,
+              },
+            ]
+          : []),
         {
           date: projection.incomeBasedEnds,
           icon: Coins,

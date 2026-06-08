@@ -222,13 +222,43 @@ export function Planner() {
       incomeBasedEnds,
       Math.round((remaining.remaining.lagsta / p) * 7),
     );
+
+    // When two caregivers share one timeline, mark where the leave passes from
+    // the first (A) to the second (B), assuming they're home one after the other.
+    let handoff: LeaveProjection["handoff"];
+    if (!soloMode && twoParent) {
+      const rec = twoParent.recommended;
+      const aDays = rec.allocatedTotals.A + extraA;
+      const bDays = rec.allocatedTotals.B + extraB;
+      if (aDays > 0 && bDays > 0) {
+        handoff = {
+          date: addDays(start, Math.round((aDays / p) * 7)),
+          fromName: nameA,
+          toName: nameB,
+        };
+      }
+    }
+
     return {
       incomeBasedEnds,
       leaveEnds,
       incomeBasedMonthly: approxMonthlyGross(representativeRate, p),
       lagstaMonthly: approxMonthlyGross(lagstanivaDailyAmount(), p),
+      handoff,
     };
-  }, [projectionPace, asOf, deadlines, remaining, representativeRate, extraA, extraB]);
+  }, [
+    projectionPace,
+    asOf,
+    deadlines,
+    remaining,
+    representativeRate,
+    extraA,
+    extraB,
+    soloMode,
+    twoParent,
+    nameA,
+    nameB,
+  ]);
 
   const vabResult = useMemo(
     () =>

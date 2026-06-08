@@ -51,6 +51,14 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("180 dagar")).toBeTruthy();
   });
 
+  it("marks the handoff between caregivers on the timeline", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    next(); // step 3 → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText("Byte av vårdnadshavare")).toBeTruthy();
+  });
+
   it("blocks step 1 until a birth date is entered", () => {
     render(<Planner />);
     const nextBtn = screen.getByRole("button", { name: /Nästa/ });
