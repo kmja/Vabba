@@ -90,8 +90,11 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(
       screen.getByRole("radio", { name: /Förläng ledigheten/ }),
     );
-    fireEvent.change(container.querySelector("#min-monthly")!, {
+    fireEvent.change(container.querySelector("#min-monthly-a")!, {
       target: { value: "15000" },
+    });
+    fireEvent.change(container.querySelector("#min-monthly-b")!, {
+      target: { value: "12000" },
     });
     next(); // → step 3: no manual pace selector for this goal
     expect(container.querySelector("#days-per-week")).toBeNull();
@@ -109,5 +112,17 @@ describe("<Planner /> wizard", () => {
     next();
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     expect(screen.getByText(/Tänk på SGI/)).toBeTruthy();
+  });
+
+  it("folds leftover days from previous children into the lead", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container); // → step 3
+    fireEvent.click(container.querySelector("#has-extra")!);
+    fireEvent.change(container.querySelector("#a-extra")!, {
+      target: { value: "40" },
+    });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText(/sparade från tidigare barn/)).toBeTruthy();
   });
 });

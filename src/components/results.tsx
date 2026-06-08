@@ -29,7 +29,8 @@ export function Results({
   remaining,
   deadlines,
   asOf,
-  effectivePace,
+  paceA,
+  paceB,
   monthlyRows,
   projection,
   vabResult,
@@ -48,7 +49,8 @@ export function Results({
   remaining: RemainingSummary;
   deadlines: PlanDeadlines;
   asOf: Date;
-  effectivePace: number;
+  paceA: number;
+  paceB: number;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -76,21 +78,22 @@ export function Results({
         </div>
       </div>
 
-      <MonthlyEstimate rows={monthlyRows} daysPerWeek={effectivePace} />
+      <MonthlyEstimate rows={monthlyRows} />
 
       {soloMode && solo ? (
         <SoloSummary
           payout={solo.payout}
           total={solo.allocatedTotal}
           name={soloName}
-          daysPerWeek={effectivePace}
+          daysPerWeek={paceA}
         />
       ) : twoParent ? (
         <SplitSuggestion
           result={twoParent}
           objective={objective}
           plan={plan}
-          daysPerWeek={effectivePace}
+          paceA={paceA}
+          paceB={paceB}
         />
       ) : null}
 

@@ -95,14 +95,16 @@ export function SplitSuggestion({
   objective,
   onObjectiveChange,
   plan,
-  daysPerWeek,
+  paceA,
+  paceB,
 }: {
   result: OptimizeResult;
   objective: Objective;
   /** When omitted, the objective toggle is hidden (e.g. on the results page). */
   onObjectiveChange?: (o: Objective) => void;
   plan: PlanInput;
-  daysPerWeek: number;
+  paceA: number;
+  paceB: number;
 }) {
   const rec = result.recommended;
   const alt = result.alternatives[0];
@@ -172,13 +174,13 @@ export function SplitSuggestion({
             name={parentName(plan, "A")}
             payout={rec.payout.A}
             total={rec.allocatedTotals.A}
-            daysPerWeek={daysPerWeek}
+            daysPerWeek={paceA}
           />
           <ParentColumn
             name={parentName(plan, "B")}
             payout={rec.payout.B}
             total={rec.allocatedTotals.B}
-            daysPerWeek={daysPerWeek}
+            daysPerWeek={paceB}
           />
         </div>
 

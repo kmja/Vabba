@@ -29,7 +29,11 @@ const DEFAULT_STATE: ShareableState = {
   detailedUsed: false,
   daysPerWeek: 7,
   doubleDays: 0,
-  minMonthly: 20000,
+  minMonthlyA: 20000,
+  minMonthlyB: 20000,
+  hasExtraDays: false,
+  extraDaysA: 0,
+  extraDaysB: 0,
   vabEnabled: false,
   vabChildren: 1,
   vabDaysUsedThisYear: 0,
@@ -67,7 +71,10 @@ export function Planner() {
   const { plan, objective, soloMode, hasUsedDays } = form;
   const daysPerWeek = form.daysPerWeek ?? 7;
   const doubleDays = form.doubleDays ?? 0;
-  const minMonthly = form.minMonthly ?? 20000;
+  const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
+  const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
+  const extraA = (form.hasExtraDays ?? false) ? (form.extraDaysA ?? 0) : 0;
+  const extraB = (form.hasExtraDays ?? false) ? (form.extraDaysB ?? 0) : 0;
   const vabEnabled = form.vabEnabled ?? false;
   const vabChildren = form.vabChildren ?? 1;
   const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
@@ -114,8 +121,24 @@ export function Planner() {
   const nameB = plan.parents.B.name?.trim() || "Vårdnadshavare B";
   const soloName = plan.parents.A.name?.trim() || "Du";
 
-  // A representative income-based rate for the "förläng ledigheten" goal: the
-  // family's blended kr/day across the income-based days they're allocated.
+  // Income-based rate per caregiver (the payout already floors at grundnivå).
+  const rateA = soloMode
+    ? (solo?.payout.dailyRate ?? 0)
+    : (twoParent?.recommended.payout.A.dailyRate ?? 0);
+  const rateB = twoParent?.recommended.payout.B.dailyRate ?? 0;
+
+  // "Förläng ledigheten" gives each caregiver their own slowest pace that still
+  // clears their own monthly target; other goals share the step-3 pace.
+  const paceA =
+    objective === "minMonthly" && rateA > 0
+      ? paceForMonthlyTarget(rateA, minMonthlyA)
+      : daysPerWeek;
+  const paceB =
+    objective === "minMonthly" && rateB > 0
+      ? paceForMonthlyTarget(rateB, minMonthlyB)
+      : daysPerWeek;
+
+  // A blended household rate for the timeline's compensation projection.
   const representativeRate = useMemo(() => {
     if (soloMode) return solo?.payout.dailyRate ?? 0;
     const rec = twoParent?.recommended;
@@ -129,20 +152,10 @@ export function Planner() {
     );
   }, [soloMode, solo, twoParent]);
 
-  // For the pace, use the *lowest* income-based rate so the monthly floor holds
-  // for whichever caregiver is home (the average would leave the lower earner
-  // short).
-  const paceRate = useMemo(() => {
-    if (soloMode) return solo?.payout.dailyRate ?? 0;
-    const rec = twoParent?.recommended;
-    if (!rec) return 0;
-    return Math.min(rec.payout.A.dailyRate, rec.payout.B.dailyRate);
-  }, [soloMode, solo, twoParent]);
-
-  const effectivePace =
-    objective === "minMonthly" && paceRate > 0
-      ? paceForMonthlyTarget(paceRate, minMonthly)
-      : daysPerWeek;
+  // A single household pace exists for every goal except two-caregiver "förläng
+  // ledigheten", where each caregiver runs their own pace (so no one timeline).
+  const projectionPace =
+    soloMode ? paceA : objective === "minMonthly" ? null : daysPerWeek;
 
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     if (soloMode && solo) {
@@ -150,31 +163,49 @@ export function Planner() {
         {
           name: soloName,
           dailyRate: solo.payout.dailyRate,
-          days: solo.allocatedTotal,
+          days: solo.allocatedTotal + extraA,
+          daysPerWeek: paceA,
+          extraDays: extraA,
         },
       ];
     }
     if (twoParent) {
       const rec = twoParent.recommended;
       return [
-        { name: nameA, dailyRate: rec.payout.A.dailyRate, days: rec.allocatedTotals.A },
-        { name: nameB, dailyRate: rec.payout.B.dailyRate, days: rec.allocatedTotals.B },
+        {
+          name: nameA,
+          dailyRate: rec.payout.A.dailyRate,
+          days: rec.allocatedTotals.A + extraA,
+          daysPerWeek: paceA,
+          extraDays: extraA,
+        },
+        {
+          name: nameB,
+          dailyRate: rec.payout.B.dailyRate,
+          days: rec.allocatedTotals.B + extraB,
+          daysPerWeek: paceB,
+          extraDays: extraB,
+        },
       ];
     }
     return [];
-  }, [soloMode, solo, twoParent, soloName, nameA, nameB]);
+  }, [soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB]);
 
   // How the leave plays out in calendar time at the effective pace.
   const projection: LeaveProjection | null = useMemo(() => {
-    if (!asOf || !deadlines || !remaining || remaining.remaining.total <= 0) {
+    if (
+      projectionPace == null ||
+      !asOf ||
+      !deadlines ||
+      !remaining ||
+      remaining.remaining.total <= 0
+    ) {
       return null;
     }
     const start = deadlines.birth > asOf ? deadlines.birth : asOf;
-    const p = effectivePace > 0 ? effectivePace : 7;
-    const incomeBasedEnds = addDays(
-      start,
-      Math.round((remaining.remaining.sjukpenning / p) * 7),
-    );
+    const p = projectionPace > 0 ? projectionPace : 7;
+    const incomeBasedDays = remaining.remaining.sjukpenning + extraA + extraB;
+    const incomeBasedEnds = addDays(start, Math.round((incomeBasedDays / p) * 7));
     const leaveEnds = addDays(
       incomeBasedEnds,
       Math.round((remaining.remaining.lagsta / p) * 7),
@@ -185,7 +216,7 @@ export function Planner() {
       incomeBasedMonthly: approxMonthlyGross(representativeRate, p),
       lagstaMonthly: approxMonthlyGross(lagstanivaDailyAmount(), p),
     };
-  }, [asOf, deadlines, remaining, effectivePace, representativeRate]);
+  }, [projectionPace, asOf, deadlines, remaining, representativeRate, extraA, extraB]);
 
   const vabResult = useMemo(
     () =>
@@ -239,7 +270,8 @@ export function Planner() {
         remaining={remaining}
         deadlines={deadlines}
         asOf={asOf}
-        effectivePace={effectivePace}
+        paceA={paceA}
+        paceB={paceB}
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

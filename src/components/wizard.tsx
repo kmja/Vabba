@@ -109,7 +109,13 @@ export function Wizard({
   const { plan, objective, soloMode, hasUsedDays, detailedUsed } = form;
   const daysPerWeek = form.daysPerWeek ?? 7;
   const doubleDays = form.doubleDays ?? 0;
-  const minMonthly = form.minMonthly ?? 20000;
+  const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
+  const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
+  const hasExtraDays = form.hasExtraDays ?? false;
+  const extraDaysA = form.extraDaysA ?? 0;
+  const extraDaysB = form.extraDaysB ?? 0;
+  const nameA = plan.parents.A.name?.trim() || "Vårdnadshavare A";
+  const nameB = plan.parents.B.name?.trim() || "Vårdnadshavare B";
   const vabEnabled = form.vabEnabled ?? false;
   const vabChildren = form.vabChildren ?? 1;
   const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
@@ -261,14 +267,29 @@ export function Wizard({
             </div>
 
             {objective === "minMonthly" && (
-              <NumberField
-                id="min-monthly"
-                label="Önskat månadsbelopp (kr, brutto)"
-                value={minMonthly}
-                step={1000}
-                onChange={(n) => setForm((f) => ({ ...f, minMonthly: n }))}
-                hint="Takten räknas ut så att du får minst så här mycket per månad och ledigheten räcker så länge som möjligt."
-              />
+              <div className="space-y-3">
+                <NumberField
+                  id="min-monthly-a"
+                  label={
+                    soloMode
+                      ? "Önskat månadsbelopp (kr, brutto)"
+                      : `Önskat månadsbelopp – ${nameA} (kr, brutto)`
+                  }
+                  value={minMonthlyA}
+                  step={1000}
+                  onChange={(n) => setForm((f) => ({ ...f, minMonthlyA: n }))}
+                  hint="Takten räknas ut så att månadsbeloppet hålls och ledigheten räcker så länge som möjligt."
+                />
+                {!soloMode && (
+                  <NumberField
+                    id="min-monthly-b"
+                    label={`Önskat månadsbelopp – ${nameB} (kr, brutto)`}
+                    value={minMonthlyB}
+                    step={1000}
+                    onChange={(n) => setForm((f) => ({ ...f, minMonthlyB: n }))}
+                  />
+                )}
+              </div>
             )}
           </>
         )}
@@ -277,9 +298,9 @@ export function Wizard({
           <>
             {objective === "minMonthly" ? (
               <p className="text-muted-foreground text-sm">
-                Takten räknas ut automatiskt för att ge minst{" "}
-                {formatSek(minMonthly)}/mån och förlänga ledigheten så mycket som
-                möjligt. Du ser den uträknade takten på nästa sida.
+                Takten räknas ut automatiskt per vårdnadshavare för att hålla
+                önskat månadsbelopp och förlänga ledigheten så mycket som
+                möjligt. Du ser de uträknade takterna på nästa sida.
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -390,6 +411,51 @@ export function Wizard({
                     );
                   })}
                   <FkSourceHint what="Uttagna dagar" />
+                </div>
+              )}
+            </div>
+
+            <Separator />
+            <div className="space-y-3">
+              <CheckRow
+                id="has-extra"
+                checked={hasExtraDays}
+                onChange={(b) => setForm((f) => ({ ...f, hasExtraDays: b }))}
+              >
+                {soloMode
+                  ? "Jag har sparade dagar kvar från tidigare barn"
+                  : "Vi har sparade dagar kvar från tidigare barn"}
+              </CheckRow>
+              {hasExtraDays && (
+                <div className="space-y-3">
+                  {visibleIds.map((id) => {
+                    const p = plan.parents[id];
+                    const who =
+                      p.name?.trim() ||
+                      (soloMode ? "dig" : `Vårdnadshavare ${id}`);
+                    const suffix = visibleIds.length > 1 ? ` – ${who}` : "";
+                    return (
+                      <NumberField
+                        key={id}
+                        id={`${id.toLowerCase()}-extra`}
+                        label={`Sparade dagar${suffix}`}
+                        value={id === "A" ? extraDaysA : extraDaysB}
+                        stepper
+                        onChange={(n) =>
+                          setForm((f) =>
+                            id === "A"
+                              ? { ...f, extraDaysA: n }
+                              : { ...f, extraDaysB: n },
+                          )
+                        }
+                      />
+                    );
+                  })}
+                  <p className="text-muted-foreground text-xs">
+                    Inkomstbaserade dagar som finns kvar från tidigare barn. De
+                    följer det äldre barnets tidsgränser — ta ut innan det barnet
+                    fyller 4 år (inkomstbaserade) respektive 12 år.
+                  </p>
                 </div>
               )}
             </div>

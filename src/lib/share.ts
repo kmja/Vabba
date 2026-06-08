@@ -16,8 +16,15 @@ export interface ShareableState {
   daysPerWeek?: number;
   /** Requested dubbeldagar (both parents home the same day). */
   doubleDays?: number;
-  /** Target gross monthly compensation for the "förläng ledigheten" goal. */
+  /** Legacy single target (kept so older links/storage still decode). */
   minMonthly?: number;
+  /** Per-caregiver target gross monthly for the "förläng ledigheten" goal. */
+  minMonthlyA?: number;
+  minMonthlyB?: number;
+  /** Leftover föräldrapenning days carried over from previous children. */
+  hasExtraDays?: boolean;
+  extraDaysA?: number;
+  extraDaysB?: number;
   /** Whether the vab (sick-child) step is included. */
   vabEnabled?: boolean;
   /** Number of children vab should cover (its own per-child allowance). */

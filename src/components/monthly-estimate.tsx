@@ -19,36 +19,35 @@ export interface MonthlyRow {
   name: string;
   /** Income-based (sjukpenningnivå) daily rate for this person. */
   dailyRate: number;
-  /** Total days allocated to this person. */
+  /** Total days for this person (incl. any leftover from previous children). */
   days: number;
+  /** This person's leave pace — may differ per caregiver under "förläng…". */
+  daysPerWeek: number;
+  /** Leftover days from previous children included in `days`, if any. */
+  extraDays?: number;
 }
 
 /**
- * Results lead: each vårdnadshavare's rough monthly deposit at the chosen leave
+ * Results lead: each vårdnadshavare's rough monthly deposit at their own leave
  * pace, plus how many days that is and how long it lasts. Surfaces the
- * post-12-month SGI condition when the pace is below the weekly floor.
+ * post-12-month SGI condition when a pace is below the weekly floor.
  */
-export function MonthlyEstimate({
-  rows,
-  daysPerWeek,
-}: {
-  rows: MonthlyRow[];
-  daysPerWeek: number;
-}) {
-  const belowSgiFloor = daysPerWeek < SGI_PROTECTION.minDaysPerWeekAfterAge1;
+export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
+  const belowSgiFloor = rows.some(
+    (r) => r.daysPerWeek < SGI_PROTECTION.minDaysPerWeekAfterAge1,
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Så mycket per månad – och hur länge</CardTitle>
         <CardDescription>
-          När inkomstbaserade dagar tas ut i takten {formatPace(daysPerWeek)}{" "}
-          dagar/vecka.
+          Uppskattat månadsbelopp medan inkomstbaserade dagar tas ut.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {rows.map((r, i) => {
-          const gross = approxMonthlyGross(r.dailyRate, daysPerWeek);
+          const gross = approxMonthlyGross(r.dailyRate, r.daysPerWeek);
           return (
             <div key={i} className="rounded-lg border p-4">
               <div className="flex items-baseline justify-between gap-3">
@@ -60,15 +59,21 @@ export function MonthlyEstimate({
                   </span>
                 </span>
               </div>
-              <div className="text-muted-foreground mt-1 flex flex-wrap items-baseline justify-between gap-x-3 text-xs tabular-nums">
+              <div className="text-muted-foreground mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs tabular-nums">
                 <span>
-                  {formatDays(r.days)} · {approxLeaveMonths(r.days, daysPerWeek)}
+                  {formatDays(r.days)} · {approxLeaveMonths(r.days, r.daysPerWeek)}{" "}
+                  vid {formatPace(r.daysPerWeek)} dagar/vecka
                 </span>
                 <span>
                   ≈ {formatSek(netAfterTax(gross))} efter skatt ·{" "}
                   {formatSek(r.dailyRate)}/dag
                 </span>
               </div>
+              {r.extraDays ? (
+                <div className="text-muted-foreground mt-0.5 text-xs">
+                  inkl. {formatDays(r.extraDays)} sparade från tidigare barn
+                </div>
+              ) : null}
             </div>
           );
         })}
