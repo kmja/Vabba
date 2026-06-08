@@ -44,12 +44,17 @@ const DAYS_PER_MONTH = 30.44;
 // proportionally to the real time between them. Anything longer is collapsed
 // to a compact ellipsis so the multi-year tail doesn't dominate.
 const COMPRESS_MONTHS = 15;
-const PX_PER_MONTH = 7;
-const MIN_GAP_PX = 40; // floor: leaves room for the marker's text beside the line
+// One month is the tightest spacing (any closer and the markers' text would
+// collide), so that's the floor; longer gaps scale up from there, capped so a
+// near-COMPRESS gap doesn't run off the screen.
+const PX_PER_MONTH = 26;
+const MIN_GAP_PX = PX_PER_MONTH; // ≈ 1 month
+const MAX_GAP_PX = 130; // ≈ 5 months
 const COMPRESSED_PX = 64; // fixed height of an ellipsis ("…") gap
 
 function proportionalGap(days: number): number {
-  return Math.max(MIN_GAP_PX, Math.round((days / DAYS_PER_MONTH) * PX_PER_MONTH));
+  const px = Math.round((days / DAYS_PER_MONTH) * PX_PER_MONTH);
+  return Math.min(MAX_GAP_PX, Math.max(MIN_GAP_PX, px));
 }
 
 function gapLabel(days: number): string {
