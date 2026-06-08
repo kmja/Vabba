@@ -182,6 +182,28 @@ export function SplitSuggestion({
                 {parentName(plan, "B")}: {100 - Math.round(splitA * 100)}%
               </span>
             </div>
+            {(() => {
+              const maxAlt = result.alternatives.find(
+                (a) => a.objective === "maxPayout",
+              );
+              const diff = maxAlt ? rec.payout.total - maxAlt.payout.total : 0;
+              return (
+                <div className="border-t pt-2 text-center text-xs">
+                  {diff === 0 ? (
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                      Maximal ersättning
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      <span className="text-foreground font-semibold">
+                        −{formatSek(Math.abs(diff))}
+                      </span>{" "}
+                      jämfört med maximal ersättning
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
