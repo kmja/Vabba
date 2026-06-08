@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
@@ -98,6 +99,8 @@ export function SplitSuggestion({
   plan,
   paceA,
   paceB,
+  splitA,
+  onSplitChange,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -106,6 +109,10 @@ export function SplitSuggestion({
   plan: PlanInput;
   paceA: number;
   paceB: number;
+  /** Current A-share (0–1) shown by the live results slider. */
+  splitA?: number;
+  /** Live split handler; when set, a draggable split slider is shown. */
+  onSplitChange?: (splitA: number) => void;
 }) {
   const rec = result.recommended;
   const alt = result.alternatives[0];
@@ -146,6 +153,35 @@ export function SplitSuggestion({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Live split slider (results page) — drag to explore the trade-off. */}
+        {onSplitChange && splitA !== undefined && (
+          <div className="space-y-2 rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="results-split">Justera fördelningen</Label>
+              <span className="text-muted-foreground text-xs">
+                dra för att testa olika upplägg
+              </span>
+            </div>
+            <input
+              id="results-split"
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(splitA * 100)}
+              onChange={(e) => onSplitChange(Number(e.target.value) / 100)}
+              className="accent-primary w-full"
+            />
+            <div className="flex justify-between text-xs font-medium">
+              <span>
+                {parentName(plan, "A")}: {Math.round(splitA * 100)}%
+              </span>
+              <span>
+                {parentName(plan, "B")}: {100 - Math.round(splitA * 100)}%
+              </span>
+            </div>
           </div>
         )}
 

@@ -31,6 +31,8 @@ export function Results({
   asOf,
   paceA,
   paceB,
+  splitA,
+  onSplitChange,
   monthlyRows,
   projection,
   vabResult,
@@ -51,6 +53,8 @@ export function Results({
   asOf: Date;
   paceA: number;
   paceB: number;
+  splitA: number;
+  onSplitChange: (splitA: number) => void;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -94,6 +98,8 @@ export function Results({
           plan={plan}
           paceA={paceA}
           paceB={paceB}
+          splitA={splitA}
+          onSplitChange={onSplitChange}
         />
       ) : null}
 

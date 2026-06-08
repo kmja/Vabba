@@ -159,6 +159,16 @@ export function Planner() {
   const projectionPace =
     soloMode ? paceA : objective === "minMonthly" ? null : daysPerWeek;
 
+  // The split the results slider shows: the chosen custom share, or the share
+  // the current objective happens to produce (so dragging continues naturally).
+  const displaySplitA = useMemo(() => {
+    if (objective === "custom") return customSplitA;
+    const rec = twoParent?.recommended;
+    if (!rec) return 0.5;
+    const total = rec.allocatedTotals.A + rec.allocatedTotals.B;
+    return total > 0 ? rec.allocatedTotals.A / total : 0.5;
+  }, [objective, customSplitA, twoParent]);
+
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     if (soloMode && solo) {
       return [
@@ -274,6 +284,10 @@ export function Planner() {
         asOf={asOf}
         paceA={paceA}
         paceB={paceB}
+        splitA={displaySplitA}
+        onSplitChange={(v) =>
+          setForm((f) => ({ ...f, objective: "custom", customSplitA: v }))
+        }
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

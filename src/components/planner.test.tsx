@@ -136,6 +136,20 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
   });
 
+  it("has a live split slider on the results page that updates the numbers", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "50000", incomeB: "50000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    const slider = container.querySelector("#results-split");
+    expect(slider).not.toBeNull();
+    // Equal (capped) rates → maxPayout splits the days 50/50.
+    expect(screen.getAllByText("240 dagar").length).toBeGreaterThanOrEqual(2);
+    // Drag to give caregiver A 75% of the days → numbers update live.
+    fireEvent.change(slider!, { target: { value: "75" } });
+    expect(screen.getByText("361 dagar")).toBeTruthy();
+  });
+
   it("folds leftover days from previous children into the lead", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → step 3
