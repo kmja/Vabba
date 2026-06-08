@@ -111,6 +111,7 @@ export function Wizard({
   const doubleDays = form.doubleDays ?? 0;
   const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
   const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
+  const customSplitA = form.customSplitA ?? 0.5;
   const hasExtraDays = form.hasExtraDays ?? false;
   const extraDaysA = form.extraDaysA ?? 0;
   const extraDaysB = form.extraDaysB ?? 0;
@@ -240,7 +241,7 @@ export function Wizard({
             <Separator />
             <div className="space-y-2">
               <Label>Mål med planen</Label>
-              {OBJECTIVES.map((o) => (
+              {OBJECTIVES.filter((o) => o !== "custom" || !soloMode).map((o) => (
                 <label
                   key={o}
                   className={`flex cursor-pointer gap-2.5 rounded-lg border p-3 ${
@@ -289,6 +290,39 @@ export function Wizard({
                     onChange={(n) => setForm((f) => ({ ...f, minMonthlyB: n }))}
                   />
                 )}
+              </div>
+            )}
+
+            {objective === "custom" && !soloMode && (
+              <div className="space-y-2">
+                <Label htmlFor="custom-split">Fördelning av dagarna</Label>
+                <input
+                  id="custom-split"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round(customSplitA * 100)}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      customSplitA: Number(e.target.value) / 100,
+                    }))
+                  }
+                  className="accent-primary w-full"
+                />
+                <div className="flex justify-between text-xs font-medium">
+                  <span>
+                    {nameA}: {Math.round(customSplitA * 100)}%
+                  </span>
+                  <span>
+                    {nameB}: {100 - Math.round(customSplitA * 100)}%
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Reserverade dagar (90 per vårdnadshavare) behålls alltid. Exakt
+                  antal dagar visas på nästa sida.
+                </p>
               </div>
             )}
           </>

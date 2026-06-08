@@ -1,4 +1,4 @@
-import { Hourglass, Scale, TrendingUp } from "lucide-react";
+import { Hourglass, Scale, SlidersHorizontal, TrendingUp } from "lucide-react";
 
 import {
   Card,
@@ -33,6 +33,7 @@ const OBJECTIVE_ICON: Record<Objective, typeof TrendingUp> = {
   maxPayout: TrendingUp,
   equal: Scale,
   minMonthly: Hourglass,
+  custom: SlidersHorizontal,
 };
 
 function parentName(plan: PlanInput, id: ParentId): string {

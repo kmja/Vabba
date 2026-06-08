@@ -61,6 +61,17 @@ describe("maxPayout objective", () => {
     expect(recommended.allocation.B.sjukpenning).toBe(300);
     expect(recommended.allocation.A.sjukpenning).toBe(90);
   });
+
+  it("splits evenly when both earn the same (e.g. both above the cap)", () => {
+    const plan = freshPlan(60_000, 60_000); // identical (capped) rates
+    const { recommended } = optimize(plan, {
+      objective: "maxPayout",
+      asOf: SOON_AFTER_BIRTH,
+    });
+    expect(recommended.allocation.A.sjukpenning).toBe(
+      recommended.allocation.B.sjukpenning,
+    );
+  });
 });
 
 describe("equal objective", () => {
@@ -98,6 +109,7 @@ describe("objective trade-off", () => {
     expect(result.alternatives.map((a) => a.objective)).toEqual([
       "equal",
       "minMonthly",
+      "custom",
     ]);
   });
 });
@@ -211,6 +223,42 @@ describe("minMonthly objective", () => {
     }).recommended;
     expect(min.allocation).toEqual(equal.allocation);
     expect(min.payout.total).toBe(equal.payout.total);
+  });
+});
+
+describe("custom split", () => {
+  it("an even custom split matches the equal objective", () => {
+    const plan = freshPlan(40_000, 30_000);
+    const custom = optimize(plan, {
+      objective: "custom",
+      customSplitA: 0.5,
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    const equal = optimize(plan, {
+      objective: "equal",
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    expect(custom.allocation).toEqual(equal.allocation);
+  });
+
+  it("shifts more days to A as the share rises, always keeping reserved", () => {
+    const plan = freshPlan(50_000, 50_000); // equal rates → split is the only lever
+    const low = optimize(plan, {
+      objective: "custom",
+      customSplitA: 0.25,
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    const high = optimize(plan, {
+      objective: "custom",
+      customSplitA: 0.8,
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    expect(high.allocatedTotals.A).toBeGreaterThan(low.allocatedTotals.A);
+    expect(low.allocation.A.sjukpenning).toBeGreaterThanOrEqual(90);
+    expect(low.allocation.B.sjukpenning).toBeGreaterThanOrEqual(90);
+    expect(high.allocation.A.sjukpenning).toBeGreaterThanOrEqual(90);
+    expect(high.allocation.B.sjukpenning).toBeGreaterThanOrEqual(90);
+    expect(high.forfeitedReserved).toEqual({ A: 0, B: 0 });
   });
 });
 

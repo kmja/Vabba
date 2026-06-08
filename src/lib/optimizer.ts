@@ -43,18 +43,20 @@ import {
 } from "@/lib/calc";
 import { parseIsoDate, differenceInDays } from "@/lib/dates";
 
-export type Objective = "maxPayout" | "equal" | "minMonthly";
+export type Objective = "maxPayout" | "equal" | "minMonthly" | "custom";
 
 export const OBJECTIVES: readonly Objective[] = [
   "maxPayout",
   "equal",
   "minMonthly",
+  "custom",
 ];
 
 export const OBJECTIVE_LABEL: Record<Objective, string> = {
   maxPayout: "Maximera ersättning",
   equal: "Jämn fördelning",
   minMonthly: "Förläng ledigheten",
+  custom: "Egen fördelning",
 };
 
 export const OBJECTIVE_DESCRIPTION: Record<Objective, string> = {
@@ -63,6 +65,8 @@ export const OBJECTIVE_DESCRIPTION: Record<Objective, string> = {
   equal: "Dela hemmatiden så jämnt som möjligt mellan vårdnadshavarna.",
   minMonthly:
     "Dela dagarna jämnt och ta ut dem i långsammast möjliga takt som ändå ger minst ditt önskade månadsbelopp — så räcker ledigheten så länge som möjligt.",
+  custom:
+    "Bestäm själv hur dagarna fördelas mellan vårdnadshavarna. De reserverade dagarna behålls alltid.",
 };
 
 export type WarningLevel = "info" | "warning" | "critical";
@@ -113,6 +117,8 @@ export interface OptimizeOptions {
   asOf?: Date;
   /** Requested dubbeldagar (both parents drawing a day simultaneously). */
   doubleDays?: number;
+  /** Share of the days to caregiver A (0–1) for the "custom" objective. */
+  customSplitA?: number;
 }
 
 export interface OptimizeResult {
@@ -147,6 +153,7 @@ function chooseSjukpenningSplitForA(
   rB: number,
   rateA: number,
   rateB: number,
+  customSplitA: number,
 ): number {
   // Not enough income-based days to honour both reserved blocks: split them
   // proportionally so the unavoidable forfeiture is shared fairly.
@@ -158,9 +165,17 @@ function chooseSjukpenningSplitForA(
   const lo = rA; // A must take at least its reserved
   const hi = S - rB; // …and must leave B's reserved for B
 
+  if (objective === "custom") {
+    // The user picks the share of the income-based days for A.
+    return clamp(Math.round(customSplitA * S), lo, hi);
+  }
   if (objective === "maxPayout") {
-    // Put income-based days on the higher-rate parent.
-    return rateA >= rateB ? hi : lo;
+    // Put income-based days on the higher-rate parent. When the rates are equal
+    // the payout is identical either way, so split evenly instead of arbitrarily
+    // favouring A.
+    if (rateA > rateB) return hi;
+    if (rateA < rateB) return lo;
+    return clamp(Math.round(S / 2), lo, hi);
   }
   // "equal" / "minMonthly": aim for a 50/50 split of the income-based days,
   // within bounds. (minMonthly only changes the leave *pace*, not the split.)
@@ -184,6 +199,7 @@ function buildPlan(
   remaining: RemainingSummary,
   asOf: Date,
   doubleDays = 0,
+  customSplitA = 0.5,
 ): OptimizedPlan {
   const S = remaining.remaining.sjukpenning;
   const L = remaining.remaining.lagsta;
@@ -212,9 +228,20 @@ function buildPlan(
 
   // Split the remaining single days after carving out the dubbeldagar.
   const S2 = S - 2 * effectiveDouble;
-  const sA = chooseSjukpenningSplitForA(objective, S2, rA, rB, rateA, rateB);
+  const sA = chooseSjukpenningSplitForA(
+    objective,
+    S2,
+    rA,
+    rB,
+    rateA,
+    rateB,
+    customSplitA,
+  );
   const sB = S2 - sA;
-  const lA = chooseLagstaSplitForA(L, sA, sB);
+  const lA =
+    objective === "custom"
+      ? clamp(Math.round(customSplitA * L), 0, L)
+      : chooseLagstaSplitForA(L, sA, sB);
   const lB = L - lA;
 
   const allocation: Record<ParentId, TierCount> = {
@@ -396,9 +423,17 @@ export function optimize(
   const remaining = planRemaining(plan);
 
   const doubleDays = options.doubleDays ?? 0;
-  const recommended = buildPlan(plan, objective, remaining, asOf, doubleDays);
+  const customSplitA = options.customSplitA ?? 0.5;
+  const recommended = buildPlan(
+    plan,
+    objective,
+    remaining,
+    asOf,
+    doubleDays,
+    customSplitA,
+  );
   const alternatives = OBJECTIVES.filter((o) => o !== objective).map((o) =>
-    buildPlan(plan, o, remaining, asOf, doubleDays),
+    buildPlan(plan, o, remaining, asOf, doubleDays, customSplitA),
   );
 
   return { recommended, alternatives, remaining };

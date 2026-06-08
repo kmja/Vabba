@@ -21,6 +21,8 @@ export interface ShareableState {
   /** Per-caregiver target gross monthly for the "förläng ledigheten" goal. */
   minMonthlyA?: number;
   minMonthlyB?: number;
+  /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
+  customSplitA?: number;
   /** Leftover föräldrapenning days carried over from previous children. */
   hasExtraDays?: boolean;
   extraDaysA?: number;

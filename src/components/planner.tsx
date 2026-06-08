@@ -31,6 +31,7 @@ const DEFAULT_STATE: ShareableState = {
   doubleDays: 0,
   minMonthlyA: 20000,
   minMonthlyB: 20000,
+  customSplitA: 0.5,
   hasExtraDays: false,
   extraDaysA: 0,
   extraDaysB: 0,
@@ -73,6 +74,7 @@ export function Planner() {
   const doubleDays = form.doubleDays ?? 0;
   const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
   const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
+  const customSplitA = form.customSplitA ?? 0.5;
   const extraA = (form.hasExtraDays ?? false) ? (form.extraDaysA ?? 0) : 0;
   const extraB = (form.hasExtraDays ?? false) ? (form.extraDaysB ?? 0) : 0;
   const vabEnabled = form.vabEnabled ?? false;
@@ -101,9 +103,9 @@ export function Planner() {
   const twoParent = useMemo(
     () =>
       valid && asOf && !soloMode
-        ? optimize(effectivePlan, { objective, asOf, doubleDays })
+        ? optimize(effectivePlan, { objective, asOf, doubleDays, customSplitA })
         : null,
-    [effectivePlan, valid, asOf, objective, soloMode, doubleDays],
+    [effectivePlan, valid, asOf, objective, soloMode, doubleDays, customSplitA],
   );
   const solo = useMemo(
     () =>

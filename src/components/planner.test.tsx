@@ -114,6 +114,28 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/Tänk på SGI/)).toBeTruthy();
   });
 
+  it("lets you choose a custom split with the slider", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next();
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "50000" },
+    });
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "50000" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: /Egen fördelning/ }));
+    const slider = container.querySelector("#custom-split");
+    expect(slider).not.toBeNull();
+    fireEvent.change(slider!, { target: { value: "20" } }); // give B more
+    next(); // → step 3
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
+  });
+
   it("folds leftover days from previous children into the lead", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → step 3
