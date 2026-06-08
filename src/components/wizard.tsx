@@ -28,7 +28,7 @@ import {
 import {
   OBJECTIVE_DESCRIPTION,
   OBJECTIVE_LABEL,
-  OBJECTIVES,
+  type Objective,
 } from "@/lib/optimizer";
 import { MONEY, isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { formatSek } from "@/lib/format";
@@ -41,6 +41,79 @@ const STEP_TITLES = [
   "Vab (valfritt)",
 ] as const;
 const STEP_COUNT = STEP_TITLES.length;
+
+/** How to split the shared pool of days — a single household decision. */
+const SPLIT_OBJECTIVES: Objective[] = ["maxPayout", "equal", "custom"];
+
+type PaceMode = "full" | "prolong";
+
+/** Per-caregiver pace goal: take days at full schedule, or stretch them out. */
+function PaceGoalControl({
+  idPrefix,
+  name,
+  mode,
+  target,
+  onModeChange,
+  onTargetChange,
+}: {
+  idPrefix: string;
+  name: string;
+  mode: PaceMode;
+  target: number;
+  onModeChange: (m: PaceMode) => void;
+  onTargetChange: (n: number) => void;
+}) {
+  const options: { value: PaceMode; label: string; desc: string }[] = [
+    {
+      value: "full",
+      label: "Full takt",
+      desc: "Mest pengar per månad, kortast tid.",
+    },
+    {
+      value: "prolong",
+      label: "Förläng ledigheten",
+      desc: "Långsammare takt, längre ledighet.",
+    },
+  ];
+  return (
+    <div className="space-y-2">
+      <Label>{name}</Label>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((o) => (
+          <label
+            key={o.value}
+            className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-3 ${
+              mode === o.value ? "border-primary bg-secondary/40" : ""
+            }`}
+          >
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="radio"
+                id={`${idPrefix}-pace-${o.value}`}
+                name={`${idPrefix}-pace`}
+                checked={mode === o.value}
+                onChange={() => onModeChange(o.value)}
+                className="accent-primary size-4 shrink-0"
+              />
+              {o.label}
+            </span>
+            <span className="text-muted-foreground text-xs">{o.desc}</span>
+          </label>
+        ))}
+      </div>
+      {mode === "prolong" && (
+        <NumberField
+          id={`min-monthly-${idPrefix}`}
+          label="Minsta månadsbelopp (kr, brutto)"
+          value={target}
+          step={1000}
+          onChange={onTargetChange}
+          hint="Takten räknas ut så att beloppet hålls och ledigheten räcker så länge som möjligt."
+        />
+      )}
+    </div>
+  );
+}
 
 function CaregiverFields({
   idPrefix,
@@ -111,6 +184,16 @@ export function Wizard({
   const doubleDays = form.doubleDays ?? 0;
   const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
   const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
+  const paceModeA: PaceMode =
+    form.paceModeA ?? (objective === "minMonthly" ? "prolong" : "full");
+  const paceModeB: PaceMode =
+    form.paceModeB ?? (objective === "minMonthly" ? "prolong" : "full");
+  // Old links used a single "minMonthly" objective; show it as an even split.
+  const splitObjective: Objective =
+    objective === "minMonthly" ? "equal" : objective;
+  const anyFullPace = soloMode
+    ? paceModeA === "full"
+    : paceModeA === "full" || paceModeB === "full";
   const customSplitA = form.customSplitA ?? 0.5;
   const hasExtraDays = form.hasExtraDays ?? false;
   const extraDaysA = form.extraDaysA ?? 0;
@@ -238,107 +321,108 @@ export function Wizard({
               </>
             )}
 
-            <Separator />
-            <div className="space-y-2">
-              <Label>Mål med planen</Label>
-              {OBJECTIVES.filter((o) => o !== "custom" || !soloMode).map((o) => (
-                <label
-                  key={o}
-                  className={`flex cursor-pointer gap-2.5 rounded-lg border p-3 ${
-                    objective === o ? "border-primary bg-secondary/40" : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="objective"
-                    checked={objective === o}
-                    onChange={() => setForm((f) => ({ ...f, objective: o }))}
-                    className="accent-primary mt-0.5 size-4 shrink-0"
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">
-                      {OBJECTIVE_LABEL[o]}
-                    </span>
-                    <span className="text-muted-foreground block text-xs">
-                      {OBJECTIVE_DESCRIPTION[o]}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
+            {!soloMode && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <Label>Fördelning av dagar</Label>
+                  {SPLIT_OBJECTIVES.map((o) => (
+                    <label
+                      key={o}
+                      className={`flex cursor-pointer gap-2.5 rounded-lg border p-3 ${
+                        splitObjective === o ? "border-primary bg-secondary/40" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="objective"
+                        checked={splitObjective === o}
+                        onChange={() => setForm((f) => ({ ...f, objective: o }))}
+                        className="accent-primary mt-0.5 size-4 shrink-0"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          {OBJECTIVE_LABEL[o]}
+                        </span>
+                        <span className="text-muted-foreground block text-xs">
+                          {OBJECTIVE_DESCRIPTION[o]}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
 
-            {objective === "minMonthly" && (
-              <div className="space-y-3">
-                <NumberField
-                  id="min-monthly-a"
-                  label={
-                    soloMode
-                      ? "Önskat månadsbelopp (kr, brutto)"
-                      : `Önskat månadsbelopp – ${nameA} (kr, brutto)`
-                  }
-                  value={minMonthlyA}
-                  step={1000}
-                  onChange={(n) => setForm((f) => ({ ...f, minMonthlyA: n }))}
-                  hint="Takten räknas ut så att månadsbeloppet hålls och ledigheten räcker så länge som möjligt."
-                />
-                {!soloMode && (
-                  <NumberField
-                    id="min-monthly-b"
-                    label={`Önskat månadsbelopp – ${nameB} (kr, brutto)`}
-                    value={minMonthlyB}
-                    step={1000}
-                    onChange={(n) => setForm((f) => ({ ...f, minMonthlyB: n }))}
-                  />
-                )}
-              </div>
+                  {objective === "custom" && (
+                    <div className="space-y-2 pt-1">
+                      <input
+                        id="custom-split"
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={Math.round(customSplitA * 100)}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            customSplitA: Number(e.target.value) / 100,
+                          }))
+                        }
+                        className="accent-primary w-full"
+                      />
+                      <div className="flex justify-between text-xs font-medium">
+                        <span>
+                          {nameA}: {Math.round(customSplitA * 100)}%
+                        </span>
+                        <span>
+                          {nameB}: {100 - Math.round(customSplitA * 100)}%
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground text-xs">
+                        Reserverade dagar (90 per vårdnadshavare) behålls alltid.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
-            {objective === "custom" && !soloMode && (
-              <div className="space-y-2">
-                <Label htmlFor="custom-split">Fördelning av dagarna</Label>
-                <input
-                  id="custom-split"
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={Math.round(customSplitA * 100)}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      customSplitA: Number(e.target.value) / 100,
-                    }))
-                  }
-                  className="accent-primary w-full"
-                />
-                <div className="flex justify-between text-xs font-medium">
-                  <span>
-                    {nameA}: {Math.round(customSplitA * 100)}%
-                  </span>
-                  <span>
-                    {nameB}: {100 - Math.round(customSplitA * 100)}%
-                  </span>
-                </div>
+            <Separator />
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label>Mål per vårdnadshavare</Label>
                 <p className="text-muted-foreground text-xs">
-                  Reserverade dagar (90 per vårdnadshavare) behålls alltid. Exakt
-                  antal dagar visas på nästa sida.
+                  Var och en väljer sin egen takt — ta ut snabbt för mest pengar i
+                  handen, eller förläng ledigheten så länge som möjligt.
                 </p>
               </div>
-            )}
+              <PaceGoalControl
+                idPrefix="a"
+                name={soloMode ? "Din takt" : nameA}
+                mode={paceModeA}
+                target={minMonthlyA}
+                onModeChange={(m) => setForm((f) => ({ ...f, paceModeA: m }))}
+                onTargetChange={(n) => setForm((f) => ({ ...f, minMonthlyA: n }))}
+              />
+              {!soloMode && (
+                <PaceGoalControl
+                  idPrefix="b"
+                  name={nameB}
+                  mode={paceModeB}
+                  target={minMonthlyB}
+                  onModeChange={(m) => setForm((f) => ({ ...f, paceModeB: m }))}
+                  onTargetChange={(n) => setForm((f) => ({ ...f, minMonthlyB: n }))}
+                />
+              )}
+            </div>
           </>
         )}
 
         {step === 3 && (
           <>
-            {objective === "minMonthly" ? (
-              <p className="text-muted-foreground text-sm">
-                Takten räknas ut automatiskt per vårdnadshavare för att hålla
-                önskat månadsbelopp och förlänga ledigheten så mycket som
-                möjligt. Du ser de uträknade takterna på nästa sida.
-              </p>
-            ) : (
+            {anyFullPace ? (
               <div className="space-y-1.5">
-                <Label htmlFor="days-per-week">Uttag (dagar per vecka)</Label>
+                <Label htmlFor="days-per-week">
+                  Uttag i full takt (dagar per vecka)
+                </Label>
                 <Select
                   id="days-per-week"
                   value={daysPerWeek}
@@ -355,10 +439,17 @@ export function Wizard({
                   <option value={1}>1 dag/vecka</option>
                 </Select>
                 <p className="text-muted-foreground text-xs">
-                  Färre dagar per vecka räcker längre i kalendertid — du kan
-                  kombinera med jobb, helger och semester.
+                  Gäller den som tar ut i full takt. Färre dagar per vecka räcker
+                  längre i kalendertid — kombinera med jobb, helger och semester.
+                  Takten för den som förlänger räknas ut automatiskt.
                 </p>
               </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Takten räknas ut automatiskt per vårdnadshavare för att hålla
+                önskat månadsbelopp och förlänga ledigheten så mycket som
+                möjligt. Du ser de uträknade takterna på nästa sida.
+              </p>
             )}
 
             {!soloMode && (

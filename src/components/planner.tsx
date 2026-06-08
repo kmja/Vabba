@@ -31,6 +31,8 @@ const DEFAULT_STATE: ShareableState = {
   doubleDays: 0,
   minMonthlyA: 20000,
   minMonthlyB: 20000,
+  paceModeA: "full",
+  paceModeB: "full",
   customSplitA: 0.5,
   hasExtraDays: false,
   extraDaysA: 0,
@@ -129,35 +131,19 @@ export function Planner() {
     : (twoParent?.recommended.payout.A.dailyRate ?? 0);
   const rateB = twoParent?.recommended.payout.B.dailyRate ?? 0;
 
-  // "Förläng ledigheten" gives each caregiver their own slowest pace that still
-  // clears their own monthly target; other goals share the step-3 pace.
+  // Each caregiver sets their own pace goal: take days at the full step-3
+  // schedule, or stretch them to their own monthly floor ("förläng").
+  // (Older shared links used a single "minMonthly" objective for both.)
+  const paceModeA = form.paceModeA ?? (objective === "minMonthly" ? "prolong" : "full");
+  const paceModeB = form.paceModeB ?? (objective === "minMonthly" ? "prolong" : "full");
   const paceA =
-    objective === "minMonthly" && rateA > 0
+    paceModeA === "prolong" && rateA > 0
       ? paceForMonthlyTarget(rateA, minMonthlyA)
       : daysPerWeek;
   const paceB =
-    objective === "minMonthly" && rateB > 0
+    paceModeB === "prolong" && rateB > 0
       ? paceForMonthlyTarget(rateB, minMonthlyB)
       : daysPerWeek;
-
-  // A blended household rate for the timeline's compensation projection.
-  const representativeRate = useMemo(() => {
-    if (soloMode) return solo?.payout.dailyRate ?? 0;
-    const rec = twoParent?.recommended;
-    if (!rec) return 0;
-    const sjuk = rec.payout.A.sjukpenningDays + rec.payout.B.sjukpenningDays;
-    if (sjuk <= 0) return Math.max(rec.payout.A.dailyRate, rec.payout.B.dailyRate);
-    return (
-      (rec.payout.A.sjukpenningDays * rec.payout.A.dailyRate +
-        rec.payout.B.sjukpenningDays * rec.payout.B.dailyRate) /
-      sjuk
-    );
-  }, [soloMode, solo, twoParent]);
-
-  // A single household pace exists for every goal except two-caregiver "förläng
-  // ledigheten", where each caregiver runs their own pace (so no one timeline).
-  const projectionPace =
-    soloMode ? paceA : objective === "minMonthly" ? null : daysPerWeek;
 
   // The split the results slider shows: the chosen custom share, or the share
   // the current objective happens to produce (so dragging continues naturally).
@@ -169,6 +155,9 @@ export function Planner() {
     return total > 0 ? rec.allocatedTotals.A / total : 0.5;
   }, [objective, customSplitA, twoParent]);
 
+  const goalA = paceModeA === "prolong" ? "Förläng ledigheten" : "Full takt";
+  const goalB = paceModeB === "prolong" ? "Förläng ledigheten" : "Full takt";
+
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     if (soloMode && solo) {
       return [
@@ -178,6 +167,7 @@ export function Planner() {
           days: solo.allocatedTotal + extraA,
           daysPerWeek: paceA,
           extraDays: extraA,
+          goalLabel: goalA,
         },
       ];
     }
@@ -190,6 +180,7 @@ export function Planner() {
           days: rec.allocatedTotals.A + extraA,
           daysPerWeek: paceA,
           extraDays: extraA,
+          goalLabel: goalA,
         },
         {
           name: nameB,
@@ -197,65 +188,86 @@ export function Planner() {
           days: rec.allocatedTotals.B + extraB,
           daysPerWeek: paceB,
           extraDays: extraB,
+          goalLabel: goalB,
         },
       ];
     }
     return [];
-  }, [soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB]);
+  }, [soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB]);
 
-  // How the leave plays out in calendar time at the effective pace.
+  // How the leave plays out in calendar time. Each caregiver is home in turn
+  // (A then B), at their own pace, taking income-based days before lägstanivå —
+  // so the timeline shows when each one's pay steps down and when they hand over.
   const projection: LeaveProjection | null = useMemo(() => {
-    if (
-      projectionPace == null ||
-      !asOf ||
-      !deadlines ||
-      !remaining ||
-      remaining.remaining.total <= 0
-    ) {
+    if (!asOf || !deadlines || !remaining || remaining.remaining.total <= 0) {
       return null;
     }
     const start = deadlines.birth > asOf ? deadlines.birth : asOf;
-    const p = projectionPace > 0 ? projectionPace : 7;
-    const incomeBasedDays = remaining.remaining.sjukpenning + extraA + extraB;
-    const incomeBasedEnds = addDays(start, Math.round((incomeBasedDays / p) * 7));
-    const leaveEnds = addDays(
-      incomeBasedEnds,
-      Math.round((remaining.remaining.lagsta / p) * 7),
-    );
+    const lagstaRate = lagstanivaDailyAmount();
 
-    // When two caregivers share one timeline, mark where the leave passes from
-    // the first (A) to the second (B), assuming they're home one after the other.
-    let handoff: LeaveProjection["handoff"];
-    if (!soloMode && twoParent) {
+    type Phase = {
+      caregiver?: string;
+      days: number;
+      pace: number;
+      rate: number;
+      tier: "income" | "lagsta";
+    };
+    const phases: Phase[] = [];
+
+    if (soloMode && solo) {
+      const p = paceA > 0 ? paceA : 7;
+      phases.push({
+        days: solo.remaining.remaining.sjukpenning + extraA,
+        pace: p,
+        rate: rateA,
+        tier: "income",
+      });
+      phases.push({
+        days: solo.remaining.remaining.lagsta,
+        pace: p,
+        rate: lagstaRate,
+        tier: "lagsta",
+      });
+    } else if (twoParent) {
       const rec = twoParent.recommended;
-      const aDays = rec.allocatedTotals.A + extraA;
-      const bDays = rec.allocatedTotals.B + extraB;
-      if (aDays > 0 && bDays > 0) {
-        handoff = {
-          date: addDays(start, Math.round((aDays / p) * 7)),
-          fromName: nameA,
-          toName: nameB,
-        };
-      }
+      const pA = paceA > 0 ? paceA : 7;
+      const pB = paceB > 0 ? paceB : 7;
+      phases.push(
+        { caregiver: nameA, days: rec.allocation.A.sjukpenning + extraA, pace: pA, rate: rateA, tier: "income" },
+        { caregiver: nameA, days: rec.allocation.A.lagsta, pace: pA, rate: lagstaRate, tier: "lagsta" },
+        { caregiver: nameB, days: rec.allocation.B.sjukpenning + extraB, pace: pB, rate: rateB, tier: "income" },
+        { caregiver: nameB, days: rec.allocation.B.lagsta, pace: pB, rate: lagstaRate, tier: "lagsta" },
+      );
+    } else {
+      return null;
     }
 
-    return {
-      incomeBasedEnds,
-      leaveEnds,
-      incomeBasedMonthly: approxMonthlyGross(representativeRate, p),
-      lagstaMonthly: approxMonthlyGross(lagstanivaDailyAmount(), p),
-      handoff,
-    };
+    let cursor = start;
+    const segments: LeaveProjection["segments"] = [];
+    for (const ph of phases) {
+      if (ph.days <= 0) continue;
+      cursor = addDays(cursor, Math.round((ph.days / ph.pace) * 7));
+      segments.push({
+        endsAt: cursor,
+        monthly: approxMonthlyGross(ph.rate, ph.pace),
+        tier: ph.tier,
+        caregiver: ph.caregiver,
+      });
+    }
+    return segments.length > 0 ? { segments } : null;
   }, [
-    projectionPace,
     asOf,
     deadlines,
     remaining,
-    representativeRate,
+    soloMode,
+    solo,
+    twoParent,
+    paceA,
+    paceB,
+    rateA,
+    rateB,
     extraA,
     extraB,
-    soloMode,
-    twoParent,
     nameA,
     nameB,
   ]);

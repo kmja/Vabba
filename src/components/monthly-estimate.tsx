@@ -25,6 +25,8 @@ export interface MonthlyRow {
   daysPerWeek: number;
   /** Leftover days from previous children included in `days`, if any. */
   extraDays?: number;
+  /** This caregiver's chosen pace goal, e.g. "Förläng ledigheten". */
+  goalLabel?: string;
 }
 
 /**
@@ -51,7 +53,14 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
           return (
             <div key={i} className="rounded-lg border p-4">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-medium">{r.name}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="font-medium">{r.name}</span>
+                  {r.goalLabel && (
+                    <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
+                      {r.goalLabel}
+                    </span>
+                  )}
+                </span>
                 <span className="text-2xl font-bold tabular-nums">
                   {formatSek(gross)}
                   <span className="text-muted-foreground text-sm font-normal">

@@ -23,17 +23,19 @@ import type { PlanDeadlines } from "@/lib/calc";
 import { addYears, differenceInDays, monthsBetween } from "@/lib/dates";
 import { formatDate, formatSek } from "@/lib/format";
 
+/** One stretch of leave at a steady pace/level, ending on `endsAt`. */
+export interface LeaveSegment {
+  endsAt: Date;
+  /** Approx gross monthly amount during this stretch. */
+  monthly: number;
+  tier: "income" | "lagsta";
+  /** Caregiver name (omitted in solo mode). */
+  caregiver?: string;
+}
+
 export interface LeaveProjection {
-  incomeBasedEnds: Date;
-  leaveEnds: Date;
-  incomeBasedMonthly: number;
-  lagstaMonthly: number;
-  /** Where the leave passes from the first caregiver to the second. */
-  handoff?: {
-    date: Date;
-    fromName: string;
-    toName: string;
-  };
+  /** Ordered stretches of leave; boundaries become timeline markers. */
+  segments: LeaveSegment[];
 }
 
 type MilestoneVariant = "legal" | "projected" | "today";
@@ -131,37 +133,40 @@ export function Timeline({
     },
   ];
 
-  const projected: Milestone[] = projection
-    ? [
-        ...(projection.handoff
-          ? [
-              {
-                date: projection.handoff.date,
-                icon: ArrowRightLeft,
-                title: "Byte av vårdnadshavare",
-                desc: `${projection.handoff.toName} tar över efter ${projection.handoff.fromName}.`,
-                variant: "projected" as MilestoneVariant,
-              },
-            ]
-          : []),
-        {
-          date: projection.incomeBasedEnds,
-          icon: Coins,
-          title: "Inkomstbaserade dagar slut",
-          desc: `Ersättningen går ner till ca ${formatSek(
-            projection.lagstaMonthly,
-          )}/mån (lägstanivå) i den här takten.`,
-          variant: "projected" as MilestoneVariant,
-        },
-        {
-          date: projection.leaveEnds,
-          icon: Wallet,
-          title: "Ledigheten tar slut",
-          desc: "Alla planerade föräldrapenningdagar är uttagna i den här takten.",
-          variant: "projected" as MilestoneVariant,
-        },
-      ]
-    : [];
+  // Each boundary between (or at the end of) the leave segments is an event:
+  // a caregiver handover, a step down to lägstanivå, or the leave ending.
+  const projected: Milestone[] = [];
+  const segments = projection?.segments ?? [];
+  segments.forEach((seg, i) => {
+    const next = segments[i + 1];
+    if (!next) {
+      projected.push({
+        date: seg.endsAt,
+        icon: Wallet,
+        title: "Ledigheten tar slut",
+        desc: "Alla planerade föräldrapenningdagar är uttagna i den här takten.",
+        variant: "projected",
+      });
+    } else if (next.caregiver !== seg.caregiver) {
+      projected.push({
+        date: seg.endsAt,
+        icon: ArrowRightLeft,
+        title: "Byte av vårdnadshavare",
+        desc: `${next.caregiver} tar över efter ${seg.caregiver}.`,
+        variant: "projected",
+      });
+    } else if (seg.tier === "income" && next.tier === "lagsta") {
+      projected.push({
+        date: seg.endsAt,
+        icon: Coins,
+        title: "Inkomstbaserade dagar slut",
+        desc: `${seg.caregiver ? `${seg.caregiver}: e` : "E"}rsättningen går ner till ca ${formatSek(
+          next.monthly,
+        )}/mån (lägstanivå).`,
+        variant: "projected",
+      });
+    }
+  });
 
   const showToday = ageMonths >= 0 && ageMonths <= span;
   const today: Milestone = {
@@ -187,18 +192,6 @@ export function Timeline({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {projection && (
-          <div className="bg-secondary/40 mb-6 rounded-lg border p-4">
-            <div className="text-sm font-medium">Så fluktuerar ersättningen</div>
-            <p className="text-muted-foreground mt-1 text-xs">
-              ≈ {formatSek(projection.incomeBasedMonthly)}/mån tills{" "}
-              {formatDate(projection.incomeBasedEnds)}, därefter ≈{" "}
-              {formatSek(projection.lagstaMonthly)}/mån på lägstanivå tills
-              ledigheten tar slut omkring {formatDate(projection.leaveEnds)}.
-            </p>
-          </div>
-        )}
-
         <div>
           {milestones.map((m, i) => {
             const Icon = m.icon;

@@ -83,7 +83,7 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Vab – vård av sjukt barn")).toBeTruthy();
   });
 
-  it("auto-computes the pace for the 'förläng ledigheten' goal", () => {
+  it("auto-computes the pace when both caregivers choose to prolong", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
@@ -95,20 +95,39 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
-    fireEvent.click(
-      screen.getByRole("radio", { name: /Förläng ledigheten/ }),
-    );
+    // Each caregiver picks "förläng" independently.
+    fireEvent.click(container.querySelector("#a-pace-prolong")!);
+    fireEvent.click(container.querySelector("#b-pace-prolong")!);
     fireEvent.change(container.querySelector("#min-monthly-a")!, {
       target: { value: "15000" },
     });
     fireEvent.change(container.querySelector("#min-monthly-b")!, {
       target: { value: "12000" },
     });
-    next(); // → step 3: no manual pace selector for this goal
+    next(); // → step 3: no manual pace selector when nobody is on full pace
     expect(container.querySelector("#days-per-week")).toBeNull();
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
+  });
+
+  it("lets each caregiver set their own pace goal", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    // Back up to step 2 to set per-caregiver paces (fillToResults left us on 3).
+    fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
+    fireEvent.click(container.querySelector("#a-pace-full")!);
+    fireEvent.click(container.querySelector("#b-pace-prolong")!);
+    fireEvent.change(container.querySelector("#min-monthly-b")!, {
+      target: { value: "12000" },
+    });
+    next(); // → step 3: A is on full pace, so the schedule selector shows
+    expect(container.querySelector("#days-per-week")).not.toBeNull();
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // Both caregivers' goal labels are shown on the monthly estimate.
+    expect(screen.getByText("Full takt")).toBeTruthy();
+    expect(screen.getByText("Förläng ledigheten")).toBeTruthy();
   });
 
   it("surfaces the SGI caveat when the pace drops below 5/week", () => {

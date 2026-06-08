@@ -21,6 +21,12 @@ export interface ShareableState {
   /** Per-caregiver target gross monthly for the "förläng ledigheten" goal. */
   minMonthlyA?: number;
   minMonthlyB?: number;
+  /**
+   * Each caregiver's pace goal, set independently: take days at the full
+   * schedule ("full") or stretch them out to a monthly floor ("prolong").
+   */
+  paceModeA?: "full" | "prolong";
+  paceModeB?: "full" | "prolong";
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
   /** Leftover föräldrapenning days carried over from previous children. */
