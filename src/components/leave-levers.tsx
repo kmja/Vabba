@@ -4,16 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { approxMonthlyGross, formatSek } from "@/lib/format";
 
-/** Practical longest stretch the months slider allows. */
+/** Practical longest stretch the duration slider allows. */
 const MONTHS_CAP = 36;
 const DAYS_PER_MONTH = 30.4;
 
-function monthsAtPace(days: number, pace: number): number {
-  return pace > 0 ? (days * 7) / (pace * DAYS_PER_MONTH) : 0;
-}
-
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
+}
+
+/** Föräldrapenning + employer föräldralön for `pace`, the way it's drawn. */
+function combinedMonthly(rate: number, bonusFull: number, pace: number): number {
+  return approxMonthlyGross(rate, pace) + Math.round((bonusFull * pace) / 7);
 }
 
 export interface PhaseControls {
@@ -27,15 +28,16 @@ export interface PhaseControls {
 
 /**
  * Per-person controls. By default a single pace, exposed as two linked sliders
- * (monthly pay and months of leave — two views of the same dial). Turn on
- * "byt takt vid 1 år" to take a second period at a different pace (e.g. slower
- * the first year, then 5/week to keep SGI).
+ * (monthly pay and length of leave — two views of the same dial, tuned in days).
+ * The numbers include any employer föräldralön. Turn on "byt takt vid 1 år" to
+ * take a second period at a different pace (e.g. 5/week to keep SGI).
  */
 export function LeaveLevers({
   name,
   days,
   dailyRate,
   pace,
+  bonusFullMonthly = 0,
   onSetTarget,
   phase,
 }: {
@@ -43,6 +45,8 @@ export function LeaveLevers({
   days: number;
   dailyRate: number;
   pace: number;
+  /** Employer föräldralön at full-time pace (monthly), if any. */
+  bonusFullMonthly?: number;
   onSetTarget: (minMonthly: number) => void;
   phase: PhaseControls;
 }) {
@@ -65,12 +69,18 @@ export function LeaveLevers({
       </div>
 
       {phase.on ? (
-        <PhaseLevers name={name} dailyRate={dailyRate} phase={phase} />
+        <PhaseLevers
+          name={name}
+          dailyRate={dailyRate}
+          bonusFull={bonusFullMonthly}
+          phase={phase}
+        />
       ) : (
         <SinglePaceLevers
           name={name}
           days={days}
           dailyRate={dailyRate}
+          bonusFull={bonusFullMonthly}
           pace={pace}
           onSetTarget={onSetTarget}
         />
@@ -83,36 +93,53 @@ function SinglePaceLevers({
   name,
   days,
   dailyRate,
+  bonusFull,
   pace,
   onSetTarget,
 }: {
   name: string;
   days: number;
   dailyRate: number;
+  bonusFull: number;
   pace: number;
   onSetTarget: (minMonthly: number) => void;
 }) {
-  const payFull = approxMonthlyGross(dailyRate, 7); // fastest → most per month
-  const monthsFull = monthsAtPace(days, 7); // fastest → shortest leave
-  const monthsMin = Math.max(1, Math.floor(monthsFull));
-  const monthsMax = Math.max(monthsMin + 1, MONTHS_CAP);
-  const paySlow = Math.max(1, Math.round((dailyRate * days) / monthsMax));
+  // Pay (incl. föräldralön) and leave length both follow the pace, so the
+  // sliders are linked. Tune the length in calendar days, and the pay in kronor.
+  const fkFull = approxMonthlyGross(dailyRate, 7); // FK target at full pace
+  const minDays = Math.max(1, Math.round(days)); // shortest leave (pace 7)
+  const maxDays = Math.max(minDays + 1, Math.round(MONTHS_CAP * DAYS_PER_MONTH));
 
-  const currentPay = approxMonthlyGross(dailyRate, pace);
-  const currentMonths = monthsAtPace(days, pace);
-  const payValue = clamp(currentPay, paySlow, payFull);
-  const monthsValue = clamp(Math.round(currentMonths), monthsMin, monthsMax);
+  const curDays = clamp(
+    pace > 0 ? Math.round((days / pace) * 7) : minDays,
+    minDays,
+    maxDays,
+  );
+  const payFull = combinedMonthly(dailyRate, bonusFull, 7); // most per month
+  const paySlow = combinedMonthly(
+    dailyRate,
+    bonusFull,
+    (minDays / maxDays) * 7,
+  );
+  const curPay = combinedMonthly(dailyRate, bonusFull, pace);
+
+  // Map a desired calendar length / combined pay back to the FK monthly target.
+  const fkFromDays = (cd: number) =>
+    Math.round(approxMonthlyGross(dailyRate, (minDays / cd) * 7));
+  const fkFromPay = (combined: number) =>
+    payFull > 0 ? Math.round((combined / payFull) * fkFull) : fkFull;
 
   return (
     <>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
-            <Coins className="size-3.5" /> Ersättning per månad
+            <Coins className="size-3.5" /> Per månad
+            {bonusFull > 0 ? " (inkl. föräldralön)" : ""}
           </Label>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold tabular-nums">
-              {formatSek(currentPay)}
+              {formatSek(curPay)}
             </span>
             <Button
               type="button"
@@ -120,7 +147,7 @@ function SinglePaceLevers({
               variant="outline"
               aria-label={`Maxa ersättning – ${name}`}
               className="h-7 px-2 text-xs"
-              onClick={() => onSetTarget(payFull)}
+              onClick={() => onSetTarget(fkFull)}
             >
               Maxa
             </Button>
@@ -129,11 +156,11 @@ function SinglePaceLevers({
         <input
           type="range"
           aria-label={`Ersättning per månad – ${name}`}
-          min={paySlow}
-          max={payFull}
-          step={500}
-          value={payValue}
-          onChange={(e) => onSetTarget(Number(e.target.value))}
+          min={Math.round(paySlow)}
+          max={Math.round(payFull)}
+          step={100}
+          value={clamp(curPay, Math.round(paySlow), Math.round(payFull))}
+          onChange={(e) => onSetTarget(fkFromPay(Number(e.target.value)))}
           className="accent-primary w-full"
         />
       </div>
@@ -141,11 +168,11 @@ function SinglePaceLevers({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
-            <Hourglass className="size-3.5" /> Månader ledigt
+            <Hourglass className="size-3.5" /> Ledighetens längd
           </Label>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold tabular-nums">
-              ≈ {Math.round(currentMonths)} mån
+              ≈ {(curDays / DAYS_PER_MONTH).toFixed(1).replace(".", ",")} mån
             </span>
             <Button
               type="button"
@@ -153,7 +180,7 @@ function SinglePaceLevers({
               variant="outline"
               aria-label={`Maxa ledighet – ${name}`}
               className="h-7 px-2 text-xs"
-              onClick={() => onSetTarget(paySlow)}
+              onClick={() => onSetTarget(fkFromDays(maxDays))}
             >
               Maxa
             </Button>
@@ -161,20 +188,18 @@ function SinglePaceLevers({
         </div>
         <input
           type="range"
-          aria-label={`Månader ledigt – ${name}`}
-          min={monthsMin}
-          max={monthsMax}
+          aria-label={`Ledighetens längd i dagar – ${name}`}
+          min={minDays}
+          max={maxDays}
           step={1}
-          value={monthsValue}
-          onChange={(e) =>
-            onSetTarget(Math.round((dailyRate * days) / Number(e.target.value)))
-          }
+          value={curDays}
+          onChange={(e) => onSetTarget(fkFromDays(Number(e.target.value)))}
           className="accent-primary w-full"
         />
       </div>
 
       <p className="text-muted-foreground text-xs">
-        Mer per månad ger kortare ledighet — och tvärtom.
+        Mer per månad ger kortare ledighet — och tvärtom. Justeras dag för dag.
       </p>
     </>
   );
@@ -184,12 +209,14 @@ function PaceRow({
   label,
   name,
   dailyRate,
+  bonusFull,
   value,
   onChange,
 }: {
   label: string;
   name: string;
   dailyRate: number;
+  bonusFull: number;
   value: number;
   onChange: (n: number) => void;
 }) {
@@ -200,7 +227,8 @@ function PaceRow({
           {label}
         </Label>
         <span className="text-sm font-semibold tabular-nums">
-          {value} dgr/v · ≈ {formatSek(approxMonthlyGross(dailyRate, value))}/mån
+          {value} dgr/v · ≈ {formatSek(combinedMonthly(dailyRate, bonusFull, value))}
+          /mån
         </span>
       </div>
       <input
@@ -220,10 +248,12 @@ function PaceRow({
 function PhaseLevers({
   name,
   dailyRate,
+  bonusFull,
   phase,
 }: {
   name: string;
   dailyRate: number;
+  bonusFull: number;
   phase: PhaseControls;
 }) {
   return (
@@ -232,6 +262,7 @@ function PhaseLevers({
         label="Första året"
         name={name}
         dailyRate={dailyRate}
+        bonusFull={bonusFull}
         value={phase.phase1}
         onChange={phase.onSetPhase1}
       />
@@ -239,6 +270,7 @@ function PhaseLevers({
         label="Efter 1 år"
         name={name}
         dailyRate={dailyRate}
+        bonusFull={bonusFull}
         value={phase.phase2}
         onChange={phase.onSetPhase2}
       />

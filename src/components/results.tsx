@@ -41,6 +41,8 @@ export function Results({
   onSetTargetB,
   phaseA,
   phaseB,
+  bonusFullA,
+  bonusFullB,
   monthlyRows,
   projection,
   vabResult,
@@ -70,6 +72,8 @@ export function Results({
   onSetTargetB: (minMonthly: number) => void;
   phaseA: PhaseControls;
   phaseB: PhaseControls;
+  bonusFullA: number;
+  bonusFullB: number;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -110,6 +114,7 @@ export function Results({
           daysPerWeek={paceA}
           onSetTarget={onSetTargetA}
           phase={phaseA}
+          bonusFullMonthly={bonusFullA}
         />
       ) : twoParent ? (
         <SplitSuggestion
@@ -124,6 +129,8 @@ export function Results({
           onSetTargetB={onSetTargetB}
           phaseA={phaseA}
           phaseB={phaseB}
+          bonusFullA={bonusFullA}
+          bonusFullB={bonusFullB}
         />
       ) : null}
 

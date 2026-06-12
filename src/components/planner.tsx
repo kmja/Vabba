@@ -285,6 +285,14 @@ export function Planner() {
   const birthDaysName =
     birthDaysCaregiver === "A" ? nameA : nameB;
 
+  // Employer top-up at full-time pace, so the levers can fold it into the numbers.
+  const bonusFullA = supplementA
+    ? Math.round(supplementA.total / (form.supplementMonthsA ?? 6))
+    : 0;
+  const bonusFullB = supplementB
+    ? Math.round(supplementB.total / (form.supplementMonthsB ?? 6))
+    : 0;
+
   // How the leave plays out in calendar time. Caregivers are home in turn
   // (first → second), each drawing income-based days before lägstanivå, at a
   // pace that may switch at the 1-year mark.
@@ -503,6 +511,8 @@ export function Planner() {
         onSetTargetB={setTargetB}
         phaseA={phaseA}
         phaseB={phaseB}
+        bonusFullA={bonusFullA}
+        bonusFullB={bonusFullB}
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

@@ -26,6 +26,7 @@ export function SoloSummary({
   daysPerWeek,
   onSetTarget,
   phase,
+  bonusFullMonthly,
 }: {
   payout: ParentPayout;
   total: number;
@@ -33,6 +34,7 @@ export function SoloSummary({
   daysPerWeek: number;
   onSetTarget: (minMonthly: number) => void;
   phase: PhaseControls;
+  bonusFullMonthly: number;
 }) {
   return (
     <Card>
@@ -90,6 +92,7 @@ export function SoloSummary({
           days={total}
           dailyRate={payout.dailyRate}
           pace={daysPerWeek}
+          bonusFullMonthly={bonusFullMonthly}
           onSetTarget={onSetTarget}
           phase={phase}
         />

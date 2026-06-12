@@ -32,6 +32,8 @@ export function SplitSuggestion({
   onSetTargetB,
   phaseA,
   phaseB,
+  bonusFullA,
+  bonusFullB,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -46,6 +48,8 @@ export function SplitSuggestion({
   onSetTargetB: (minMonthly: number) => void;
   phaseA: PhaseControls;
   phaseB: PhaseControls;
+  bonusFullA: number;
+  bonusFullB: number;
 }) {
   const rec = result.recommended;
   const aDays = rec.allocatedTotals.A;
@@ -101,6 +105,7 @@ export function SplitSuggestion({
             days={aDays}
             dailyRate={rec.payout.A.dailyRate}
             pace={paceA}
+            bonusFullMonthly={bonusFullA}
             onSetTarget={onSetTargetA}
             phase={phaseA}
           />
@@ -109,6 +114,7 @@ export function SplitSuggestion({
             days={bDays}
             dailyRate={rec.payout.B.dailyRate}
             pace={paceB}
+            bonusFullMonthly={bonusFullB}
             onSetTarget={onSetTargetB}
             phase={phaseB}
           />
