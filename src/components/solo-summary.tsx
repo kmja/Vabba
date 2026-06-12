@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { LeaveLevers } from "@/components/leave-levers";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
 import {
@@ -23,11 +24,13 @@ export function SoloSummary({
   total,
   name,
   daysPerWeek,
+  onSetTarget,
 }: {
   payout: ParentPayout;
   total: number;
   name: string;
   daysPerWeek: number;
+  onSetTarget: (minMonthly: number) => void;
 }) {
   return (
     <Card>
@@ -79,6 +82,14 @@ export function SoloSummary({
             {formatSek(lagstanivaDailyAmount())}/dag på lägstanivå
           </p>
         </div>
+
+        <LeaveLevers
+          name={name}
+          days={total}
+          dailyRate={payout.dailyRate}
+          pace={daysPerWeek}
+          onSetTarget={onSetTarget}
+        />
 
         <p className="text-muted-foreground text-xs">
           Förslaget fördelar alla återstående dagar — du kan förstås ta ut färre.

@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { LeaveLevers } from "@/components/leave-levers";
 import {
   OBJECTIVE_DESCRIPTION,
   type Objective,
@@ -25,6 +26,10 @@ export function SplitSuggestion({
   plan,
   splitA,
   onSplitChange,
+  paceA,
+  paceB,
+  onSetTargetA,
+  onSetTargetB,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -33,6 +38,10 @@ export function SplitSuggestion({
   splitA?: number;
   /** Live split handler; when set, a draggable split slider is shown. */
   onSplitChange?: (splitA: number) => void;
+  paceA: number;
+  paceB: number;
+  onSetTargetA: (minMonthly: number) => void;
+  onSetTargetB: (minMonthly: number) => void;
 }) {
   const rec = result.recommended;
   const aDays = rec.allocatedTotals.A;
@@ -77,6 +86,27 @@ export function SplitSuggestion({
             </div>
           </div>
         )}
+
+        {/* Per-person pay ↔ duration levers */}
+        <div className="space-y-3">
+          <div className="text-muted-foreground text-xs">
+            Finjustera takten per vårdnadshavare:
+          </div>
+          <LeaveLevers
+            name={parentName(plan, "A")}
+            days={aDays}
+            dailyRate={rec.payout.A.dailyRate}
+            pace={paceA}
+            onSetTarget={onSetTargetA}
+          />
+          <LeaveLevers
+            name={parentName(plan, "B")}
+            days={bDays}
+            dailyRate={rec.payout.B.dailyRate}
+            pace={paceB}
+            onSetTarget={onSetTargetB}
+          />
+        </div>
 
         {/* Total payout */}
         <div className="bg-secondary/40 rounded-lg border p-4 text-center">

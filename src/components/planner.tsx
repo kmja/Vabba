@@ -178,8 +178,25 @@ export function Planner() {
     return total > 0 ? rec.allocatedTotals.A / total : 0.5;
   }, [objective, customSplitA, twoParent]);
 
-  const goalA = paceModeA === "prolong" ? "Förläng ledigheten" : "Full takt";
-  const goalB = paceModeB === "prolong" ? "Förläng ledigheten" : "Full takt";
+  // Label by the actual pace, not the stored mode (the results levers may set a
+  // prolong target that still works out to ~full speed, or vice versa).
+  const goalA = paceA >= 6.5 ? "Full takt" : "Förläng ledigheten";
+  const goalB = paceB >= 6.5 ? "Full takt" : "Förläng ledigheten";
+
+  // The results-page levers set a caregiver's target monthly pay, which drives
+  // their pace (months ↔ kr/månad are two views of the same dial).
+  const setTargetA = (minMonthly: number) =>
+    setForm((f) => ({
+      ...f,
+      minMonthlyA: Math.max(1, Math.round(minMonthly)),
+      paceModeA: "prolong",
+    }));
+  const setTargetB = (minMonthly: number) =>
+    setForm((f) => ({
+      ...f,
+      minMonthlyB: Math.max(1, Math.round(minMonthly)),
+      paceModeB: "prolong",
+    }));
 
   // Employer top-up ("föräldralön" from a kollektivavtal), per caregiver.
   const aboveCapA = plan.parents.A.incomeAboveCap ?? false;
@@ -411,10 +428,13 @@ export function Planner() {
         deadlines={deadlines}
         asOf={asOf}
         paceA={paceA}
+        paceB={paceB}
         splitA={displaySplitA}
         onSplitChange={(v) =>
           setForm((f) => ({ ...f, objective: "custom", customSplitA: v }))
         }
+        onSetTargetA={setTargetA}
+        onSetTargetB={setTargetB}
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

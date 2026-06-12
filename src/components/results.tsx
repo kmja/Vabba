@@ -33,8 +33,11 @@ export function Results({
   deadlines,
   asOf,
   paceA,
+  paceB,
   splitA,
   onSplitChange,
+  onSetTargetA,
+  onSetTargetB,
   monthlyRows,
   projection,
   vabResult,
@@ -57,8 +60,11 @@ export function Results({
   deadlines: PlanDeadlines;
   asOf: Date;
   paceA: number;
+  paceB: number;
   splitA: number;
   onSplitChange: (splitA: number) => void;
+  onSetTargetA: (minMonthly: number) => void;
+  onSetTargetB: (minMonthly: number) => void;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -97,6 +103,7 @@ export function Results({
           total={solo.allocatedTotal}
           name={soloName}
           daysPerWeek={paceA}
+          onSetTarget={onSetTargetA}
         />
       ) : twoParent ? (
         <SplitSuggestion
@@ -105,6 +112,10 @@ export function Results({
           plan={plan}
           splitA={splitA}
           onSplitChange={onSplitChange}
+          paceA={paceA}
+          paceB={paceB}
+          onSetTargetA={onSetTargetA}
+          onSetTargetB={onSetTargetB}
         />
       ) : null}
 

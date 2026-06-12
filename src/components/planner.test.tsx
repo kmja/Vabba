@@ -239,6 +239,18 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/293 dagar/).length).toBeGreaterThan(0);
   });
 
+  it("stretches one caregiver's leave with the per-person lever", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // Both caregivers start on full pace.
+    expect(screen.queryByText("Förläng ledigheten")).toBeNull();
+    // Use caregiver A's "Förläng" lever button to stretch their leave.
+    fireEvent.click(screen.getAllByRole("button", { name: "Förläng" })[0]);
+    expect(screen.getByText("Förläng ledigheten")).toBeTruthy();
+  });
+
   it("saves the lägstanivå days by default", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → step 3
