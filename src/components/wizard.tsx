@@ -273,6 +273,7 @@ export function Wizard({
     ? paceModeA === "full"
     : paceModeA === "full" || paceModeB === "full";
   const customSplitA = form.customSplitA ?? 0.5;
+  const includeLagsta = form.includeLagsta ?? false;
   const firstCaregiver = form.firstCaregiver ?? "A";
   const supplementA = {
     enabled: form.supplementA ?? false,
@@ -600,6 +601,22 @@ export function Wizard({
                 hint="Varje dubbeldag kostar 2 dagar ur potten (max 60, före 15 mån)."
               />
             )}
+
+            <Separator />
+            <div className="space-y-2">
+              <CheckRow
+                id="include-lagsta"
+                checked={includeLagsta}
+                onChange={(b) => setForm((f) => ({ ...f, includeLagsta: b }))}
+              >
+                Ta ut lägstanivådagarna (90 dagar à 180 kr)
+              </CheckRow>
+              <p className="text-muted-foreground text-xs">
+                {includeLagsta
+                  ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
+                  : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
+              </p>
+            </div>
 
             <Separator />
             <div className="space-y-3">

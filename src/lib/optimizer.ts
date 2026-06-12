@@ -125,6 +125,12 @@ export interface OptimizeOptions {
   doubleDays?: number;
   /** Share of the days to caregiver A (0–1) for the "custom" objective. */
   customSplitA?: number;
+  /**
+   * Whether to spend the flat lägstanivå days (180 kr) in the plan. When false
+   * they're left saved (the leave ends when income-based days run out). Defaults
+   * to true.
+   */
+  includeLagsta?: boolean;
 }
 
 export interface OptimizeResult {
@@ -232,9 +238,12 @@ function buildPlan(
   asOf: Date,
   doubleDays = 0,
   customSplitA = 0.5,
+  includeLagsta = true,
 ): OptimizedPlan {
   const S = remaining.remaining.sjukpenning;
-  const L = remaining.remaining.lagsta;
+  // Lägstanivå days are optional — when not taken, the leave ends as the
+  // income-based days run out.
+  const L = includeLagsta ? remaining.remaining.lagsta : 0;
 
   const reservedRisk = reservedDaysAtRisk(plan);
   const rA = reservedRisk.A;
@@ -478,6 +487,7 @@ export function optimize(
 
   const doubleDays = options.doubleDays ?? 0;
   const customSplitA = options.customSplitA ?? 0.5;
+  const includeLagsta = options.includeLagsta ?? true;
   const recommended = buildPlan(
     plan,
     objective,
@@ -485,9 +495,10 @@ export function optimize(
     asOf,
     doubleDays,
     customSplitA,
+    includeLagsta,
   );
   const alternatives = OBJECTIVES.filter((o) => o !== objective).map((o) =>
-    buildPlan(plan, o, remaining, asOf, doubleDays, customSplitA),
+    buildPlan(plan, o, remaining, asOf, doubleDays, customSplitA, includeLagsta),
   );
 
   return { recommended, alternatives, remaining };
@@ -572,9 +583,10 @@ function buildSoloWarnings(
  */
 export function optimizeSolo(
   plan: PlanInput,
-  options: { asOf?: Date } = {},
+  options: { asOf?: Date; includeLagsta?: boolean } = {},
 ): SoloResult {
   const asOf = options.asOf ?? new Date();
+  const includeLagsta = options.includeLagsta ?? true;
   const budget = planBudget(plan);
   const usedSjuk = Math.max(0, plan.parents.A.daysUsed.sjukpenning);
   const usedLagsta = Math.max(0, plan.parents.A.daysUsed.lagsta);
@@ -599,7 +611,7 @@ export function optimizeSolo(
 
   const days: TierCount = {
     sjukpenning: remaining.remaining.sjukpenning,
-    lagsta: remaining.remaining.lagsta,
+    lagsta: includeLagsta ? remaining.remaining.lagsta : 0,
   };
   const payout = payoutFor(
     days,

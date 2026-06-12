@@ -44,11 +44,12 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
 
     expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
-    expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
+    expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
-    // Max-payout default: higher earner (A) takes the bulk; B keeps reserved.
-    expect(screen.getByText("300 dagar")).toBeTruthy();
-    expect(screen.getByText("180 dagar")).toBeTruthy();
+    // Max-payout default, lägsta saved: A takes the 300 income-based days, B
+    // keeps their 90 reserved (no flat days spread across the leave).
+    expect(screen.getAllByText(/300 dagar/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/90 dagar/).length).toBeGreaterThan(0);
   });
 
   it("marks the handoff between caregivers on the timeline", () => {
@@ -221,7 +222,7 @@ describe("<Planner /> wizard", () => {
     next(); // → step 3
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText("Förslag på fördelning")).toBeTruthy();
+    expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
   });
 
   it("has a live split slider on the results page that updates the numbers", () => {
@@ -231,11 +232,29 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     const slider = container.querySelector("#results-split");
     expect(slider).not.toBeNull();
-    // Equal (capped) rates → maxPayout splits the days 50/50.
-    expect(screen.getAllByText("240 dagar").length).toBeGreaterThanOrEqual(2);
+    // Equal (capped) rates → maxPayout splits the 390 income-based days 50/50.
+    expect(screen.getAllByText(/195 dagar/).length).toBeGreaterThanOrEqual(2);
     // Drag to give caregiver A 75% of the days → numbers update live.
     fireEvent.change(slider!, { target: { value: "75" } });
-    expect(screen.getByText("361 dagar")).toBeTruthy();
+    expect(screen.getAllByText(/293 dagar/).length).toBeGreaterThan(0);
+  });
+
+  it("saves the lägstanivå days by default", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container); // → step 3
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText(/ingår inte i planen/)).toBeTruthy();
+  });
+
+  it("includes the lägstanivå days when the schedule toggle is on", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container); // → step 3
+    fireEvent.click(container.querySelector("#include-lagsta")!);
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // maxPayout default (45k/30k): B's 90 reserved + 90 flat days = 180.
+    expect(screen.getAllByText(/180 dagar/).length).toBeGreaterThan(0);
   });
 
   it("folds leftover days from previous children into the lead", () => {

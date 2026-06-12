@@ -68,31 +68,36 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
           const gross = approxMonthlyGross(r.dailyRate, r.daysPerWeek);
           return (
             <div key={i} className="rounded-lg border p-4">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="flex items-baseline gap-2">
-                  <span className="font-medium">{r.name}</span>
-                  {r.goalLabel && (
-                    <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
-                      {r.goalLabel}
-                    </span>
-                  )}
-                </span>
-                <span className="text-2xl font-bold tabular-nums">
-                  {formatSek(gross)}
-                  <span className="text-muted-foreground text-sm font-normal">
-                    /mån
+              <div className="flex items-baseline gap-2">
+                <span className="font-medium">{r.name}</span>
+                {r.goalLabel && (
+                  <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
+                    {r.goalLabel}
                   </span>
-                </span>
+                )}
               </div>
-              <div className="text-muted-foreground mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs tabular-nums">
-                <span>
-                  {formatDays(r.days)} · {approxLeaveMonths(r.days, r.daysPerWeek)}{" "}
-                  vid {formatPace(r.daysPerWeek)} dagar/vecka
-                </span>
-                <span>
-                  ≈ {formatSek(netAfterTax(gross))} efter skatt ·{" "}
-                  {formatSek(r.dailyRate)}/dag
-                </span>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-2xl font-bold tabular-nums">
+                    {approxLeaveMonths(r.days, r.daysPerWeek)}
+                  </div>
+                  <div className="text-muted-foreground text-xs tabular-nums">
+                    {formatDays(r.days)} vid {formatPace(r.daysPerWeek)}{" "}
+                    dagar/vecka
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold tabular-nums">
+                    {formatSek(gross)}
+                    <span className="text-muted-foreground text-sm font-normal">
+                      /mån
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground text-xs tabular-nums">
+                    ≈ {formatSek(netAfterTax(gross))} efter skatt ·{" "}
+                    {formatSek(r.dailyRate)}/dag
+                  </div>
+                </div>
               </div>
               {r.extraDays ? (
                 <div className="text-muted-foreground mt-0.5 text-xs">

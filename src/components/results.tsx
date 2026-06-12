@@ -33,7 +33,6 @@ export function Results({
   deadlines,
   asOf,
   paceA,
-  paceB,
   splitA,
   onSplitChange,
   monthlyRows,
@@ -41,6 +40,7 @@ export function Results({
   vabResult,
   birthDays,
   birthDaysName,
+  savedLagstaDays,
   warnings,
   onEdit,
   onReset,
@@ -57,7 +57,6 @@ export function Results({
   deadlines: PlanDeadlines;
   asOf: Date;
   paceA: number;
-  paceB: number;
   splitA: number;
   onSplitChange: (splitA: number) => void;
   monthlyRows: MonthlyRow[];
@@ -65,6 +64,7 @@ export function Results({
   vabResult: VabResult | null;
   birthDays?: BirthDaysResult;
   birthDaysName: string;
+  savedLagstaDays: number;
   warnings: PlanWarning[];
   onEdit: () => void;
   onReset: () => void;
@@ -103,14 +103,12 @@ export function Results({
           result={twoParent}
           objective={objective}
           plan={plan}
-          paceA={paceA}
-          paceB={paceB}
           splitA={splitA}
           onSplitChange={onSplitChange}
         />
       ) : null}
 
-      <RemainingTiers remaining={remaining} />
+      <RemainingTiers remaining={remaining} savedLagstaDays={savedLagstaDays} />
 
       {vabResult && <VabResultCard result={vabResult} />}
 

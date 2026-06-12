@@ -29,6 +29,11 @@ export interface ShareableState {
   paceModeB?: "full" | "prolong";
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
+  /**
+   * Whether to spend the 90 flat lägstanivå days (180 kr) in the plan. When
+   * false they're saved and the leave ends as the income-based days run out.
+   */
+  includeLagsta?: boolean;
   /** Which caregiver takes their leave first (affects the timeline order). */
   firstCaregiver?: "A" | "B";
   /**

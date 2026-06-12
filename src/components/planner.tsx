@@ -36,6 +36,7 @@ const DEFAULT_STATE: ShareableState = {
   paceModeA: "full",
   paceModeB: "full",
   customSplitA: 0.5,
+  includeLagsta: false,
   firstCaregiver: "A",
   supplementA: false,
   supplementB: false,
@@ -89,6 +90,7 @@ export function Planner() {
   const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
   const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
   const customSplitA = form.customSplitA ?? 0.5;
+  const includeLagsta = form.includeLagsta ?? false;
   const firstCaregiver = form.firstCaregiver ?? "A";
   const extraA = (form.hasExtraDays ?? false) ? (form.extraDaysA ?? 0) : 0;
   const extraB = (form.hasExtraDays ?? false) ? (form.extraDaysB ?? 0) : 0;
@@ -118,14 +120,22 @@ export function Planner() {
   const twoParent = useMemo(
     () =>
       valid && asOf && !soloMode
-        ? optimize(effectivePlan, { objective, asOf, doubleDays, customSplitA })
+        ? optimize(effectivePlan, {
+            objective,
+            asOf,
+            doubleDays,
+            customSplitA,
+            includeLagsta,
+          })
         : null,
-    [effectivePlan, valid, asOf, objective, soloMode, doubleDays, customSplitA],
+    [effectivePlan, valid, asOf, objective, soloMode, doubleDays, customSplitA, includeLagsta],
   );
   const solo = useMemo(
     () =>
-      valid && asOf && soloMode ? optimizeSolo(effectivePlan, { asOf }) : null,
-    [effectivePlan, valid, asOf, soloMode],
+      valid && asOf && soloMode
+        ? optimizeSolo(effectivePlan, { asOf, includeLagsta })
+        : null,
+    [effectivePlan, valid, asOf, soloMode, includeLagsta],
   );
   const remaining = soloMode
     ? (solo?.remaining ?? null)
@@ -285,13 +295,13 @@ export function Planner() {
     if (soloMode && solo) {
       const p = paceA > 0 ? paceA : 7;
       phases.push({
-        days: solo.remaining.remaining.sjukpenning + extraA,
+        days: solo.payout.sjukpenningDays + extraA,
         pace: p,
         rate: rateA,
         tier: "income",
       });
       phases.push({
-        days: solo.remaining.remaining.lagsta,
+        days: solo.payout.lagstaDays,
         pace: p,
         rate: lagstaRate,
         tier: "lagsta",
@@ -401,7 +411,6 @@ export function Planner() {
         deadlines={deadlines}
         asOf={asOf}
         paceA={paceA}
-        paceB={paceB}
         splitA={displaySplitA}
         onSplitChange={(v) =>
           setForm((f) => ({ ...f, objective: "custom", customSplitA: v }))
@@ -411,6 +420,7 @@ export function Planner() {
         vabResult={vabResult}
         birthDays={birthDays ?? undefined}
         birthDaysName={birthDaysName}
+        savedLagstaDays={includeLagsta ? 0 : (remaining?.remaining.lagsta ?? 0)}
         warnings={warnings}
         onEdit={() => setForm((f) => ({ ...f, submitted: false }))}
         onReset={() => setForm(DEFAULT_STATE)}

@@ -50,7 +50,14 @@ function TierRow({
   );
 }
 
-export function RemainingTiers({ remaining }: { remaining: RemainingSummary }) {
+export function RemainingTiers({
+  remaining,
+  savedLagstaDays = 0,
+}: {
+  remaining: RemainingSummary;
+  /** Lägstanivå days left out of the plan (saved), if any. */
+  savedLagstaDays?: number;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -61,6 +68,13 @@ export function RemainingTiers({ remaining }: { remaining: RemainingSummary }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        {savedLagstaDays > 0 && (
+          <p className="text-muted-foreground text-xs">
+            {formatNumber(savedLagstaDays)} lägstanivådagar (180 kr/dag) ingår
+            inte i planen — de sparas och kan tas ut senare eller läggas till i
+            schemat för att förlänga ledigheten.
+          </p>
+        )}
         <TierRow
           label={TIER_LABEL.sjukpenning}
           used={remaining.used.sjukpenning}
