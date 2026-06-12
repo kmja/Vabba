@@ -38,7 +38,7 @@ const STEP_TITLES = [
   "Barnet",
   "Vårdnadshavare & mål",
   "Schema",
-  "Vab (valfritt)",
+  "Vab & 10-dagar",
 ] as const;
 const STEP_COUNT = STEP_TITLES.length;
 
@@ -169,6 +169,22 @@ function CaregiverFields({
         capHint={capHint}
       />
 
+      <CheckRow
+        id={`${idPrefix}-240`}
+        checked={value.meets240DayRule !== false}
+        onChange={(b) => onChange({ ...value, meets240DayRule: b })}
+      >
+        <span className="font-normal">
+          Har haft inkomst (SGI) i minst 240 dagar före födseln
+        </span>
+      </CheckRow>
+      {value.meets240DayRule === false && (
+        <p className="text-muted-foreground -mt-1 text-xs">
+          De första 180 dagarna betalas då på grundnivå (250 kr/dag) i stället
+          för på sjukpenningnivå.
+        </p>
+      )}
+
       <div className="space-y-2">
         <CheckRow
           id={`${idPrefix}-supplement`}
@@ -276,6 +292,9 @@ export function Wizard({
   const vabEnabled = form.vabEnabled ?? false;
   const vabChildren = form.vabChildren ?? 1;
   const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
+  const birthDaysEnabled = form.birthDaysEnabled ?? false;
+  const birthDaysCaregiver = form.birthDaysCaregiver ?? "B";
+  const birthDaysCount = form.birthDaysCount ?? 10;
 
   const setPlan = (updater: (p: PlanInput) => PlanInput) =>
     setForm((f) => ({ ...f, plan: updater(f.plan) }));
@@ -753,8 +772,63 @@ export function Wizard({
                 </p>
               </>
             )}
+
+            {!soloMode && (
+              <>
+                <Separator />
+                <CheckRow
+                  id="birth-days-enabled"
+                  checked={birthDaysEnabled}
+                  onChange={(b) =>
+                    setForm((f) => ({ ...f, birthDaysEnabled: b }))
+                  }
+                >
+                  10 dagar vid barns födelse (tillfällig föräldrapenning)
+                </CheckRow>
+                {birthDaysEnabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="birth-days-who">
+                        Vem tar ut dagarna?
+                      </Label>
+                      <Select
+                        id="birth-days-who"
+                        value={birthDaysCaregiver}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            birthDaysCaregiver: e.target.value as "A" | "B",
+                          }))
+                        }
+                      >
+                        <option value="A">{nameA}</option>
+                        <option value="B">{nameB}</option>
+                      </Select>
+                    </div>
+                    <NumberField
+                      id="birth-days-count"
+                      label="Antal dagar (max 10)"
+                      value={birthDaysCount}
+                      min={0}
+                      max={10}
+                      stepper
+                      onChange={(n) =>
+                        setForm((f) => ({ ...f, birthDaysCount: n }))
+                      }
+                    />
+                  </div>
+                )}
+                {birthDaysEnabled && (
+                  <p className="text-muted-foreground text-xs">
+                    Den andra vårdnadshavarens dagar i samband med födseln —
+                    utöver de 480. Tas ut inom 60 dagar efter hemkomsten.
+                  </p>
+                )}
+              </>
+            )}
+
             <p className="text-muted-foreground text-xs">
-              Vab är valfritt — hoppa över om det inte är aktuellt.
+              Allt här är valfritt — hoppa över om det inte är aktuellt.
             </p>
           </>
         )}

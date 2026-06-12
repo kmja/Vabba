@@ -6,7 +6,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { SGI_PROTECTION, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
+import {
+  MONEY,
+  SGI_PROTECTION,
+  lagstanivaDailyAmount,
+  netAfterTax,
+} from "@/lib/rules";
 import {
   approxLeaveMonths,
   approxMonthlyGross,
@@ -31,6 +36,8 @@ export interface MonthlyRow {
   aboveCap?: boolean;
   /** Employer top-up (föräldralön) during the first months, if any. */
   supplement?: { monthly: number; total: number; months: number };
+  /** Income-based days paid at grundnivå (240-day rule not met), if any. */
+  grundnivaFirstDays?: number;
 }
 
 /**
@@ -90,6 +97,17 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
               {r.extraDays ? (
                 <div className="text-muted-foreground mt-0.5 text-xs">
                   inkl. {formatDays(r.extraDays)} sparade från tidigare barn
+                </div>
+              ) : null}
+
+              {r.grundnivaFirstDays ? (
+                <div className="mt-1 text-xs">
+                  De första {formatDays(r.grundnivaFirstDays)} betalas på
+                  grundnivå ({formatSek(MONEY.grundnivaPerDay)}/dag ≈{" "}
+                  {formatSek(
+                    approxMonthlyGross(MONEY.grundnivaPerDay, r.daysPerWeek),
+                  )}
+                  /mån) — 240-dagarsvillkoret är inte uppfyllt.
                 </div>
               ) : null}
 

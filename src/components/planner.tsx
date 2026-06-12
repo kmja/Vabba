@@ -19,6 +19,7 @@ import { computeVab } from "@/lib/vab";
 import { addDays } from "@/lib/dates";
 import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
 import { computeSupplement } from "@/lib/supplement";
+import { computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
 
@@ -42,6 +43,9 @@ const DEFAULT_STATE: ShareableState = {
   supplementMonthsB: 6,
   supplementPctA: 90,
   supplementPctB: 90,
+  birthDaysEnabled: false,
+  birthDaysCaregiver: "B",
+  birthDaysCount: 10,
   hasExtraDays: false,
   extraDaysA: 0,
   extraDaysB: 0,
@@ -199,12 +203,27 @@ export function Planner() {
     [soloMode, form.supplementB, form.supplementPctB, form.supplementMonthsB, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, paceB],
   );
 
+  // "10 dagar vid barns födelse" — tillfällig FP for the chosen caregiver.
+  const birthDaysCaregiver = form.birthDaysCaregiver ?? "B";
+  const birthDays = useMemo(() => {
+    if (soloMode || !(form.birthDaysEnabled ?? false)) return null;
+    const p = plan.parents[birthDaysCaregiver];
+    return computeBirthDays({
+      grossMonthlyIncome: p.grossMonthlyIncome,
+      incomeAboveCap: p.incomeAboveCap,
+      days: form.birthDaysCount ?? 10,
+    });
+  }, [soloMode, form.birthDaysEnabled, form.birthDaysCount, birthDaysCaregiver, plan.parents]);
+  const birthDaysName =
+    birthDaysCaregiver === "A" ? nameA : nameB;
+
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     if (soloMode && solo) {
       return [
         {
           name: soloName,
           dailyRate: solo.payout.dailyRate,
+          grundnivaFirstDays: solo.payout.grundnivaDays,
           days: solo.allocatedTotal + extraA,
           daysPerWeek: paceA,
           extraDays: extraA,
@@ -220,6 +239,7 @@ export function Planner() {
         {
           name: nameA,
           dailyRate: rec.payout.A.dailyRate,
+          grundnivaFirstDays: rec.payout.A.grundnivaDays,
           days: rec.allocatedTotals.A + extraA,
           daysPerWeek: paceA,
           extraDays: extraA,
@@ -230,6 +250,7 @@ export function Planner() {
         {
           name: nameB,
           dailyRate: rec.payout.B.dailyRate,
+          grundnivaFirstDays: rec.payout.B.grundnivaDays,
           days: rec.allocatedTotals.B + extraB,
           daysPerWeek: paceB,
           extraDays: extraB,
@@ -388,6 +409,8 @@ export function Planner() {
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}
+        birthDays={birthDays ?? undefined}
+        birthDaysName={birthDaysName}
         warnings={warnings}
         onEdit={() => setForm((f) => ({ ...f, submitted: false }))}
         onReset={() => setForm(DEFAULT_STATE)}

@@ -280,6 +280,36 @@ describe("income above the cap shortcut", () => {
   });
 });
 
+describe("240-day rule", () => {
+  it("pays grundnivå for the first 180 income-based days when unmet", () => {
+    const plan = freshPlan(60_000, 30_000); // A is above the cap
+    plan.parents.A.meets240DayRule = false;
+    const { recommended } = optimize(plan, {
+      objective: "maxPayout",
+      asOf: SOON_AFTER_BIRTH,
+    });
+    const a = recommended.payout.A;
+    expect(a.sjukpenningDays).toBe(300);
+    expect(a.grundnivaDays).toBe(180);
+    // 180 days at grundnivå + 120 at the (capped) income rate.
+    expect(a.amount).toBe(
+      180 * MONEY.grundnivaPerDay + 120 * MONEY.maxSjukpenningPerDay,
+    );
+    expect(
+      recommended.warnings.some((w) => w.code === "grundnivaFirst180"),
+    ).toBe(true);
+  });
+
+  it("leaves a qualifying parent unaffected", () => {
+    const plan = freshPlan(60_000, 30_000);
+    const { recommended } = optimize(plan, {
+      objective: "maxPayout",
+      asOf: SOON_AFTER_BIRTH,
+    });
+    expect(recommended.payout.A.grundnivaDays).toBe(0);
+  });
+});
+
 describe("optimizeSolo (sole custody)", () => {
   it("gives the single parent all remaining days and their value", () => {
     const solo = optimizeSolo(freshPlan(40_000, 0), { asOf: SOON_AFTER_BIRTH });

@@ -73,6 +73,34 @@ describe("<Planner /> wizard", () => {
     ).toBeTruthy();
   });
 
+  it("adds the 10 birth-days for the other parent", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container); // → step 3
+    next(); // → step 4
+    fireEvent.click(container.querySelector("#birth-days-enabled")!);
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText("10 dagar vid barns födelse")).toBeTruthy();
+  });
+
+  it("drops the first 180 days to grundnivå when the 240-day rule isn't met", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next(); // → step 2
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    fireEvent.click(container.querySelector("#a-240")!); // A no longer qualifies
+    next(); // → step 3
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getAllByText(/grundnivå/).length).toBeGreaterThan(0);
+  });
+
   it("includes employer föräldralön on the results page", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {

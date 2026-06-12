@@ -8,6 +8,7 @@ import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import { MonthlyEstimate, type MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
+import { BirthDaysCard } from "@/components/birth-days-card";
 import { ExtraRulesCard } from "@/components/extra-rules-card";
 import { WarningsList } from "@/components/warnings-list";
 import { Timeline, type LeaveProjection } from "@/components/timeline";
@@ -19,6 +20,7 @@ import type {
   SoloResult,
 } from "@/lib/optimizer";
 import type { VabResult } from "@/lib/vab";
+import type { BirthDaysResult } from "@/lib/birth-days";
 
 export function Results({
   soloMode,
@@ -37,6 +39,8 @@ export function Results({
   monthlyRows,
   projection,
   vabResult,
+  birthDays,
+  birthDaysName,
   warnings,
   onEdit,
   onReset,
@@ -59,6 +63,8 @@ export function Results({
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
+  birthDays?: BirthDaysResult;
+  birthDaysName: string;
   warnings: PlanWarning[];
   onEdit: () => void;
   onReset: () => void;
@@ -107,6 +113,10 @@ export function Results({
       <RemainingTiers remaining={remaining} />
 
       {vabResult && <VabResultCard result={vabResult} />}
+
+      {birthDays && birthDays.days > 0 && (
+        <BirthDaysCard result={birthDays} caregiverName={birthDaysName} />
+      )}
 
       <WarningsList warnings={warnings} />
 

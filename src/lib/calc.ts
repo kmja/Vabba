@@ -42,6 +42,13 @@ export interface ParentInput {
    * "above the cap" shortcut instead of an exact salary.
    */
   incomeAboveCap?: boolean;
+  /**
+   * The "240-dagarsregeln": to be paid sjukpenningnivå (rather than grundnivå)
+   * for the first 180 days, a parent must have had SGI-qualifying income for at
+   * least 240 days before the birth. Defaults to met (`true`/undefined). When
+   * `false`, the first 180 income-based days are paid at grundnivå (250 kr).
+   */
+  meets240DayRule?: boolean;
   /** Days already used by this parent, per tier (default 0/0). */
   daysUsed: TierCount;
 }

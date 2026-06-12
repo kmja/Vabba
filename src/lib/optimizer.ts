@@ -80,6 +80,7 @@ export type WarningCode =
   | "doubleDaysWindow"
   | "incomeAboveCap"
   | "doubleDaysLimited"
+  | "grundnivaFirst180"
   | "overAllocated";
 
 export interface PlanWarning {
@@ -93,6 +94,11 @@ export interface ParentPayout {
   lagstaDays: number;
   /** Daily amount on the income-based tier for this parent. */
   dailyRate: number;
+  /**
+   * How many of the income-based days are paid at grundnivå instead of the
+   * income rate because the 240-day rule isn't met (the first 180 days).
+   */
+  grundnivaDays: number;
   /** Total kronor from the days allocated to this parent. */
   amount: number;
 }
@@ -132,14 +138,40 @@ export interface OptimizeResult {
 // Core allocation
 // -----------------------------------------------------------------------------
 
-function payoutFor(days: TierCount, grossMonthlyIncome: number): ParentPayout {
+function payoutFor(
+  days: TierCount,
+  grossMonthlyIncome: number,
+  grundnivaDays = 0,
+): ParentPayout {
   const dailyRate = sjukpenningnivaDailyAmount(grossMonthlyIncome);
+  const gnv = Math.max(0, Math.min(grundnivaDays, days.sjukpenning));
+  const incomeSjuk = days.sjukpenning - gnv;
   return {
     sjukpenningDays: days.sjukpenning,
     lagstaDays: days.lagsta,
     dailyRate,
-    amount: days.sjukpenning * dailyRate + days.lagsta * MONEY.lagstaPerDay,
+    grundnivaDays: gnv,
+    amount:
+      gnv * MONEY.grundnivaPerDay +
+      incomeSjuk * dailyRate +
+      days.lagsta * MONEY.lagstaPerDay,
   };
+}
+
+/**
+ * How many of a parent's allocated income-based days fall in the first-180-day
+ * grundnivå window when they don't meet the 240-day rule (already-used income
+ * days count toward the 180).
+ */
+function grundnivaDaysFor(
+  parent: PlanInput["parents"][ParentId],
+  allocatedSjuk: number,
+  usedSjuk: number,
+): number {
+  if (parent.meets240DayRule === false) {
+    return Math.max(0, Math.min(allocatedSjuk, 180 - usedSjuk));
+  }
+  return 0;
 }
 
 /**
@@ -249,8 +281,19 @@ function buildPlan(
     B: { sjukpenning: sB + effectiveDouble, lagsta: lB },
   };
 
-  const payoutA = payoutFor(allocation.A, incomeA);
-  const payoutB = payoutFor(allocation.B, incomeB);
+  // 240-day rule: a non-qualifying parent's first 180 income-based days pay
+  // grundnivå. Already-used income days count toward the 180.
+  const usage = planUsage(plan);
+  const payoutA = payoutFor(
+    allocation.A,
+    incomeA,
+    grundnivaDaysFor(plan.parents.A, allocation.A.sjukpenning, usage.byParent.A.sjukpenning),
+  );
+  const payoutB = payoutFor(
+    allocation.B,
+    incomeB,
+    grundnivaDaysFor(plan.parents.B, allocation.B.sjukpenning, usage.byParent.B.sjukpenning),
+  );
 
   // Reserved days are single days, so forfeiture is judged on the split (the
   // dubbeldagar added on top don't count toward the reserved block).
@@ -402,6 +445,17 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
     }
   }
 
+  // 7. 240-day rule not met → first 180 income-based days at grundnivå.
+  for (const id of PARENT_IDS) {
+    if (plan.parents[id].meets240DayRule === false) {
+      warnings.push({
+        level: "warning",
+        code: "grundnivaFirst180",
+        message: `${parentName(plan, id)} uppfyller inte 240-dagarsvillkoret, så de första 180 inkomstbaserade dagarna betalas på grundnivå (${MONEY.grundnivaPerDay} kr/dag) i stället för på sjukpenningnivå.`,
+      });
+    }
+  }
+
   return warnings;
 }
 
@@ -500,6 +554,14 @@ function buildSoloWarnings(
     });
   }
 
+  if (plan.parents.A.meets240DayRule === false) {
+    warnings.push({
+      level: "warning",
+      code: "grundnivaFirst180",
+      message: `Du uppfyller inte 240-dagarsvillkoret, så de första 180 inkomstbaserade dagarna betalas på grundnivå (${MONEY.grundnivaPerDay} kr/dag) i stället för på sjukpenningnivå.`,
+    });
+  }
+
   return warnings;
 }
 
@@ -539,7 +601,11 @@ export function optimizeSolo(
     sjukpenning: remaining.remaining.sjukpenning,
     lagsta: remaining.remaining.lagsta,
   };
-  const payout = payoutFor(days, resolveMonthlyIncome(plan.parents.A));
+  const payout = payoutFor(
+    days,
+    resolveMonthlyIncome(plan.parents.A),
+    grundnivaDaysFor(plan.parents.A, days.sjukpenning, usedSjuk),
+  );
 
   return {
     remaining,
