@@ -29,6 +29,8 @@ export interface ShareableState {
   paceModeB?: "full" | "prolong";
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
+  /** Which caregiver takes their leave first (affects the timeline order). */
+  firstCaregiver?: "A" | "B";
   /** Leftover föräldrapenning days carried over from previous children. */
   hasExtraDays?: boolean;
   extraDaysA?: number;

@@ -59,6 +59,20 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Byte av vårdnadshavare")).toBeTruthy();
   });
 
+  it("lets you choose which caregiver takes leave first", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container); // → step 3, two caregivers, A first by default
+    fireEvent.change(container.querySelector("#first-caregiver")!, {
+      target: { value: "B" },
+    });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // B now leads, so A is the one who takes over at the handover.
+    expect(
+      screen.getByText(/tar över efter Vårdnadshavare B/),
+    ).toBeTruthy();
+  });
+
   it("blocks step 1 until a birth date is entered", () => {
     render(<Planner />);
     const nextBtn = screen.getByRole("button", { name: /Nästa/ });

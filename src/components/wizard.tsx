@@ -195,6 +195,7 @@ export function Wizard({
     ? paceModeA === "full"
     : paceModeA === "full" || paceModeB === "full";
   const customSplitA = form.customSplitA ?? 0.5;
+  const firstCaregiver = form.firstCaregiver ?? "A";
   const hasExtraDays = form.hasExtraDays ?? false;
   const extraDaysA = form.extraDaysA ?? 0;
   const extraDaysB = form.extraDaysB ?? 0;
@@ -418,6 +419,32 @@ export function Wizard({
 
         {step === 3 && (
           <>
+            {!soloMode && (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="first-caregiver">Vem är ledig först?</Label>
+                  <Select
+                    id="first-caregiver"
+                    value={firstCaregiver}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        firstCaregiver: e.target.value as "A" | "B",
+                      }))
+                    }
+                  >
+                    <option value="A">{nameA}</option>
+                    <option value="B">{nameB}</option>
+                  </Select>
+                  <p className="text-muted-foreground text-xs">
+                    Styr ordningen på tidslinjen — vem som tar ut sina dagar
+                    först och när ni byter. Ofta börjar den som fött barnet.
+                  </p>
+                </div>
+                <Separator />
+              </>
+            )}
+
             {anyFullPace ? (
               <div className="space-y-1.5">
                 <Label htmlFor="days-per-week">

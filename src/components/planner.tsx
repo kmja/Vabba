@@ -34,6 +34,7 @@ const DEFAULT_STATE: ShareableState = {
   paceModeA: "full",
   paceModeB: "full",
   customSplitA: 0.5,
+  firstCaregiver: "A",
   hasExtraDays: false,
   extraDaysA: 0,
   extraDaysB: 0,
@@ -77,6 +78,7 @@ export function Planner() {
   const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
   const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
   const customSplitA = form.customSplitA ?? 0.5;
+  const firstCaregiver = form.firstCaregiver ?? "A";
   const extraA = (form.hasExtraDays ?? false) ? (form.extraDaysA ?? 0) : 0;
   const extraB = (form.hasExtraDays ?? false) ? (form.extraDaysB ?? 0) : 0;
   const vabEnabled = form.vabEnabled ?? false;
@@ -230,14 +232,21 @@ export function Planner() {
       });
     } else if (twoParent) {
       const rec = twoParent.recommended;
-      const pA = paceA > 0 ? paceA : 7;
-      const pB = paceB > 0 ? paceB : 7;
-      phases.push(
-        { caregiver: nameA, days: rec.allocation.A.sjukpenning + extraA, pace: pA, rate: rateA, tier: "income" },
-        { caregiver: nameA, days: rec.allocation.A.lagsta, pace: pA, rate: lagstaRate, tier: "lagsta" },
-        { caregiver: nameB, days: rec.allocation.B.sjukpenning + extraB, pace: pB, rate: rateB, tier: "income" },
-        { caregiver: nameB, days: rec.allocation.B.lagsta, pace: pB, rate: lagstaRate, tier: "lagsta" },
-      );
+      const phasesFor = (id: "A" | "B"): Phase[] => {
+        const alloc = rec.allocation[id];
+        const extra = id === "A" ? extraA : extraB;
+        const rawPace = id === "A" ? paceA : paceB;
+        const pace = rawPace > 0 ? rawPace : 7;
+        const rate = id === "A" ? rateA : rateB;
+        const name = id === "A" ? nameA : nameB;
+        return [
+          { caregiver: name, days: alloc.sjukpenning + extra, pace, rate, tier: "income" },
+          { caregiver: name, days: alloc.lagsta, pace, rate: lagstaRate, tier: "lagsta" },
+        ];
+      };
+      const order: ("A" | "B")[] =
+        firstCaregiver === "B" ? ["B", "A"] : ["A", "B"];
+      phases.push(...phasesFor(order[0]), ...phasesFor(order[1]));
     } else {
       return null;
     }
@@ -270,6 +279,7 @@ export function Planner() {
     extraB,
     nameA,
     nameB,
+    firstCaregiver,
   ]);
 
   const vabResult = useMemo(
