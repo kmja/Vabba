@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { LeaveLevers } from "@/components/leave-levers";
+import { LeaveLevers, type PhaseControls } from "@/components/leave-levers";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
 import {
@@ -25,12 +25,14 @@ export function SoloSummary({
   name,
   daysPerWeek,
   onSetTarget,
+  phase,
 }: {
   payout: ParentPayout;
   total: number;
   name: string;
   daysPerWeek: number;
   onSetTarget: (minMonthly: number) => void;
+  phase: PhaseControls;
 }) {
   return (
     <Card>
@@ -89,6 +91,7 @@ export function SoloSummary({
           dailyRate={payout.dailyRate}
           pace={daysPerWeek}
           onSetTarget={onSetTarget}
+          phase={phase}
         />
 
         <p className="text-muted-foreground text-xs">

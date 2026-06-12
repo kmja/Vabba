@@ -27,6 +27,17 @@ export interface ShareableState {
    */
   paceModeA?: "full" | "prolong";
   paceModeB?: "full" | "prolong";
+  /**
+   * Optional second leave period: switch pace at the child's 1st birthday
+   * (the SGI milestone). `phase1*` is the days/week during the first year,
+   * `phase2*` after it.
+   */
+  switchAt1A?: boolean;
+  switchAt1B?: boolean;
+  phase1A?: number;
+  phase1B?: number;
+  phase2A?: number;
+  phase2B?: number;
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
   /**

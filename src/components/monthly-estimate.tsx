@@ -38,6 +38,16 @@ export interface MonthlyRow {
   supplement?: { monthly: number; total: number; months: number };
   /** Income-based days paid at grundnivå (240-day rule not met), if any. */
   grundnivaFirstDays?: number;
+  /** Accurate total leave length in months (overrides the days/pace estimate). */
+  leaveMonths?: number;
+  /** Second leave period after the 1-year switch, if any. */
+  secondPhase?: { daysPerWeek: number; monthly: number };
+}
+
+function formatMonths(months: number): string {
+  if (months < 1) return "< 1 mån";
+  const n = months < 10 ? months.toFixed(1) : String(Math.round(months));
+  return `≈ ${n.replace(".", ",")} mån`;
 }
 
 /**
@@ -47,7 +57,9 @@ export interface MonthlyRow {
  */
 export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
   const belowSgiFloor = rows.some(
-    (r) => r.daysPerWeek < SGI_PROTECTION.minDaysPerWeekAfterAge1,
+    (r) =>
+      (r.secondPhase?.daysPerWeek ?? r.daysPerWeek) <
+      SGI_PROTECTION.minDaysPerWeekAfterAge1,
   );
   const supplementTotal = rows.reduce(
     (sum, r) => sum + (r.supplement?.total ?? 0),
@@ -79,11 +91,13 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
               <div className="mt-2 flex items-end justify-between gap-3">
                 <div>
                   <div className="text-2xl font-bold tabular-nums">
-                    {approxLeaveMonths(r.days, r.daysPerWeek)}
+                    {r.leaveMonths != null
+                      ? formatMonths(r.leaveMonths)
+                      : approxLeaveMonths(r.days, r.daysPerWeek)}
                   </div>
                   <div className="text-muted-foreground text-xs tabular-nums">
-                    {formatDays(r.days)} vid {formatPace(r.daysPerWeek)}{" "}
-                    dagar/vecka
+                    {formatDays(r.days)} · {formatPace(r.daysPerWeek)} dagar/vecka
+                    {r.secondPhase ? " första året" : ""}
                   </div>
                 </div>
                 <div className="text-right">
@@ -99,6 +113,12 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                   </div>
                 </div>
               </div>
+              {r.secondPhase && (
+                <div className="text-foreground mt-1 text-xs tabular-nums">
+                  Efter 1 år: ≈ {formatSek(r.secondPhase.monthly)}/mån vid{" "}
+                  {formatPace(r.secondPhase.daysPerWeek)} dagar/vecka
+                </div>
+              )}
               {r.extraDays ? (
                 <div className="text-muted-foreground mt-0.5 text-xs">
                   inkl. {formatDays(r.extraDays)} sparade från tidigare barn

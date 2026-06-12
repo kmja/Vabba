@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
+import type { PhaseControls } from "@/components/leave-levers";
 import { MonthlyEstimate, type MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
@@ -38,6 +39,8 @@ export function Results({
   onSplitChange,
   onSetTargetA,
   onSetTargetB,
+  phaseA,
+  phaseB,
   monthlyRows,
   projection,
   vabResult,
@@ -65,6 +68,8 @@ export function Results({
   onSplitChange: (splitA: number) => void;
   onSetTargetA: (minMonthly: number) => void;
   onSetTargetB: (minMonthly: number) => void;
+  phaseA: PhaseControls;
+  phaseB: PhaseControls;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -104,6 +109,7 @@ export function Results({
           name={soloName}
           daysPerWeek={paceA}
           onSetTarget={onSetTargetA}
+          phase={phaseA}
         />
       ) : twoParent ? (
         <SplitSuggestion
@@ -116,6 +122,8 @@ export function Results({
           paceB={paceB}
           onSetTargetA={onSetTargetA}
           onSetTargetB={onSetTargetB}
+          phaseA={phaseA}
+          phaseB={phaseB}
         />
       ) : null}
 

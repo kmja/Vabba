@@ -46,6 +46,7 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
     expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
+    expect(screen.getByText("Vem är ledig när")).toBeTruthy(); // Gantt
     // Max-payout default, lägsta saved: A takes the 300 income-based days, B
     // keeps their 90 reserved (no flat days spread across the leave).
     expect(screen.getAllByText(/300 dagar/).length).toBeGreaterThan(0);
@@ -246,9 +247,26 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     // Both caregivers start on full pace.
     expect(screen.queryByText("Förläng ledigheten")).toBeNull();
-    // Use caregiver A's "Förläng" lever button to stretch their leave.
-    fireEvent.click(screen.getAllByRole("button", { name: "Förläng" })[0]);
+    // Maximise caregiver A's months-of-leave lever to stretch their leave.
+    fireEvent.click(
+      screen.getByRole("button", { name: /Maxa ledighet – Vårdnadshavare A/ }),
+    );
     expect(screen.getByText("Förläng ledigheten")).toBeTruthy();
+  });
+
+  it("supports a second leave period (switch pace at 1 year)", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /Byt takt vid 1 år – Vårdnadshavare A/,
+      }),
+    );
+    // The monthly card now shows the post-1-year rate for caregiver A.
+    expect(screen.getByText(/Efter 1 år:/)).toBeTruthy();
   });
 
   it("saves the lägstanivå days by default", () => {

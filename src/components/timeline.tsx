@@ -19,23 +19,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { GanttChart } from "@/components/gantt-chart";
 import type { PlanDeadlines } from "@/lib/calc";
 import { addYears, differenceInDays, monthsBetween } from "@/lib/dates";
 import { formatDate, formatSek } from "@/lib/format";
-
-/** One stretch of leave at a steady pace/level, ending on `endsAt`. */
-export interface LeaveSegment {
-  endsAt: Date;
-  /** Approx gross monthly amount during this stretch. */
-  monthly: number;
-  tier: "income" | "lagsta";
-  /** Caregiver name (omitted in solo mode). */
-  caregiver?: string;
-}
+import type { LeaveInterval } from "@/lib/projection";
 
 export interface LeaveProjection {
   /** Ordered stretches of leave; boundaries become timeline markers. */
-  segments: LeaveSegment[];
+  segments: LeaveInterval[];
 }
 
 type MilestoneVariant = "legal" | "projected" | "today";
@@ -192,6 +184,11 @@ export function Timeline({
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {segments.length > 0 && (
+          <div className="mb-6">
+            <GanttChart segments={segments} birth={birth} asOf={asOf} />
+          </div>
+        )}
         <div>
           {milestones.map((m, i) => {
             const Icon = m.icon;

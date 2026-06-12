@@ -16,8 +16,9 @@ import {
 import { isPlannableBirthDate, optimize, optimizeSolo } from "@/lib/optimizer";
 import { lagstanivaDailyAmount } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
-import { addDays } from "@/lib/dates";
+import { addYears, differenceInDays } from "@/lib/dates";
 import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
+import { buildLeaveIntervals, type LeaveBlock } from "@/lib/projection";
 import { computeSupplement } from "@/lib/supplement";
 import { computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -35,6 +36,12 @@ const DEFAULT_STATE: ShareableState = {
   minMonthlyB: 20000,
   paceModeA: "full",
   paceModeB: "full",
+  switchAt1A: false,
+  switchAt1B: false,
+  phase1A: 3,
+  phase1B: 3,
+  phase2A: 5,
+  phase2B: 5,
   customSplitA: 0.5,
   includeLagsta: false,
   firstCaregiver: "A",
@@ -168,6 +175,14 @@ export function Planner() {
       ? paceForMonthlyTarget(rateB, minMonthlyB)
       : daysPerWeek;
 
+  // Optional second leave period: switch pace at the child's 1st birthday.
+  const switchA = form.switchAt1A ?? false;
+  const switchB = form.switchAt1B ?? false;
+  const phase1A = form.phase1A ?? 3;
+  const phase1B = form.phase1B ?? 3;
+  const phase2A = form.phase2A ?? 5;
+  const phase2B = form.phase2B ?? 5;
+
   // The split the results slider shows: the chosen custom share, or the share
   // the current objective happens to produce (so dragging continues naturally).
   const displaySplitA = useMemo(() => {
@@ -180,8 +195,16 @@ export function Planner() {
 
   // Label by the actual pace, not the stored mode (the results levers may set a
   // prolong target that still works out to ~full speed, or vice versa).
-  const goalA = paceA >= 6.5 ? "Full takt" : "Förläng ledigheten";
-  const goalB = paceB >= 6.5 ? "Full takt" : "Förläng ledigheten";
+  const goalA = switchA
+    ? "Byter takt vid 1 år"
+    : paceA >= 6.5
+      ? "Full takt"
+      : "Förläng ledigheten";
+  const goalB = switchB
+    ? "Byter takt vid 1 år"
+    : paceB >= 6.5
+      ? "Full takt"
+      : "Förläng ledigheten";
 
   // The results-page levers set a caregiver's target monthly pay, which drives
   // their pace (months ↔ kr/månad are two views of the same dial).
@@ -197,6 +220,24 @@ export function Planner() {
       minMonthlyB: Math.max(1, Math.round(minMonthly)),
       paceModeB: "prolong",
     }));
+
+  // The per-person "byt takt vid 1 år" controls (results page).
+  const phaseA = {
+    on: switchA,
+    phase1: phase1A,
+    phase2: phase2A,
+    onToggle: (on: boolean) => setForm((f) => ({ ...f, switchAt1A: on })),
+    onSetPhase1: (n: number) => setForm((f) => ({ ...f, phase1A: n })),
+    onSetPhase2: (n: number) => setForm((f) => ({ ...f, phase2A: n })),
+  };
+  const phaseB = {
+    on: switchB,
+    phase1: phase1B,
+    phase2: phase2B,
+    onToggle: (on: boolean) => setForm((f) => ({ ...f, switchAt1B: on })),
+    onSetPhase1: (n: number) => setForm((f) => ({ ...f, phase1B: n })),
+    onSetPhase2: (n: number) => setForm((f) => ({ ...f, phase2B: n })),
+  };
 
   // Employer top-up ("föräldralön" from a kollektivavtal), per caregiver.
   const aboveCapA = plan.parents.A.incomeAboveCap ?? false;
@@ -244,15 +285,119 @@ export function Planner() {
   const birthDaysName =
     birthDaysCaregiver === "A" ? nameA : nameB;
 
-  const monthlyRows: MonthlyRow[] = useMemo(() => {
+  // How the leave plays out in calendar time. Caregivers are home in turn
+  // (first → second), each drawing income-based days before lägstanivå, at a
+  // pace that may switch at the 1-year mark.
+  const projection: LeaveProjection | null = useMemo(() => {
+    if (!asOf || !deadlines || !remaining || remaining.remaining.total <= 0) {
+      return null;
+    }
+    const start = deadlines.birth > asOf ? deadlines.birth : asOf;
+    const oneYear = addYears(deadlines.birth, 1);
+    const lagstaRate = lagstanivaDailyAmount();
+
+    const scheduleFor = (id: "A" | "B") => {
+      if (id === "A" ? switchA : switchB) {
+        const p1 = id === "A" ? phase1A : phase1B;
+        const p2 = id === "A" ? phase2A : phase2B;
+        return [
+          { until: oneYear, pace: p1 > 0 ? p1 : 1 },
+          { until: null, pace: p2 > 0 ? p2 : 1 },
+        ];
+      }
+      const p = id === "A" ? paceA : paceB;
+      return [{ until: null, pace: p > 0 ? p : 7 }];
+    };
+
+    const blocks: LeaveBlock[] = [];
     if (soloMode && solo) {
+      const schedule = scheduleFor("A");
+      blocks.push(
+        { caregiver: soloName, tier: "income", days: solo.payout.sjukpenningDays + extraA, rate: rateA, schedule },
+        { caregiver: soloName, tier: "lagsta", days: solo.payout.lagstaDays, rate: lagstaRate, schedule },
+      );
+    } else if (twoParent) {
+      const rec = twoParent.recommended;
+      const blocksFor = (id: "A" | "B"): LeaveBlock[] => {
+        const alloc = rec.allocation[id];
+        const extra = id === "A" ? extraA : extraB;
+        const rate = id === "A" ? rateA : rateB;
+        const name = id === "A" ? nameA : nameB;
+        const schedule = scheduleFor(id);
+        return [
+          { caregiver: name, tier: "income", days: alloc.sjukpenning + extra, rate, schedule },
+          { caregiver: name, tier: "lagsta", days: alloc.lagsta, rate: lagstaRate, schedule },
+        ];
+      };
+      const order: ("A" | "B")[] =
+        firstCaregiver === "B" ? ["B", "A"] : ["A", "B"];
+      blocks.push(...blocksFor(order[0]), ...blocksFor(order[1]));
+    } else {
+      return null;
+    }
+
+    const segments = buildLeaveIntervals(start, blocks);
+    return segments.length > 0 ? { segments } : null;
+  }, [
+    asOf,
+    deadlines,
+    remaining,
+    soloMode,
+    solo,
+    twoParent,
+    soloName,
+    nameA,
+    nameB,
+    paceA,
+    paceB,
+    rateA,
+    rateB,
+    extraA,
+    extraB,
+    firstCaregiver,
+    switchA,
+    switchB,
+    phase1A,
+    phase1B,
+    phase2A,
+    phase2B,
+  ]);
+
+  const monthlyRows: MonthlyRow[] = useMemo(() => {
+    const segs = projection?.segments ?? [];
+    const monthsFor = (name: string): number | undefined => {
+      const mine = segs.filter((s) => s.caregiver === name);
+      if (mine.length === 0) return undefined;
+      return (
+        differenceInDays(mine[0].startsAt, mine[mine.length - 1].endsAt) / 30.4
+      );
+    };
+    const phaseInfo = (id: "A" | "B", rate: number) => {
+      if (id === "A" ? switchA : switchB) {
+        const p1 = id === "A" ? phase1A : phase1B;
+        const p2 = id === "A" ? phase2A : phase2B;
+        return {
+          startPace: p1,
+          secondPhase: { daysPerWeek: p2, monthly: approxMonthlyGross(rate, p2) },
+        };
+      }
+      return {
+        startPace: id === "A" ? paceA : paceB,
+        secondPhase: undefined,
+      };
+    };
+
+    if (soloMode && solo) {
+      const ph = phaseInfo("A", solo.payout.dailyRate);
       return [
         {
           name: soloName,
           dailyRate: solo.payout.dailyRate,
           grundnivaFirstDays: solo.payout.grundnivaDays,
           days: solo.allocatedTotal + extraA,
-          daysPerWeek: paceA,
+          daysPerWeek: ph.startPace,
+          leaveMonths: monthsFor(soloName),
+          secondPhase: ph.secondPhase,
           extraDays: extraA,
           goalLabel: goalA,
           aboveCap: aboveCapA,
@@ -262,13 +407,17 @@ export function Planner() {
     }
     if (twoParent) {
       const rec = twoParent.recommended;
+      const phA = phaseInfo("A", rec.payout.A.dailyRate);
+      const phB = phaseInfo("B", rec.payout.B.dailyRate);
       return [
         {
           name: nameA,
           dailyRate: rec.payout.A.dailyRate,
           grundnivaFirstDays: rec.payout.A.grundnivaDays,
           days: rec.allocatedTotals.A + extraA,
-          daysPerWeek: paceA,
+          daysPerWeek: phA.startPace,
+          leaveMonths: monthsFor(nameA),
+          secondPhase: phA.secondPhase,
           extraDays: extraA,
           goalLabel: goalA,
           aboveCap: aboveCapA,
@@ -279,7 +428,9 @@ export function Planner() {
           dailyRate: rec.payout.B.dailyRate,
           grundnivaFirstDays: rec.payout.B.grundnivaDays,
           days: rec.allocatedTotals.B + extraB,
-          daysPerWeek: paceB,
+          daysPerWeek: phB.startPace,
+          leaveMonths: monthsFor(nameB),
+          secondPhase: phB.secondPhase,
           extraDays: extraB,
           goalLabel: goalB,
           aboveCap: aboveCapB,
@@ -288,92 +439,7 @@ export function Planner() {
       ];
     }
     return [];
-  }, [soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB]);
-
-  // How the leave plays out in calendar time. Each caregiver is home in turn
-  // (A then B), at their own pace, taking income-based days before lägstanivå —
-  // so the timeline shows when each one's pay steps down and when they hand over.
-  const projection: LeaveProjection | null = useMemo(() => {
-    if (!asOf || !deadlines || !remaining || remaining.remaining.total <= 0) {
-      return null;
-    }
-    const start = deadlines.birth > asOf ? deadlines.birth : asOf;
-    const lagstaRate = lagstanivaDailyAmount();
-
-    type Phase = {
-      caregiver?: string;
-      days: number;
-      pace: number;
-      rate: number;
-      tier: "income" | "lagsta";
-    };
-    const phases: Phase[] = [];
-
-    if (soloMode && solo) {
-      const p = paceA > 0 ? paceA : 7;
-      phases.push({
-        days: solo.payout.sjukpenningDays + extraA,
-        pace: p,
-        rate: rateA,
-        tier: "income",
-      });
-      phases.push({
-        days: solo.payout.lagstaDays,
-        pace: p,
-        rate: lagstaRate,
-        tier: "lagsta",
-      });
-    } else if (twoParent) {
-      const rec = twoParent.recommended;
-      const phasesFor = (id: "A" | "B"): Phase[] => {
-        const alloc = rec.allocation[id];
-        const extra = id === "A" ? extraA : extraB;
-        const rawPace = id === "A" ? paceA : paceB;
-        const pace = rawPace > 0 ? rawPace : 7;
-        const rate = id === "A" ? rateA : rateB;
-        const name = id === "A" ? nameA : nameB;
-        return [
-          { caregiver: name, days: alloc.sjukpenning + extra, pace, rate, tier: "income" },
-          { caregiver: name, days: alloc.lagsta, pace, rate: lagstaRate, tier: "lagsta" },
-        ];
-      };
-      const order: ("A" | "B")[] =
-        firstCaregiver === "B" ? ["B", "A"] : ["A", "B"];
-      phases.push(...phasesFor(order[0]), ...phasesFor(order[1]));
-    } else {
-      return null;
-    }
-
-    let cursor = start;
-    const segments: LeaveProjection["segments"] = [];
-    for (const ph of phases) {
-      if (ph.days <= 0) continue;
-      cursor = addDays(cursor, Math.round((ph.days / ph.pace) * 7));
-      segments.push({
-        endsAt: cursor,
-        monthly: approxMonthlyGross(ph.rate, ph.pace),
-        tier: ph.tier,
-        caregiver: ph.caregiver,
-      });
-    }
-    return segments.length > 0 ? { segments } : null;
-  }, [
-    asOf,
-    deadlines,
-    remaining,
-    soloMode,
-    solo,
-    twoParent,
-    paceA,
-    paceB,
-    rateA,
-    rateB,
-    extraA,
-    extraB,
-    nameA,
-    nameB,
-    firstCaregiver,
-  ]);
+  }, [projection, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B]);
 
   const vabResult = useMemo(
     () =>
@@ -435,6 +501,8 @@ export function Planner() {
         }
         onSetTargetA={setTargetA}
         onSetTargetB={setTargetB}
+        phaseA={phaseA}
+        phaseB={phaseB}
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}
