@@ -107,6 +107,8 @@ function PaceGoalControl({
           label="Minsta månadsbelopp (kr, brutto)"
           value={target}
           step={1000}
+          slider
+          sliderMax={60000}
           onChange={onTargetChange}
           hint="Takten räknas ut så att beloppet hålls och ledigheten räcker så länge som möjligt."
         />
@@ -201,6 +203,8 @@ function CaregiverFields({
                 label="Faktisk månadslön (brutto)"
                 value={income}
                 step={1000}
+                slider
+                sliderMax={100000}
                 onChange={(n) =>
                   onChange({ ...value, grossMonthlyIncome: n })
                 }
@@ -215,6 +219,7 @@ function CaregiverFields({
                 min={0}
                 max={24}
                 stepper
+                slider
                 onChange={(n) =>
                   onSupplementChange({ ...supplement, months: n })
                 }
@@ -227,6 +232,7 @@ function CaregiverFields({
                 max={100}
                 step={5}
                 stepper
+                slider
                 onChange={(n) => onSupplementChange({ ...supplement, pct: n })}
               />
             </div>
@@ -597,6 +603,7 @@ export function Wizard({
                 min={0}
                 max={60}
                 stepper
+                slider
                 onChange={(n) => setForm((f) => ({ ...f, doubleDays: n }))}
                 hint="Varje dubbeldag kostar 2 dagar ur potten (max 60, före 15 mån)."
               />
@@ -655,6 +662,8 @@ export function Wizard({
                           label={`Sjukpenningdagar${suffix}`}
                           value={p.daysUsed.sjukpenning}
                           stepper
+                          slider
+                          sliderMax={390}
                           onChange={(n) =>
                             setParentDays(id, {
                               sjukpenning: n,
@@ -667,6 +676,8 @@ export function Wizard({
                           label={`Lägstanivådagar${suffix}`}
                           value={p.daysUsed.lagsta}
                           stepper
+                          slider
+                          sliderMax={90}
                           onChange={(n) =>
                             setParentDays(id, {
                               sjukpenning: p.daysUsed.sjukpenning,
@@ -682,6 +693,8 @@ export function Wizard({
                         label={`Uttagna dagar${suffix}`}
                         value={p.daysUsed.sjukpenning + p.daysUsed.lagsta}
                         stepper
+                        slider
+                        sliderMax={480}
                         onChange={(n) =>
                           setParentDays(id, { sjukpenning: n, lagsta: 0 })
                         }
@@ -719,6 +732,8 @@ export function Wizard({
                         label={`Sparade dagar${suffix}`}
                         value={id === "A" ? extraDaysA : extraDaysB}
                         stepper
+                        slider
+                        sliderMax={200}
                         onChange={(n) =>
                           setForm((f) =>
                             id === "A"
@@ -777,6 +792,8 @@ export function Wizard({
                     label="Vab-dagar uttagna i år"
                     value={vabDaysUsedThisYear}
                     stepper
+                    slider
+                    sliderMax={240}
                     onChange={(n) =>
                       setForm((f) => ({ ...f, vabDaysUsedThisYear: n }))
                     }
@@ -829,6 +846,7 @@ export function Wizard({
                       min={0}
                       max={10}
                       stepper
+                      slider
                       onChange={(n) =>
                         setForm((f) => ({ ...f, birthDaysCount: n }))
                       }

@@ -16,6 +16,8 @@ export function NumberField({
   placeholder,
   hint,
   stepper = false,
+  slider = false,
+  sliderMax,
 }: {
   id: string;
   label: string;
@@ -27,11 +29,16 @@ export function NumberField({
   placeholder?: string;
   hint?: string;
   stepper?: boolean;
+  /** Show a drag slider in addition to the input (needs `max` or `sliderMax`). */
+  slider?: boolean;
+  /** Upper bound for the slider only — lets the typed value exceed it. */
+  sliderMax?: number;
 }) {
   const clamp = (n: number) => {
     const lo = Math.max(min, n);
     return max !== undefined ? Math.min(max, lo) : lo;
   };
+  const rangeMax = max ?? sliderMax;
 
   const input = (
     <Input
@@ -80,6 +87,21 @@ export function NumberField({
         </div>
       ) : (
         input
+      )}
+      {slider && rangeMax !== undefined && (
+        <input
+          type="range"
+          aria-label={`${label} (skjutreglage)`}
+          min={min}
+          max={rangeMax}
+          step={step}
+          value={Math.min(
+            rangeMax,
+            Math.max(min, Number.isFinite(value) ? value : min),
+          )}
+          onChange={(e) => onChange(clamp(Number(e.target.value)))}
+          className="accent-primary w-full"
+        />
       )}
       {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
     </div>
