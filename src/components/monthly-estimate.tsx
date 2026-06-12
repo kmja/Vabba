@@ -27,6 +27,10 @@ export interface MonthlyRow {
   extraDays?: number;
   /** This caregiver's chosen pace goal, e.g. "Förläng ledigheten". */
   goalLabel?: string;
+  /** Whether this caregiver's salary is above the SGI cap. */
+  aboveCap?: boolean;
+  /** Employer top-up (föräldralön) during the first months, if any. */
+  supplement?: { monthly: number; total: number; months: number };
 }
 
 /**
@@ -38,6 +42,11 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
   const belowSgiFloor = rows.some(
     (r) => r.daysPerWeek < SGI_PROTECTION.minDaysPerWeekAfterAge1,
   );
+  const supplementTotal = rows.reduce(
+    (sum, r) => sum + (r.supplement?.total ?? 0),
+    0,
+  );
+  const aboveCapWithSupplement = rows.some((r) => r.supplement && r.aboveCap);
 
   return (
     <Card>
@@ -83,6 +92,28 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                   inkl. {formatDays(r.extraDays)} sparade från tidigare barn
                 </div>
               ) : null}
+
+              {r.supplement && (
+                <div className="bg-secondary/40 mt-2 rounded-md px-3 py-2 text-xs">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      + Föräldralön (arbetsgivaren)
+                    </span>
+                    <span className="font-semibold tabular-nums">
+                      ≈ {formatSek(r.supplement.monthly)}/mån
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground mt-0.5">
+                    i ca {r.supplement.months} mån · ≈{" "}
+                    {formatSek(r.supplement.total)} totalt
+                    {r.aboveCap ? " · täcker även lön över taket" : ""}
+                  </div>
+                  <div className="mt-1 font-medium tabular-nums">
+                    ≈ {formatSek(gross + r.supplement.monthly)}/mån under
+                    föräldralöneperioden
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -94,6 +125,17 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
           många dagar i veckan som tas ut. Lägstanivådagar ger{" "}
           {formatSek(lagstanivaDailyAmount())}/dag.
         </p>
+
+        {supplementTotal > 0 && (
+          <p className="text-xs">
+            <span className="font-medium">Föräldralön totalt:</span> ≈{" "}
+            {formatSek(supplementTotal)} utöver föräldrapenningen (uppskattning,
+            brutto). Exakt belopp och längd styrs av kollektivavtalet —
+            {aboveCapWithSupplement
+              ? " för lön över taket täcker arbetsgivaren ofta merparten, vilket föräldrapenningen inte gör."
+              : " kolla villkoren med din arbetsgivare."}
+          </p>
+        )}
 
         {belowSgiFloor && (
           <p className="text-xs">

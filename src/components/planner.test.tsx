@@ -73,6 +73,25 @@ describe("<Planner /> wizard", () => {
     ).toBeTruthy();
   });
 
+  it("includes employer föräldralön on the results page", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next(); // → step 2
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    fireEvent.click(container.querySelector("#a-supplement")!); // A has föräldralön
+    next(); // → step 3
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    expect(screen.getByText(/Föräldralön \(arbetsgivaren\)/)).toBeTruthy();
+  });
+
   it("blocks step 1 until a birth date is entered", () => {
     render(<Planner />);
     const nextBtn = screen.getByRole("button", { name: /Nästa/ });

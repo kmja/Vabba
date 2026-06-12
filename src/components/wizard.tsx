@@ -120,11 +120,19 @@ function CaregiverFields({
   fallbackName,
   value,
   onChange,
+  supplement,
+  onSupplementChange,
 }: {
   idPrefix: string;
   fallbackName: string;
   value: ParentInput;
   onChange: (next: ParentInput) => void;
+  supplement: { enabled: boolean; months: number; pct: number };
+  onSupplementChange: (next: {
+    enabled: boolean;
+    months: number;
+    pct: number;
+  }) => void;
 }) {
   const income = value.grossMonthlyIncome;
   const aboveCap = value.incomeAboveCap ?? false;
@@ -160,6 +168,60 @@ function CaregiverFields({
         amountHint={amountHint}
         capHint={capHint}
       />
+
+      <div className="space-y-2">
+        <CheckRow
+          id={`${idPrefix}-supplement`}
+          checked={supplement.enabled}
+          onChange={(b) => onSupplementChange({ ...supplement, enabled: b })}
+        >
+          Föräldralön från arbetsgivaren (kollektivavtal)
+        </CheckRow>
+        {supplement.enabled && (
+          <div className="space-y-3">
+            {aboveCap && (
+              <NumberField
+                id={`${idPrefix}-supp-salary`}
+                label="Faktisk månadslön (brutto)"
+                value={income}
+                step={1000}
+                onChange={(n) =>
+                  onChange({ ...value, grossMonthlyIncome: n })
+                }
+                hint="Behövs för att räkna föräldralön på lönedelar över taket."
+              />
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField
+                id={`${idPrefix}-supp-months`}
+                label="Antal månader"
+                value={supplement.months}
+                min={0}
+                max={24}
+                stepper
+                onChange={(n) =>
+                  onSupplementChange({ ...supplement, months: n })
+                }
+              />
+              <NumberField
+                id={`${idPrefix}-supp-pct`}
+                label="Fyller upp till (% av lön)"
+                value={supplement.pct}
+                min={0}
+                max={100}
+                step={5}
+                stepper
+                onChange={(n) => onSupplementChange({ ...supplement, pct: n })}
+              />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Många kollektivavtal fyller upp till ca 90 % av lönen i ungefär 6
+              månader — och kompenserar då även lönedelar över taket. Kolla ditt
+              avtal för exakta villkor.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -196,6 +258,16 @@ export function Wizard({
     : paceModeA === "full" || paceModeB === "full";
   const customSplitA = form.customSplitA ?? 0.5;
   const firstCaregiver = form.firstCaregiver ?? "A";
+  const supplementA = {
+    enabled: form.supplementA ?? false,
+    months: form.supplementMonthsA ?? 6,
+    pct: form.supplementPctA ?? 90,
+  };
+  const supplementB = {
+    enabled: form.supplementB ?? false,
+    months: form.supplementMonthsB ?? 6,
+    pct: form.supplementPctB ?? 90,
+  };
   const hasExtraDays = form.hasExtraDays ?? false;
   const extraDaysA = form.extraDaysA ?? 0;
   const extraDaysB = form.extraDaysB ?? 0;
@@ -309,6 +381,15 @@ export function Wizard({
               fallbackName="Vårdnadshavare A"
               value={plan.parents.A}
               onChange={(next) => setParent("A", next)}
+              supplement={supplementA}
+              onSupplementChange={(s) =>
+                setForm((f) => ({
+                  ...f,
+                  supplementA: s.enabled,
+                  supplementMonthsA: s.months,
+                  supplementPctA: s.pct,
+                }))
+              }
             />
             {!soloMode && (
               <>
@@ -318,6 +399,15 @@ export function Wizard({
                   fallbackName="Vårdnadshavare B"
                   value={plan.parents.B}
                   onChange={(next) => setParent("B", next)}
+                  supplement={supplementB}
+                  onSupplementChange={(s) =>
+                    setForm((f) => ({
+                      ...f,
+                      supplementB: s.enabled,
+                      supplementMonthsB: s.months,
+                      supplementPctB: s.pct,
+                    }))
+                  }
                 />
               </>
             )}

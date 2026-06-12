@@ -31,6 +31,17 @@ export interface ShareableState {
   customSplitA?: number;
   /** Which caregiver takes their leave first (affects the timeline order). */
   firstCaregiver?: "A" | "B";
+  /**
+   * Employer top-up during leave (föräldralön / föräldrapenningtillägg from a
+   * kollektivavtal), per caregiver: whether it applies, for how many months, and
+   * the percent of salary it tops up to.
+   */
+  supplementA?: boolean;
+  supplementB?: boolean;
+  supplementMonthsA?: number;
+  supplementMonthsB?: number;
+  supplementPctA?: number;
+  supplementPctB?: number;
   /** Leftover föräldrapenning days carried over from previous children. */
   hasExtraDays?: boolean;
   extraDaysA?: number;

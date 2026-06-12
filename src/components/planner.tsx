@@ -18,6 +18,7 @@ import { lagstanivaDailyAmount } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
 import { addDays } from "@/lib/dates";
 import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
+import { computeSupplement } from "@/lib/supplement";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
 
@@ -35,6 +36,12 @@ const DEFAULT_STATE: ShareableState = {
   paceModeB: "full",
   customSplitA: 0.5,
   firstCaregiver: "A",
+  supplementA: false,
+  supplementB: false,
+  supplementMonthsA: 6,
+  supplementMonthsB: 6,
+  supplementPctA: 90,
+  supplementPctB: 90,
   hasExtraDays: false,
   extraDaysA: 0,
   extraDaysB: 0,
@@ -160,6 +167,38 @@ export function Planner() {
   const goalA = paceModeA === "prolong" ? "Förläng ledigheten" : "Full takt";
   const goalB = paceModeB === "prolong" ? "Förläng ledigheten" : "Full takt";
 
+  // Employer top-up ("föräldralön" from a kollektivavtal), per caregiver.
+  const aboveCapA = plan.parents.A.incomeAboveCap ?? false;
+  const aboveCapB = plan.parents.B.incomeAboveCap ?? false;
+  const supplementA = useMemo(
+    () =>
+      (form.supplementA ?? false)
+        ? computeSupplement({
+            grossMonthlySalary: plan.parents.A.grossMonthlyIncome,
+            incomeAboveCap: aboveCapA,
+            pct: form.supplementPctA ?? 90,
+            months: form.supplementMonthsA ?? 6,
+            fkDailyRate: rateA,
+            pace: paceA,
+          })
+        : null,
+    [form.supplementA, form.supplementPctA, form.supplementMonthsA, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, paceA],
+  );
+  const supplementB = useMemo(
+    () =>
+      !soloMode && (form.supplementB ?? false)
+        ? computeSupplement({
+            grossMonthlySalary: plan.parents.B.grossMonthlyIncome,
+            incomeAboveCap: aboveCapB,
+            pct: form.supplementPctB ?? 90,
+            months: form.supplementMonthsB ?? 6,
+            fkDailyRate: rateB,
+            pace: paceB,
+          })
+        : null,
+    [soloMode, form.supplementB, form.supplementPctB, form.supplementMonthsB, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, paceB],
+  );
+
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     if (soloMode && solo) {
       return [
@@ -170,6 +209,8 @@ export function Planner() {
           daysPerWeek: paceA,
           extraDays: extraA,
           goalLabel: goalA,
+          aboveCap: aboveCapA,
+          supplement: supplementA ?? undefined,
         },
       ];
     }
@@ -183,6 +224,8 @@ export function Planner() {
           daysPerWeek: paceA,
           extraDays: extraA,
           goalLabel: goalA,
+          aboveCap: aboveCapA,
+          supplement: supplementA ?? undefined,
         },
         {
           name: nameB,
@@ -191,11 +234,13 @@ export function Planner() {
           daysPerWeek: paceB,
           extraDays: extraB,
           goalLabel: goalB,
+          aboveCap: aboveCapB,
+          supplement: supplementB ?? undefined,
         },
       ];
     }
     return [];
-  }, [soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB]);
+  }, [soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB]);
 
   // How the leave plays out in calendar time. Each caregiver is home in turn
   // (A then B), at their own pace, taking income-based days before lägstanivå —

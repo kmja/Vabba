@@ -8,6 +8,7 @@ import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import { MonthlyEstimate, type MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
+import { ExtraRulesCard } from "@/components/extra-rules-card";
 import { WarningsList } from "@/components/warnings-list";
 import { Timeline, type LeaveProjection } from "@/components/timeline";
 import type { PlanDeadlines, PlanInput, RemainingSummary } from "@/lib/calc";
@@ -114,6 +115,8 @@ export function Results({
         asOf={asOf}
         projection={projection ?? undefined}
       />
+
+      <ExtraRulesCard />
     </div>
   );
 }
