@@ -27,10 +27,11 @@ export interface PhaseControls {
 }
 
 /**
- * Per-person controls. By default a single pace, exposed as two linked sliders
- * (monthly pay and length of leave — two views of the same dial, tuned in days).
- * The numbers include any employer föräldralön. Turn on "byt takt vid 1 år" to
- * take a second period at a different pace (e.g. 5/week to keep SGI).
+ * Per-person controls, framed around **household** income. While this caregiver
+ * is on leave the partner is working, so the monthly figure is this caregiver's
+ * föräldrapenning + föräldralön + the partner's salary (`householdBase`). The
+ * two sliders (household pay and length of leave) are linked through the pace;
+ * "Maxa" maximises the combined household income (fastest pace).
  */
 export function LeaveLevers({
   name,
@@ -38,6 +39,7 @@ export function LeaveLevers({
   dailyRate,
   pace,
   bonusFullMonthly = 0,
+  householdBase = 0,
   onSetTarget,
   phase,
 }: {
@@ -47,6 +49,8 @@ export function LeaveLevers({
   pace: number;
   /** Employer föräldralön at full-time pace (monthly), if any. */
   bonusFullMonthly?: number;
+  /** The working partner's monthly salary, added to the household total. */
+  householdBase?: number;
   onSetTarget: (minMonthly: number) => void;
   phase: PhaseControls;
 }) {
@@ -73,6 +77,7 @@ export function LeaveLevers({
           name={name}
           dailyRate={dailyRate}
           bonusFull={bonusFullMonthly}
+          householdBase={householdBase}
           phase={phase}
         />
       ) : (
@@ -81,6 +86,7 @@ export function LeaveLevers({
           days={days}
           dailyRate={dailyRate}
           bonusFull={bonusFullMonthly}
+          householdBase={householdBase}
           pace={pace}
           onSetTarget={onSetTarget}
         />
@@ -94,6 +100,7 @@ function SinglePaceLevers({
   days,
   dailyRate,
   bonusFull,
+  householdBase,
   pace,
   onSetTarget,
 }: {
@@ -101,12 +108,14 @@ function SinglePaceLevers({
   days: number;
   dailyRate: number;
   bonusFull: number;
+  householdBase: number;
   pace: number;
   onSetTarget: (minMonthly: number) => void;
 }) {
-  // Pay (incl. föräldralön) and leave length both follow the pace, so the
-  // sliders are linked. Tune the length in calendar days, and the pay in kronor.
-  const fkFull = approxMonthlyGross(dailyRate, 7); // FK target at full pace
+  // Household monthly = this caregiver's FP + föräldralön + partner salary.
+  // Only the FP+bonus part follows the pace; the partner's salary is constant.
+  const fkFull = approxMonthlyGross(dailyRate, 7);
+  const variableFull = fkFull + bonusFull; // FP + bonus at full pace
   const minDays = Math.max(1, Math.round(days)); // shortest leave (pace 7)
   const maxDays = Math.max(minDays + 1, Math.round(MONTHS_CAP * DAYS_PER_MONTH));
 
@@ -115,26 +124,29 @@ function SinglePaceLevers({
     minDays,
     maxDays,
   );
-  const payFull = combinedMonthly(dailyRate, bonusFull, 7); // most per month
-  const paySlow = combinedMonthly(
-    dailyRate,
-    bonusFull,
-    (minDays / maxDays) * 7,
-  );
-  const curPay = combinedMonthly(dailyRate, bonusFull, pace);
+  const payFull = variableFull + householdBase; // household at full pace
+  const paySlow =
+    combinedMonthly(dailyRate, bonusFull, (minDays / maxDays) * 7) +
+    householdBase;
+  const curPay = combinedMonthly(dailyRate, bonusFull, pace) + householdBase;
 
-  // Map a desired calendar length / combined pay back to the FK monthly target.
+  // Map a desired household pay / leave length back to the FK monthly target.
   const fkFromDays = (cd: number) =>
     Math.round(approxMonthlyGross(dailyRate, (minDays / cd) * 7));
-  const fkFromPay = (combined: number) =>
-    payFull > 0 ? Math.round((combined / payFull) * fkFull) : fkFull;
+  const fkFromPay = (household: number) =>
+    variableFull > 0
+      ? Math.round(
+          (Math.max(0, household - householdBase) / variableFull) * fkFull,
+        )
+      : fkFull;
 
   return (
     <>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
-            <Coins className="size-3.5" /> Per månad
+            <Coins className="size-3.5" />
+            {householdBase > 0 ? "Hushåll per månad" : "Per månad"}
             {bonusFull > 0 ? " (inkl. föräldralön)" : ""}
           </Label>
           <div className="flex items-center gap-2">
@@ -155,7 +167,7 @@ function SinglePaceLevers({
         </div>
         <input
           type="range"
-          aria-label={`Ersättning per månad – ${name}`}
+          aria-label={`Hushållsinkomst per månad – ${name}`}
           min={Math.round(paySlow)}
           max={Math.round(payFull)}
           step={100}
@@ -163,6 +175,11 @@ function SinglePaceLevers({
           onChange={(e) => onSetTarget(fkFromPay(Number(e.target.value)))}
           className="accent-primary w-full"
         />
+        {householdBase > 0 && (
+          <p className="text-muted-foreground text-[11px]">
+            varav ≈ {formatSek(householdBase)}/mån i partnerns lön (hen arbetar)
+          </p>
+        )}
       </div>
 
       <div className="space-y-1.5">
@@ -210,6 +227,7 @@ function PaceRow({
   name,
   dailyRate,
   bonusFull,
+  householdBase,
   value,
   onChange,
 }: {
@@ -217,6 +235,7 @@ function PaceRow({
   name: string;
   dailyRate: number;
   bonusFull: number;
+  householdBase: number;
   value: number;
   onChange: (n: number) => void;
 }) {
@@ -227,7 +246,8 @@ function PaceRow({
           {label}
         </Label>
         <span className="text-sm font-semibold tabular-nums">
-          {value} dgr/v · ≈ {formatSek(combinedMonthly(dailyRate, bonusFull, value))}
+          {value} dgr/v · ≈{" "}
+          {formatSek(combinedMonthly(dailyRate, bonusFull, value) + householdBase)}
           /mån
         </span>
       </div>
@@ -249,11 +269,13 @@ function PhaseLevers({
   name,
   dailyRate,
   bonusFull,
+  householdBase,
   phase,
 }: {
   name: string;
   dailyRate: number;
   bonusFull: number;
+  householdBase: number;
   phase: PhaseControls;
 }) {
   return (
@@ -263,6 +285,7 @@ function PhaseLevers({
         name={name}
         dailyRate={dailyRate}
         bonusFull={bonusFull}
+        householdBase={householdBase}
         value={phase.phase1}
         onChange={phase.onSetPhase1}
       />
@@ -271,6 +294,7 @@ function PhaseLevers({
         name={name}
         dailyRate={dailyRate}
         bonusFull={bonusFull}
+        householdBase={householdBase}
         value={phase.phase2}
         onChange={phase.onSetPhase2}
       />

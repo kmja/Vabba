@@ -42,6 +42,10 @@ export interface MonthlyRow {
   leaveMonths?: number;
   /** Second leave period after the 1-year switch, if any. */
   secondPhase?: { daysPerWeek: number; monthly: number };
+  /** The working partner's monthly salary, for the household total. */
+  householdBase?: number;
+  /** Name of the partner who is working during this caregiver's leave. */
+  partnerWorking?: string;
 }
 
 function formatMonths(months: number): string {
@@ -72,7 +76,8 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
       <CardHeader>
         <CardTitle>Så mycket per månad – och hur länge</CardTitle>
         <CardDescription>
-          Uppskattat månadsbelopp medan inkomstbaserade dagar tas ut.
+          Föräldrapenning per vårdnadshavare, och vad hushållet får in totalt
+          medan en är ledig och den andra arbetar.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -119,6 +124,24 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                   {formatPace(r.secondPhase.daysPerWeek)} dagar/vecka
                 </div>
               )}
+              {r.householdBase ? (
+                <div className="bg-secondary/40 mt-2 rounded-md px-3 py-2 text-xs">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                      Hushållet medan {r.name} är ledig
+                    </span>
+                    <span className="font-semibold tabular-nums">
+                      ≈ {formatSek(gross + (r.supplement?.monthly ?? 0) + r.householdBase)}/mån
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground mt-0.5 tabular-nums">
+                    ersättning ≈ {formatSek(gross + (r.supplement?.monthly ?? 0))}
+                    {r.partnerWorking
+                      ? ` + ${r.partnerWorking}s lön ≈ ${formatSek(r.householdBase)}`
+                      : ""}
+                  </div>
+                </div>
+              ) : null}
               {r.extraDays ? (
                 <div className="text-muted-foreground mt-0.5 text-xs">
                   inkl. {formatDays(r.extraDays)} sparade från tidigare barn

@@ -14,7 +14,7 @@ import {
   type PlanInput,
 } from "@/lib/calc";
 import { isPlannableBirthDate, optimize, optimizeSolo } from "@/lib/optimizer";
-import { lagstanivaDailyAmount } from "@/lib/rules";
+import { lagstanivaDailyAmount, MONEY } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
 import { addYears, differenceInDays } from "@/lib/dates";
 import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
@@ -242,6 +242,25 @@ export function Planner() {
   // Employer top-up ("föräldralön" from a kollektivavtal), per caregiver.
   const aboveCapA = plan.parents.A.incomeAboveCap ?? false;
   const aboveCapB = plan.parents.B.incomeAboveCap ?? false;
+
+  // Household income: while one caregiver is on leave the other is working, so
+  // their salary adds to the household total. (Above the cap with no figure
+  // entered, fall back to the cap as a floor.)
+  const CAP_MONTHLY = Math.round(MONEY.sgiAnnualCap / 12);
+  const salaryA =
+    plan.parents.A.grossMonthlyIncome > 0
+      ? plan.parents.A.grossMonthlyIncome
+      : aboveCapA
+        ? CAP_MONTHLY
+        : 0;
+  const salaryB =
+    plan.parents.B.grossMonthlyIncome > 0
+      ? plan.parents.B.grossMonthlyIncome
+      : aboveCapB
+        ? CAP_MONTHLY
+        : 0;
+  const householdBaseA = soloMode ? 0 : salaryB; // B works while A is on leave
+  const householdBaseB = soloMode ? 0 : salaryA;
   const supplementA = useMemo(
     () =>
       (form.supplementA ?? false)
@@ -410,6 +429,7 @@ export function Planner() {
           goalLabel: goalA,
           aboveCap: aboveCapA,
           supplement: supplementA ?? undefined,
+          householdBase: householdBaseA,
         },
       ];
     }
@@ -430,6 +450,8 @@ export function Planner() {
           goalLabel: goalA,
           aboveCap: aboveCapA,
           supplement: supplementA ?? undefined,
+          householdBase: householdBaseA,
+          partnerWorking: nameB,
         },
         {
           name: nameB,
@@ -443,11 +465,13 @@ export function Planner() {
           goalLabel: goalB,
           aboveCap: aboveCapB,
           supplement: supplementB ?? undefined,
+          householdBase: householdBaseB,
+          partnerWorking: nameA,
         },
       ];
     }
     return [];
-  }, [projection, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B]);
+  }, [projection, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB]);
 
   const vabResult = useMemo(
     () =>
@@ -513,6 +537,8 @@ export function Planner() {
         phaseB={phaseB}
         bonusFullA={bonusFullA}
         bonusFullB={bonusFullB}
+        householdBaseA={householdBaseA}
+        householdBaseB={householdBaseB}
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

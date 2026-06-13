@@ -269,6 +269,15 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/Efter 1 år:/)).toBeTruthy();
   });
 
+  it("shows combined household income while one caregiver is on leave", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // The monthly card frames income at the household level for each phase.
+    expect(screen.getAllByText(/Hushållet medan/).length).toBeGreaterThan(0);
+  });
+
   it("saves the lägstanivå days by default", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → step 3

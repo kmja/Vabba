@@ -43,6 +43,8 @@ export function Results({
   phaseB,
   bonusFullA,
   bonusFullB,
+  householdBaseA,
+  householdBaseB,
   monthlyRows,
   projection,
   vabResult,
@@ -74,6 +76,8 @@ export function Results({
   phaseB: PhaseControls;
   bonusFullA: number;
   bonusFullB: number;
+  householdBaseA: number;
+  householdBaseB: number;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -131,6 +135,8 @@ export function Results({
           phaseB={phaseB}
           bonusFullA={bonusFullA}
           bonusFullB={bonusFullB}
+          householdBaseA={householdBaseA}
+          householdBaseB={householdBaseB}
         />
       ) : null}
 

@@ -34,6 +34,8 @@ export function SplitSuggestion({
   phaseB,
   bonusFullA,
   bonusFullB,
+  householdBaseA,
+  householdBaseB,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -50,6 +52,8 @@ export function SplitSuggestion({
   phaseB: PhaseControls;
   bonusFullA: number;
   bonusFullB: number;
+  householdBaseA: number;
+  householdBaseB: number;
 }) {
   const rec = result.recommended;
   const aDays = rec.allocatedTotals.A;
@@ -106,6 +110,7 @@ export function SplitSuggestion({
             dailyRate={rec.payout.A.dailyRate}
             pace={paceA}
             bonusFullMonthly={bonusFullA}
+            householdBase={householdBaseA}
             onSetTarget={onSetTargetA}
             phase={phaseA}
           />
@@ -115,6 +120,7 @@ export function SplitSuggestion({
             dailyRate={rec.payout.B.dailyRate}
             pace={paceB}
             bonusFullMonthly={bonusFullB}
+            householdBase={householdBaseB}
             onSetTarget={onSetTargetB}
             phase={phaseB}
           />
