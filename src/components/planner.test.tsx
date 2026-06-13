@@ -46,7 +46,7 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
     expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
-    expect(screen.getByText("Vem är ledig när")).toBeTruthy(); // Gantt
+    expect(screen.getByText(/Vem är ledig när/)).toBeTruthy(); // Gantt
     // Max-payout default, lägsta saved: A takes the 300 income-based days, B
     // keeps their 90 reserved (no flat days spread across the leave).
     expect(screen.getAllByText(/300 dagar/).length).toBeGreaterThan(0);

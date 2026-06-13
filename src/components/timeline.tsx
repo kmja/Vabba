@@ -19,10 +19,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { GanttChart } from "@/components/gantt-chart";
 import type { PlanDeadlines } from "@/lib/calc";
 import { addYears, differenceInDays, monthsBetween } from "@/lib/dates";
-import { formatDate, formatSek } from "@/lib/format";
+import { formatDate, formatPace, formatSek } from "@/lib/format";
 import type { LeaveInterval } from "@/lib/projection";
 
 export interface LeaveProjection {
@@ -41,17 +40,19 @@ interface Milestone {
 }
 
 const DAYS_PER_MONTH = 30.44;
-// Most important dates fall in the first ~2 years, so those gaps are spaced
-// proportionally to the real time between them. Anything longer is collapsed
-// to a compact ellipsis so the multi-year tail doesn't dominate.
+// Gaps within ~15 months are spaced proportionally to the real time between
+// them; longer gaps collapse to a compact ellipsis. The floor leaves room for a
+// marker's text so neighbours don't collide.
 const COMPRESS_MONTHS = 15;
-// One month is the tightest spacing (any closer and the markers' text would
-// collide), so that's the floor; longer gaps scale up from there, capped so a
-// near-COMPRESS gap doesn't run off the screen.
-const PX_PER_MONTH = 26;
-const MIN_GAP_PX = PX_PER_MONTH; // ≈ 1 month
-const MAX_GAP_PX = 130; // ≈ 5 months
-const COMPRESSED_PX = 64; // fixed height of an ellipsis ("…") gap
+const PX_PER_MONTH = 30;
+const MIN_GAP_PX = 60;
+const MAX_GAP_PX = 170;
+const COMPRESSED_PX = 66;
+const TOP_PAD = 30;
+const BOTTOM_PAD = 38;
+const RAIL_X = 16; // dot centre within the timeline column
+
+const CG_BAR = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];
 
 function proportionalGap(days: number): number {
   const px = Math.round((days / DAYS_PER_MONTH) * PX_PER_MONTH);
@@ -175,51 +176,142 @@ export function Timeline({
     ...(showToday ? [today] : []),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
+  // Vertical position of each marker, and a date→y map the Gantt bars share.
+  const last = milestones.length - 1;
+  const yPos: number[] = [];
+  const segPx: number[] = [];
+  const segCompressed: boolean[] = [];
+  let y = TOP_PAD;
+  milestones.forEach((m, i) => {
+    yPos[i] = y;
+    if (i < last) {
+      const gd = differenceInDays(m.date, milestones[i + 1].date);
+      const compressed = gd / DAYS_PER_MONTH > COMPRESS_MONTHS;
+      segCompressed[i] = compressed;
+      segPx[i] = compressed ? COMPRESSED_PX : proportionalGap(gd);
+      y += segPx[i];
+    }
+  });
+  const totalHeight = y + BOTTOM_PAD;
+
+  const yAt = (date: Date): number => {
+    if (milestones.length === 0) return TOP_PAD;
+    const t = date.getTime();
+    if (t <= milestones[0].date.getTime()) return yPos[0];
+    for (let i = 0; i < last; i++) {
+      const a = milestones[i].date.getTime();
+      const b = milestones[i + 1].date.getTime();
+      if (t <= b) {
+        const frac = b > a ? Math.min(1, Math.max(0, (t - a) / (b - a))) : 0;
+        return yPos[i] + frac * segPx[i];
+      }
+    }
+    return yPos[last];
+  };
+
+  // Group leave segments into one Gantt column per caregiver (in turn order).
+  const cgOrder: string[] = [];
+  const cgSegs = new Map<string, LeaveInterval[]>();
+  for (const s of segments) {
+    const key = s.caregiver ?? "Ledig";
+    if (!cgSegs.has(key)) {
+      cgSegs.set(key, []);
+      cgOrder.push(key);
+    }
+    cgSegs.get(key)!.push(s);
+  }
+  const colW = cgOrder.length > 1 ? 12 : 16;
+  const colGap = 6;
+  const gutterW =
+    cgOrder.length > 0
+      ? cgOrder.length * colW + (cgOrder.length - 1) * colGap
+      : 0;
+  const hasLagsta = segments.some((s) => s.tier === "lagsta");
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Tidslinje</CardTitle>
         <CardDescription>
-          Avståndet speglar tiden mellan datumen; långa hopp visas hopfällda.
+          Vem är ledig när, längs viktiga åldersgränser och datum.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {segments.length > 0 && (
-          <div className="mb-6">
-            <GanttChart segments={segments} birth={birth} asOf={asOf} />
-          </div>
-        )}
-        <div>
-          {milestones.map((m, i) => {
-            const Icon = m.icon;
-            const isLast = i === milestones.length - 1;
-            const isToday = m.variant === "today";
-            const isProjected = m.variant === "projected";
-            const isPast = !isToday && m.date.getTime() < asOf.getTime();
+        <div className="flex gap-3">
+          {/* Gantt gutter — one column per caregiver, sharing the axis */}
+          {gutterW > 0 && (
+            <div
+              className="relative shrink-0"
+              style={{ width: gutterW, height: totalHeight }}
+            >
+              {cgOrder.map((name, idx) =>
+                cgSegs.get(name)!.map((seg, j) => {
+                  const top = yAt(seg.startsAt);
+                  const h = Math.max(3, yAt(seg.endsAt) - top);
+                  return (
+                    <div
+                      key={`${idx}-${j}`}
+                      title={`${name}: ${formatPace(seg.pace)} dagar/vecka · ≈ ${formatSek(
+                        seg.monthly,
+                      )}/mån`}
+                      className={cn(
+                        "absolute rounded-sm",
+                        CG_BAR[idx % CG_BAR.length],
+                        seg.tier === "lagsta" && "opacity-50",
+                      )}
+                      style={{
+                        left: idx * (colW + colGap),
+                        width: colW,
+                        top,
+                        height: h,
+                      }}
+                    />
+                  );
+                }),
+              )}
+            </div>
+          )}
 
-            // The gap *below* this marker, to the next one.
-            const gapDays = isLast
-              ? 0
-              : differenceInDays(m.date, milestones[i + 1].date);
-            const compressed =
-              !isLast && gapDays / DAYS_PER_MONTH > COMPRESS_MONTHS;
-            const spacingPx = compressed
-              ? COMPRESSED_PX
-              : proportionalGap(gapDays);
-
-            return (
+          {/* Timeline column — connector, ellipses and dated markers */}
+          <div className="relative flex-1" style={{ height: totalHeight }}>
+            {last > 0 && (
               <div
-                key={i}
-                className="relative flex gap-4"
-                // The row's min-height drives the spacing; the connector line
-                // flex-fills it, so it always reaches the next dot.
-                style={isLast ? undefined : { minHeight: 32 + spacingPx }}
-              >
-                {/* Rail: dot + connector in one column so the line touches the dot */}
-                <div className="flex w-8 shrink-0 flex-col items-center">
+                aria-hidden="true"
+                className="bg-border absolute w-px -translate-x-1/2"
+                style={{ left: RAIL_X, top: yPos[0], height: yPos[last] - yPos[0] }}
+              />
+            )}
+
+            {/* "≈ X år" chips where a long gap is compressed */}
+            {milestones.map((m, i) =>
+              i < last && segCompressed[i] ? (
+                <span
+                  key={`gap-${i}`}
+                  className="bg-card text-muted-foreground absolute -translate-x-1/2 -translate-y-1/2 rounded px-1 text-[10px] whitespace-nowrap"
+                  style={{
+                    left: RAIL_X,
+                    top: (yPos[i] + yPos[i + 1]) / 2,
+                  }}
+                >
+                  {gapLabel(differenceInDays(m.date, milestones[i + 1].date))}
+                </span>
+              ) : null,
+            )}
+
+            {milestones.map((m, i) => {
+              const Icon = m.icon;
+              const isToday = m.variant === "today";
+              const isProjected = m.variant === "projected";
+              const isPast = !isToday && m.date.getTime() < asOf.getTime();
+              return (
+                <div
+                  key={i}
+                  className="absolute flex -translate-y-1/2 items-center gap-3"
+                  style={{ left: 0, right: 0, top: yPos[i] }}
+                >
                   <div
                     className={cn(
-                      "z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2",
+                      "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border-2",
                       isToday
                         ? "border-primary bg-primary text-primary-foreground"
                         : isPast
@@ -231,66 +323,52 @@ export function Timeline({
                   >
                     <Icon className="size-3.5" />
                   </div>
-
-                  {!isLast &&
-                    (compressed ? (
-                      <div className="flex w-full flex-1 flex-col items-center gap-1.5">
-                        <div className="bg-border w-px flex-1" />
-                        <div className="flex flex-col gap-1">
-                          {[0, 1, 2].map((j) => (
-                            <div
-                              key={j}
-                              className="bg-muted-foreground/40 size-[3px] rounded-full"
-                            />
-                          ))}
-                        </div>
-                        <div className="bg-border w-px flex-1" />
-                      </div>
-                    ) : (
-                      <div className="bg-border w-px flex-1" />
-                    ))}
-                </div>
-
-                {/* Duration label for a collapsed gap, centred on the ellipsis */}
-                {compressed && (
-                  <span
-                    className="text-muted-foreground absolute left-12 -translate-y-1/2 text-xs"
-                    style={{ top: 32 + COMPRESSED_PX / 2 }}
-                  >
-                    {gapLabel(gapDays)}
-                  </span>
-                )}
-
-                {/* Marker text */}
-                <div className="flex-1 pt-0.5 pb-1">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        isToday
-                          ? "text-primary"
-                          : isPast
-                            ? "text-muted-foreground"
-                            : "text-foreground",
-                      )}
-                    >
-                      {m.title}
-                    </span>
-                    <time
-                      dateTime={m.date.toISOString().slice(0, 10)}
-                      className="text-muted-foreground text-xs tabular-nums"
-                    >
-                      {formatDate(m.date)}
-                    </time>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          isToday
+                            ? "text-primary"
+                            : isPast
+                              ? "text-muted-foreground"
+                              : "text-foreground",
+                        )}
+                      >
+                        {m.title}
+                      </span>
+                      <time
+                        dateTime={m.date.toISOString().slice(0, 10)}
+                        className="text-muted-foreground text-xs tabular-nums"
+                      >
+                        {formatDate(m.date)}
+                      </time>
+                    </div>
+                    <p className="text-muted-foreground text-xs">{m.desc}</p>
                   </div>
-                  <p className="text-muted-foreground mt-0.5 text-xs">
-                    {m.desc}
-                  </p>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
+
+        {/* Legend for the Gantt columns */}
+        {cgOrder.length > 0 && (
+          <div className="text-muted-foreground mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+            {cgOrder.map((name, idx) => (
+              <span key={name} className="flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    "inline-block size-2.5 rounded-sm",
+                    CG_BAR[idx % CG_BAR.length],
+                  )}
+                />
+                {name}
+              </span>
+            ))}
+            {hasLagsta && <span>ljusare = lägstanivå</span>}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
