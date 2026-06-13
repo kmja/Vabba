@@ -43,7 +43,12 @@ const STEP_TITLES = [
 const STEP_COUNT = STEP_TITLES.length;
 
 /** How to split the shared pool of days — a single household decision. */
-const SPLIT_OBJECTIVES: Objective[] = ["maxPayout", "equal", "custom"];
+const SPLIT_OBJECTIVES: Objective[] = [
+  "maxHousehold",
+  "maxPayout",
+  "equal",
+  "custom",
+];
 
 type PaceMode = "full" | "prolong";
 

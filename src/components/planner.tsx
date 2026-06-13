@@ -26,7 +26,7 @@ import { decodeState, encodeState, type ShareableState } from "@/lib/share";
 
 const DEFAULT_STATE: ShareableState = {
   plan: defaultPlanInput(""),
-  objective: "maxPayout",
+  objective: "maxHousehold",
   soloMode: false,
   hasUsedDays: false,
   detailedUsed: false,

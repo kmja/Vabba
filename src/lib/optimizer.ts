@@ -43,9 +43,15 @@ import {
 } from "@/lib/calc";
 import { parseIsoDate, differenceInDays } from "@/lib/dates";
 
-export type Objective = "maxPayout" | "equal" | "minMonthly" | "custom";
+export type Objective =
+  | "maxHousehold"
+  | "maxPayout"
+  | "equal"
+  | "minMonthly"
+  | "custom";
 
 export const OBJECTIVES: readonly Objective[] = [
+  "maxHousehold",
   "maxPayout",
   "equal",
   "minMonthly",
@@ -53,15 +59,18 @@ export const OBJECTIVES: readonly Objective[] = [
 ];
 
 export const OBJECTIVE_LABEL: Record<Objective, string> = {
-  maxPayout: "Maximera ersättning",
+  maxHousehold: "Maximera hushållsinkomst",
+  maxPayout: "Maximera föräldrapenning",
   equal: "Jämn fördelning",
   minMonthly: "Förläng ledigheten",
   custom: "Egen fördelning",
 };
 
 export const OBJECTIVE_DESCRIPTION: Record<Objective, string> = {
+  maxHousehold:
+    "Lägg ledigheten på den som tjänar minst, så att den som tjänar mest fortsätter jobba — hushållet behåller den högre lönen och får mest pengar totalt.",
   maxPayout:
-    "Lägg så många inkomstbaserade dagar som möjligt på den vårdnadshavare som tjänar mest (utan att förlora reserverade dagar).",
+    "Lägg så många inkomstbaserade dagar som möjligt på den vårdnadshavare som tjänar mest — högst föräldrapenning, men hushållet förlorar den lönen under tiden.",
   equal: "Dela hemmatiden så jämnt som möjligt mellan vårdnadshavarna.",
   minMonthly:
     "Dela dagarna jämnt och ta ut dem i långsammast möjliga takt som ändå ger minst ditt önskade månadsbelopp — så räcker ledigheten så länge som möjligt.",
@@ -192,6 +201,8 @@ function chooseSjukpenningSplitForA(
   rateA: number,
   rateB: number,
   customSplitA: number,
+  salaryA: number,
+  salaryB: number,
 ): number {
   // Not enough income-based days to honour both reserved blocks: split them
   // proportionally so the unavoidable forfeiture is shared fairly.
@@ -207,6 +218,14 @@ function chooseSjukpenningSplitForA(
     // The user picks the share of the income-based days for A.
     return clamp(Math.round(customSplitA * S), lo, hi);
   }
+  if (objective === "maxHousehold") {
+    // Put the transferable income-based days on the LOWER earner, so the higher
+    // earner keeps working and the household keeps the bigger salary. Ranked by
+    // actual salary (correct even when both are above the cap and rates tie).
+    if (salaryA < salaryB) return hi;
+    if (salaryA > salaryB) return lo;
+    return clamp(Math.round(S / 2), lo, hi);
+  }
   if (objective === "maxPayout") {
     // Put income-based days on the higher-rate parent. When the rates are equal
     // the payout is identical either way, so split evenly instead of arbitrarily
@@ -218,6 +237,15 @@ function chooseSjukpenningSplitForA(
   // "equal" / "minMonthly": aim for a 50/50 split of the income-based days,
   // within bounds. (minMonthly only changes the leave *pace*, not the split.)
   return clamp(Math.round(S / 2), lo, hi);
+}
+
+/** Monthly salary at the cap — the floor used when an above-cap figure is unknown. */
+const CAP_MONTHLY_SALARY = Math.round(MONEY.sgiAnnualCap / 12);
+
+/** A parent's actual gross monthly salary for household-income ranking. */
+function householdSalary(parent: PlanInput["parents"][ParentId]): number {
+  if (parent.grossMonthlyIncome > 0) return parent.grossMonthlyIncome;
+  return parent.incomeAboveCap ? CAP_MONTHLY_SALARY : 0;
 }
 
 /** Split `L` flat days to even out total home-time between the parents. */
@@ -254,6 +282,11 @@ function buildPlan(
   const rateA = sjukpenningnivaDailyAmount(incomeA);
   const rateB = sjukpenningnivaDailyAmount(incomeB);
 
+  // Actual salaries drive the household-income split (which keeps the higher
+  // earner working). Falls back to the cap when an above-cap figure is unknown.
+  const salaryA = householdSalary(plan.parents.A);
+  const salaryB = householdSalary(plan.parents.B);
+
   // Dubbeldagar: both parents draw a day at the same time. They come from the
   // non-reserved income-based pool (never the reserved days), are capped at the
   // statutory max and only before the 15-month deadline. Each spends one day per
@@ -277,12 +310,21 @@ function buildPlan(
     rateA,
     rateB,
     customSplitA,
+    salaryA,
+    salaryB,
   );
   const sB = S2 - sA;
   const lA =
     objective === "custom"
       ? clamp(Math.round(customSplitA * L), 0, L)
-      : chooseLagstaSplitForA(L, sA, sB);
+      : objective === "maxHousehold"
+        ? // Flat days follow the income-based ones — onto the lower earner.
+          salaryA < salaryB
+          ? L
+          : salaryA > salaryB
+            ? 0
+            : chooseLagstaSplitForA(L, sA, sB)
+        : chooseLagstaSplitForA(L, sA, sB);
   const lB = L - lA;
 
   const allocation: Record<ParentId, TierCount> = {

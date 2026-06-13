@@ -138,18 +138,17 @@ export function SplitSuggestion({
             ≈ {formatSek(netAfterTax(rec.payout.total))} efter skatt
           </div>
           {diffVsMax !== 0 && (
-            <div className="mt-1 text-xs">
+            <div className="text-muted-foreground mt-1 text-xs">
               <span className="text-foreground font-semibold">
                 −{formatSek(Math.abs(diffVsMax))}
               </span>{" "}
-              <span className="text-muted-foreground">
-                jämfört med maximal ersättning
-              </span>
+              i föräldrapenning mot max — men hushållet behåller mer lön (se
+              ovan)
             </div>
           )}
           {diffVsMax === 0 && (
             <div className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              Maximal ersättning
+              Maximal föräldrapenning
             </div>
           )}
         </div>

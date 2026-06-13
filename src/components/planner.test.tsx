@@ -47,8 +47,8 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
     expect(screen.getByText(/Vem är ledig när/)).toBeTruthy(); // Gantt
-    // Max-payout default, lägsta saved: A takes the 300 income-based days, B
-    // keeps their 90 reserved (no flat days spread across the leave).
+    // Household-income default: the lower earner (B) takes the 300 income-based
+    // days while the higher earner (A) keeps their 90 reserved and stays at work.
     expect(screen.getAllByText(/300 dagar/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/90 dagar/).length).toBeGreaterThan(0);
   });
@@ -292,8 +292,9 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(container.querySelector("#include-lagsta")!);
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // maxPayout default (45k/30k): B's 90 reserved + 90 flat days = 180.
-    expect(screen.getAllByText(/180 dagar/).length).toBeGreaterThan(0);
+    // Household default (45k/30k): the lower earner B takes the 300 income-based
+    // days plus all 90 flat days = 390 once lägstanivå is included.
+    expect(screen.getAllByText(/390 dagar/).length).toBeGreaterThan(0);
   });
 
   it("folds leftover days from previous children into the lead", () => {

@@ -74,6 +74,46 @@ describe("maxPayout objective", () => {
   });
 });
 
+describe("maxHousehold objective", () => {
+  it("puts the transferable days on the lower earner (keeps the higher salary working)", () => {
+    const plan = freshPlan(60_000, 30_000); // A earns more
+    const { recommended } = optimize(plan, {
+      objective: "maxHousehold",
+      asOf: SOON_AFTER_BIRTH,
+    });
+    // The lower earner (B) takes the bulk; the higher earner (A) keeps only
+    // their reserved days and stays at work the rest of the time.
+    expect(recommended.allocation.B.sjukpenning).toBe(300);
+    expect(recommended.allocation.A.sjukpenning).toBe(90);
+  });
+
+  it("is the mirror image of maxPayout", () => {
+    const plan = freshPlan(55_000, 25_000);
+    const house = optimize(plan, {
+      objective: "maxHousehold",
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    const pay = optimize(plan, {
+      objective: "maxPayout",
+      asOf: SOON_AFTER_BIRTH,
+    }).recommended;
+    expect(house.allocation.A.sjukpenning).toBe(pay.allocation.B.sjukpenning);
+    expect(house.allocation.B.sjukpenning).toBe(pay.allocation.A.sjukpenning);
+  });
+
+  it("ranks by actual salary even when both are above the cap", () => {
+    // Both above the cap → identical FP rates, but A earns more salary, so the
+    // lower-salary B should still take the transferable days.
+    const plan = freshPlan(90_000, 55_000);
+    const { recommended } = optimize(plan, {
+      objective: "maxHousehold",
+      asOf: SOON_AFTER_BIRTH,
+    });
+    expect(recommended.allocation.B.sjukpenning).toBe(300);
+    expect(recommended.allocation.A.sjukpenning).toBe(90);
+  });
+});
+
 describe("equal objective", () => {
   it("splits total home-time evenly", () => {
     const plan = freshPlan(45_000, 30_000);
@@ -107,6 +147,7 @@ describe("objective trade-off", () => {
       asOf: SOON_AFTER_BIRTH,
     });
     expect(result.alternatives.map((a) => a.objective)).toEqual([
+      "maxHousehold",
       "equal",
       "minMonthly",
       "custom",
