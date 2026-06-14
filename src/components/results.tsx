@@ -7,7 +7,7 @@ import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import type { PhaseControls, PartTime } from "@/components/leave-levers";
-import { MonthlyEstimate, type MonthlyRow } from "@/components/monthly-estimate";
+import type { MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
 import { ExtraRulesCard } from "@/components/extra-rules-card";
@@ -116,7 +116,16 @@ export function Results({
         </div>
       </div>
 
-      <MonthlyEstimate rows={monthlyRows} />
+      <WarningsList warnings={warnings} />
+
+      {/* The timeline is the centrepiece: who's home when, what the household
+          lives on each period, and the legal age gates. */}
+      <Timeline
+        deadlines={deadlines}
+        asOf={asOf}
+        projection={projection ?? undefined}
+        rows={monthlyRows}
+      />
 
       {soloMode && solo ? (
         <SoloSummary
@@ -161,14 +170,6 @@ export function Results({
       {birthDays && birthDays.days > 0 && (
         <BirthDaysCard result={birthDays} caregiverName={birthDaysName} />
       )}
-
-      <WarningsList warnings={warnings} />
-
-      <Timeline
-        deadlines={deadlines}
-        asOf={asOf}
-        projection={projection ?? undefined}
-      />
 
       <ExtraRulesCard />
     </div>

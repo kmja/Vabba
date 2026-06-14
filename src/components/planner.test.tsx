@@ -43,10 +43,11 @@ describe("<Planner /> wizard", () => {
     next(); // step 3 → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
 
-    expect(screen.getByText(/och hur länge/)).toBeTruthy();
     expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
     expect(screen.getByText(/Vem är ledig när/)).toBeTruthy(); // Gantt
+    // The timeline now leads with the household income per leave period.
+    expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
     // Household-income default: the lower earner (B) takes the 300 income-based
     // days while the higher earner (A) keeps their 90 reserved and stays at work.
     expect(screen.getAllByText(/300 dagar/).length).toBeGreaterThan(0);
@@ -119,7 +120,9 @@ describe("<Planner /> wizard", () => {
     next(); // → step 3
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText(/Föräldralön \(arbetsgivaren\)/)).toBeTruthy();
+    expect(
+      screen.getAllByText(/Föräldralön \(arbetsgivaren\)/).length,
+    ).toBeGreaterThan(0);
   });
 
   it("blocks step 1 until a birth date is entered", () => {
@@ -171,7 +174,7 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("#days-per-week")).toBeNull();
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText(/och hur länge/)).toBeTruthy();
+    expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
   });
 
   it("lets each caregiver set their own pace goal", () => {
@@ -188,9 +191,9 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("#days-per-week")).not.toBeNull();
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // Both caregivers' goal labels are shown on the monthly estimate.
-    expect(screen.getByText("Full takt")).toBeTruthy();
-    expect(screen.getByText("Förläng ledigheten")).toBeTruthy();
+    // Both caregivers' goal labels are shown on their timeline period cards.
+    expect(screen.getAllByText("Full takt").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Förläng ledigheten").length).toBeGreaterThan(0);
   });
 
   it("surfaces the SGI caveat when the pace drops below 5/week", () => {
@@ -251,7 +254,7 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
     );
-    expect(screen.getByText("Förläng ledigheten")).toBeTruthy();
+    expect(screen.getAllByText("Förläng ledigheten").length).toBeGreaterThan(0);
   });
 
   it("supports a second leave period (switch pace at 1 year)", () => {
@@ -265,8 +268,8 @@ describe("<Planner /> wizard", () => {
         name: /Byt takt vid 1 år – Vårdnadshavare A/,
       }),
     );
-    // The monthly card now shows the post-1-year rate for caregiver A.
-    expect(screen.getByText(/Efter 1 år:/)).toBeTruthy();
+    // The period card now shows the post-1-year rate for caregiver A.
+    expect(screen.getAllByText(/Efter 1 år:/).length).toBeGreaterThan(0);
   });
 
   it("shows combined household income while one caregiver is on leave", () => {
@@ -274,8 +277,9 @@ describe("<Planner /> wizard", () => {
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // The card leads with the household income for each leave phase.
-    expect(screen.getAllByText(/Medan .* är ledig/).length).toBeGreaterThan(0);
+    // Each leave period in the timeline combines both incomes — the leave-taker's
+    // föräldrapenning plus the working partner's salary.
+    expect(screen.getAllByText(/s lön ≈/).length).toBeGreaterThan(0);
   });
 
   it("counts part-time work in household income when a leave is extended", () => {
@@ -320,6 +324,8 @@ describe("<Planner /> wizard", () => {
     });
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText(/sparade från tidigare barn/)).toBeTruthy();
+    expect(
+      screen.getAllByText(/sparade från tidigare barn/).length,
+    ).toBeGreaterThan(0);
   });
 });

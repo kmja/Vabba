@@ -18,10 +18,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  type MonthlyRow,
+  formatMonths,
+  householdMonthly,
+  ownMonthly,
+} from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
 import type { PlanDeadlines } from "@/lib/calc";
 import { addYears, differenceInDays, monthsBetween } from "@/lib/dates";
-import { formatDate, formatPace, formatSek } from "@/lib/format";
+import {
+  approxLeaveMonths,
+  approxMonthlyGross,
+  formatDate,
+  formatDays,
+  formatPace,
+  formatSek,
+} from "@/lib/format";
+import {
+  MONEY,
+  SGI_PROTECTION,
+  lagstanivaDailyAmount,
+  netAfterTax,
+} from "@/lib/rules";
 import type { LeaveInterval } from "@/lib/projection";
 
 export interface LeaveProjection {
@@ -51,8 +70,16 @@ const COMPRESSED_PX = 66;
 const TOP_PAD = 30;
 const BOTTOM_PAD = 38;
 const RAIL_X = 16; // dot centre within the timeline column
+// Rough height a period card needs, so the rail reserves room beside it.
+const EST_CARD_PX = 150;
 
 const CG_BAR = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];
+const CG_BORDER = [
+  "border-l-chart-1",
+  "border-l-chart-2",
+  "border-l-chart-3",
+  "border-l-chart-4",
+];
 
 function proportionalGap(days: number): number {
   const px = Math.round((days / DAYS_PER_MONTH) * PX_PER_MONTH);
@@ -75,14 +102,109 @@ function childAgeLabel(ageMonths: number): string {
   return `${years} år ${months} mån`;
 }
 
+/**
+ * The detail for one caregiver's leave period: what the household lives on,
+ * how long it lasts, the pace, and the per-day compensation — folded into the
+ * timeline beside that caregiver's Gantt bar.
+ */
+function PeriodCard({ row, colorIdx }: { row: MonthlyRow; colorIdx: number }) {
+  const gross = approxMonthlyGross(row.dailyRate, row.daysPerWeek);
+  const own = ownMonthly(row);
+  const hasHousehold = (row.householdBase ?? 0) > 0;
+  const months =
+    row.leaveMonths != null
+      ? formatMonths(row.leaveMonths)
+      : approxLeaveMonths(row.days, row.daysPerWeek);
+
+  return (
+    <div
+      className={cn(
+        "bg-card rounded-md border border-l-4 p-3 shadow-sm",
+        CG_BORDER[colorIdx % CG_BORDER.length],
+      )}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="text-sm font-medium">{row.name}</span>
+        {row.goalLabel && (
+          <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
+            {row.goalLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Household income — the headline */}
+      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-muted-foreground text-xs">
+          {hasHousehold ? "Hushåll" : "Per månad"}
+        </span>
+        <span className="text-xl font-bold tabular-nums">
+          {formatSek(householdMonthly(row))}
+          <span className="text-muted-foreground text-xs font-normal">/mån</span>
+        </span>
+      </div>
+      {hasHousehold && (
+        <div className="text-muted-foreground text-[11px] tabular-nums">
+          {row.name} ≈ {formatSek(own)}
+          {row.partTimeSalary
+            ? ` + deltidslön ≈ ${formatSek(row.partTimeSalary)}`
+            : ""}
+          {row.partnerWorking
+            ? ` + ${row.partnerWorking}s lön ≈ ${formatSek(row.householdBase ?? 0)}`
+            : ""}
+        </div>
+      )}
+
+      {/* Length + pace + per-day compensation */}
+      <div className="mt-1.5 text-xs tabular-nums">
+        <span className="font-medium">{months}</span> · {formatDays(row.days)} ·{" "}
+        {formatPace(row.daysPerWeek)} dagar/vecka
+        {row.secondPhase ? " första året" : ""}
+      </div>
+      <div className="text-muted-foreground text-[11px] tabular-nums">
+        {formatSek(gross)}/mån föräldrapenning · {formatSek(row.dailyRate)}/dag ·
+        ≈ {formatSek(netAfterTax(gross))} efter skatt
+      </div>
+
+      {row.secondPhase && (
+        <div className="mt-0.5 text-[11px] tabular-nums">
+          Efter 1 år: ≈ {formatSek(row.secondPhase.monthly)}/mån vid{" "}
+          {formatPace(row.secondPhase.daysPerWeek)} dagar/vecka
+        </div>
+      )}
+      {row.supplement && (
+        <div className="mt-0.5 text-[11px]">
+          + Föräldralön (arbetsgivaren) ≈ {formatSek(row.supplement.monthly)}/mån
+          i ca {row.supplement.months} mån
+          {row.aboveCap ? " · täcker även lön över taket" : ""}
+        </div>
+      )}
+      {row.grundnivaFirstDays ? (
+        <div className="mt-0.5 text-[11px]">
+          Första {formatDays(row.grundnivaFirstDays)} på grundnivå (
+          {formatSek(MONEY.grundnivaPerDay)}/dag) — 240-dagarsvillkoret är inte
+          uppfyllt.
+        </div>
+      ) : null}
+      {row.extraDays ? (
+        <div className="text-muted-foreground mt-0.5 text-[11px]">
+          inkl. {formatDays(row.extraDays)} sparade från tidigare barn
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Timeline({
   deadlines,
   asOf,
   projection,
+  rows = [],
 }: {
   deadlines: PlanDeadlines;
   asOf: Date;
   projection?: LeaveProjection;
+  /** Per-caregiver leave detail, shown beside each Gantt bar. */
+  rows?: MonthlyRow[];
 }) {
   const birth = deadlines.birth;
   const ageMonths = monthsBetween(birth, asOf);
@@ -192,7 +314,6 @@ export function Timeline({
       y += segPx[i];
     }
   });
-  const totalHeight = y + BOTTOM_PAD;
 
   const yAt = (date: Date): number => {
     if (milestones.length === 0) return TOP_PAD;
@@ -228,15 +349,58 @@ export function Timeline({
       : 0;
   const hasLagsta = segments.some((s) => s.tier === "lagsta");
 
+  // Pair each caregiver's leave with its detail row, anchored at the leave's
+  // start so the card sits beside that caregiver's bar. When a leave is short
+  // (e.g. the reserved 90 days), the card is nudged down so consecutive cards
+  // never overlap — they stay roughly date-aligned without colliding.
+  const rowByName = new Map(rows.map((r) => [r.name, r]));
+  const CARD_GAP = 10;
+  let cursor = 0;
+  const periods = cgOrder
+    .map((name, idx) => {
+      const row = rowByName.get(name);
+      if (!row) return null;
+      const segs = cgSegs.get(name)!;
+      const top = Math.max(yAt(segs[0].startsAt), cursor);
+      cursor = top + EST_CARD_PX + CARD_GAP;
+      return { row, colorIdx: idx, top };
+    })
+    .filter((p): p is { row: MonthlyRow; colorIdx: number; top: number } =>
+      Boolean(p),
+    );
+
+  // Reserve enough height that the last card doesn't spill past the rail.
+  const milestoneHeight = (yPos[last] ?? TOP_PAD) + BOTTOM_PAD;
+  const totalHeight = Math.max(milestoneHeight, cursor + BOTTOM_PAD);
+
+  // The stacked list is the mobile view of the same cards — and the only view
+  // when there are no dated segments to anchor against.
+  const stackPeriods = periods.length
+    ? periods
+    : rows.map((row, i) => ({ row, colorIdx: i, top: 0 }));
+
+  // Footnotes carried over from the old monthly card.
+  const supplementTotal = rows.reduce(
+    (sum, r) => sum + (r.supplement?.total ?? 0),
+    0,
+  );
+  const aboveCapWithSupplement = rows.some((r) => r.supplement && r.aboveCap);
+  const belowSgiFloor = rows.some(
+    (r) =>
+      (r.secondPhase?.daysPerWeek ?? r.daysPerWeek) <
+      SGI_PROTECTION.minDaysPerWeekAfterAge1,
+  );
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Tidslinje</CardTitle>
         <CardDescription>
-          Vem är ledig när, längs viktiga åldersgränser och datum.
+          Vem är ledig när, vad hushållet får in under varje period, och de
+          viktiga åldersgränserna.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         <div className="flex gap-3">
           {/* Gantt gutter — one column per caregiver, sharing the axis */}
           {gutterW > 0 && (
@@ -272,7 +436,7 @@ export function Timeline({
             </div>
           )}
 
-          {/* Timeline column — connector, ellipses and dated markers */}
+          {/* Timeline column — connector, ellipses, markers and period cards */}
           <div className="relative flex-1" style={{ height: totalHeight }}>
             {last > 0 && (
               <div
@@ -298,6 +462,8 @@ export function Timeline({
               ) : null,
             )}
 
+            {/* Dated markers — kept to the left lane on wide screens so the
+                period cards have room on the right. */}
             {milestones.map((m, i) => {
               const Icon = m.icon;
               const isToday = m.variant === "today";
@@ -306,8 +472,8 @@ export function Timeline({
               return (
                 <div
                   key={i}
-                  className="absolute flex -translate-y-1/2 items-center gap-3"
-                  style={{ left: 0, right: 0, top: yPos[i] }}
+                  className="absolute right-0 left-0 flex -translate-y-1/2 items-center gap-3 md:right-[46%]"
+                  style={{ top: yPos[i] }}
                 >
                   <div
                     className={cn(
@@ -349,12 +515,33 @@ export function Timeline({
                 </div>
               );
             })}
+
+            {/* Period detail cards — anchored beside their bar (wide screens). */}
+            {periods.map((p) => (
+              <div
+                key={`pc-${p.colorIdx}`}
+                className="absolute right-0 hidden w-[44%] md:block"
+                style={{ top: p.top }}
+              >
+                <PeriodCard row={p.row} colorIdx={p.colorIdx} />
+              </div>
+            ))}
           </div>
         </div>
 
+        {/* Narrow screens: the same period cards, stacked under the rail.
+            (Shown on every width when there are no dated bars to anchor to.) */}
+        {stackPeriods.length > 0 && (
+          <div className={cn("space-y-2", periods.length > 0 && "md:hidden")}>
+            {stackPeriods.map((p) => (
+              <PeriodCard key={`m-${p.colorIdx}`} row={p.row} colorIdx={p.colorIdx} />
+            ))}
+          </div>
+        )}
+
         {/* Legend for the Gantt columns */}
         {cgOrder.length > 0 && (
-          <div className="text-muted-foreground mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+          <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
             {cgOrder.map((name, idx) => (
               <span key={name} className="flex items-center gap-1.5">
                 <span
@@ -368,6 +555,33 @@ export function Timeline({
             ))}
             {hasLagsta && <span>ljusare = lägstanivå</span>}
           </div>
+        )}
+
+        {/* Carried-over notes about föräldralön and SGI. */}
+        <p className="text-muted-foreground text-xs">
+          Föräldrapenning betalas per uttagen dag, så månadsbeloppet följer hur
+          många dagar i veckan som tas ut. Lägstanivådagar ger{" "}
+          {formatSek(lagstanivaDailyAmount())}/dag.
+        </p>
+
+        {supplementTotal > 0 && (
+          <p className="text-xs">
+            <span className="font-medium">Föräldralön totalt:</span> ≈{" "}
+            {formatSek(supplementTotal)} utöver föräldrapenningen (uppskattning,
+            brutto). Exakt belopp och längd styrs av kollektivavtalet —
+            {aboveCapWithSupplement
+              ? " för lön över taket täcker arbetsgivaren ofta merparten, vilket föräldrapenningen inte gör."
+              : " kolla villkoren med din arbetsgivare."}
+          </p>
+        )}
+
+        {belowSgiFloor && (
+          <p className="text-xs">
+            <span className="font-medium">Tänk på SGI:</span> efter barnets
+            1-årsdag skyddas SGI bara om du tar ut minst{" "}
+            {SGI_PROTECTION.minDaysPerWeekAfterAge1} dagar/vecka — eller arbetar
+            resten av veckan. Under det första året är SGI skyddad oavsett takt.
+          </p>
         )}
       </CardContent>
     </Card>
