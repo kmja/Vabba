@@ -43,7 +43,7 @@ describe("<Planner /> wizard", () => {
     next(); // step 3 → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
 
-    expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
+    expect(screen.getByText("Justera planen")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
     expect(screen.getByText(/Vem är ledig när/)).toBeTruthy(); // Gantt
     // The timeline now leads with the household income per leave period.
@@ -226,7 +226,7 @@ describe("<Planner /> wizard", () => {
     next(); // → step 3
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
+    expect(screen.getByText("Justera planen")).toBeTruthy();
   });
 
   it("has a live split slider on the results page that updates the numbers", () => {

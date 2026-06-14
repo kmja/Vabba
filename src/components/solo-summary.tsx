@@ -46,8 +46,8 @@ export function SoloSummary({
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Din plan</CardTitle>
+      <CardHeader className="bg-card sticky top-0 z-30 rounded-t-xl border-b pt-2 pb-4">
+        <CardTitle>Justera planen</CardTitle>
         <CardDescription>
           Som ensam vårdnadshavare har du rätt till alla dagarna.
         </CardDescription>

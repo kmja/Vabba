@@ -77,8 +77,8 @@ export function SplitSuggestion({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Fördelning av dagarna</CardTitle>
+      <CardHeader className="bg-card sticky top-0 z-30 rounded-t-xl border-b pt-2 pb-4">
+        <CardTitle>Justera planen</CardTitle>
         <CardDescription>{OBJECTIVE_DESCRIPTION[objective]}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
