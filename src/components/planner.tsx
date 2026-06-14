@@ -42,6 +42,8 @@ const DEFAULT_STATE: ShareableState = {
   phase1B: 3,
   phase2A: 5,
   phase2B: 5,
+  worksPartTimeA: true,
+  worksPartTimeB: true,
   customSplitA: 0.5,
   includeLagsta: false,
   firstCaregiver: "A",
@@ -182,6 +184,9 @@ export function Planner() {
   const phase1B = form.phase1B ?? 3;
   const phase2A = form.phase2A ?? 5;
   const phase2B = form.phase2B ?? 5;
+  // Whether each caregiver works the rest of the week during a slow leave.
+  const worksPartTimeA = form.worksPartTimeA ?? true;
+  const worksPartTimeB = form.worksPartTimeB ?? true;
 
   // The split the results slider shows: the chosen custom share, or the share
   // the current objective happens to produce (so dragging continues naturally).
@@ -237,6 +242,14 @@ export function Planner() {
     onToggle: (on: boolean) => setForm((f) => ({ ...f, switchAt1B: on })),
     onSetPhase1: (n: number) => setForm((f) => ({ ...f, phase1B: n })),
     onSetPhase2: (n: number) => setForm((f) => ({ ...f, phase2B: n })),
+  };
+  const partTimeA = {
+    works: worksPartTimeA,
+    onToggle: (works: boolean) => setForm((f) => ({ ...f, worksPartTimeA: works })),
+  };
+  const partTimeB = {
+    works: worksPartTimeB,
+    onToggle: (works: boolean) => setForm((f) => ({ ...f, worksPartTimeB: works })),
   };
 
   // Employer top-up ("föräldralön" from a kollektivavtal), per caregiver.
@@ -413,6 +426,9 @@ export function Planner() {
         secondPhase: undefined,
       };
     };
+    // Part-time salary earned on the non-FP days, at the leave's start pace.
+    const partTimeFor = (salary: number, pace: number, works: boolean) =>
+      works ? Math.round((salary * (7 - Math.max(0, Math.min(7, pace)))) / 7) : 0;
 
     if (soloMode && solo) {
       const ph = phaseInfo("A", solo.payout.dailyRate);
@@ -430,6 +446,7 @@ export function Planner() {
           aboveCap: aboveCapA,
           supplement: supplementA ?? undefined,
           householdBase: householdBaseA,
+          partTimeSalary: partTimeFor(salaryA, ph.startPace, worksPartTimeA),
         },
       ];
     }
@@ -452,6 +469,7 @@ export function Planner() {
           supplement: supplementA ?? undefined,
           householdBase: householdBaseA,
           partnerWorking: nameB,
+          partTimeSalary: partTimeFor(salaryA, phA.startPace, worksPartTimeA),
         },
         {
           name: nameB,
@@ -467,11 +485,12 @@ export function Planner() {
           supplement: supplementB ?? undefined,
           householdBase: householdBaseB,
           partnerWorking: nameA,
+          partTimeSalary: partTimeFor(salaryB, phB.startPace, worksPartTimeB),
         },
       ];
     }
     return [];
-  }, [projection, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB]);
+  }, [projection, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB]);
 
   const vabResult = useMemo(
     () =>
@@ -539,6 +558,10 @@ export function Planner() {
         bonusFullB={bonusFullB}
         householdBaseA={householdBaseA}
         householdBaseB={householdBaseB}
+        salaryA={salaryA}
+        salaryB={salaryB}
+        partTimeA={partTimeA}
+        partTimeB={partTimeB}
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

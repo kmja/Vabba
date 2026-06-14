@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
-import type { PhaseControls } from "@/components/leave-levers";
+import type { PhaseControls, PartTime } from "@/components/leave-levers";
 import { MonthlyEstimate, type MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
@@ -45,6 +45,10 @@ export function Results({
   bonusFullB,
   householdBaseA,
   householdBaseB,
+  salaryA,
+  salaryB,
+  partTimeA,
+  partTimeB,
   monthlyRows,
   projection,
   vabResult,
@@ -78,6 +82,10 @@ export function Results({
   bonusFullB: number;
   householdBaseA: number;
   householdBaseB: number;
+  salaryA: number;
+  salaryB: number;
+  partTimeA: PartTime;
+  partTimeB: PartTime;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -119,6 +127,8 @@ export function Results({
           onSetTarget={onSetTargetA}
           phase={phaseA}
           bonusFullMonthly={bonusFullA}
+          salary={salaryA}
+          partTime={partTimeA}
         />
       ) : twoParent ? (
         <SplitSuggestion
@@ -137,6 +147,10 @@ export function Results({
           bonusFullB={bonusFullB}
           householdBaseA={householdBaseA}
           householdBaseB={householdBaseB}
+          salaryA={salaryA}
+          salaryB={salaryB}
+          partTimeA={partTimeA}
+          partTimeB={partTimeB}
         />
       ) : null}
 

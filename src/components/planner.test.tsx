@@ -247,9 +247,9 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     // Both caregivers start on full pace.
     expect(screen.queryByText("Förläng ledigheten")).toBeNull();
-    // Maximise caregiver A's months-of-leave lever to stretch their leave.
+    // Use caregiver A's "Längst" lever button to stretch their leave.
     fireEvent.click(
-      screen.getByRole("button", { name: /Maxa ledighet – Vårdnadshavare A/ }),
+      screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
     );
     expect(screen.getByText("Förläng ledigheten")).toBeTruthy();
   });
@@ -276,6 +276,20 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     // The card leads with the household income for each leave phase.
     expect(screen.getAllByText(/Medan .* är ledig/).length).toBeGreaterThan(0);
+  });
+
+  it("counts part-time work in household income when a leave is extended", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // At full pace nobody works part-time, so no deltidslön.
+    expect(screen.queryByText(/deltidslön/)).toBeNull();
+    // Extend caregiver A's leave → they work the rest of the week.
+    fireEvent.click(
+      screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
+    );
+    expect(screen.getAllByText(/deltidslön/).length).toBeGreaterThan(0);
   });
 
   it("saves the lägstanivå days by default", () => {

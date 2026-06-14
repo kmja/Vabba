@@ -38,6 +38,13 @@ export interface ShareableState {
   phase1B?: number;
   phase2A?: number;
   phase2B?: number;
+  /**
+   * Whether each caregiver works the rest of the week while on a reduced-pace
+   * leave (earning that share of salary). Default on — realistic, and what the
+   * SGI 5-day rule assumes after the child turns 1.
+   */
+  worksPartTimeA?: boolean;
+  worksPartTimeB?: boolean;
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
   /**

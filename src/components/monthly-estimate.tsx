@@ -46,6 +46,8 @@ export interface MonthlyRow {
   householdBase?: number;
   /** Name of the partner who is working during this caregiver's leave. */
   partnerWorking?: string;
+  /** Part-time salary this caregiver earns on non-FP days (if working). */
+  partTimeSalary?: number;
 }
 
 function formatMonths(months: number): string {
@@ -104,7 +106,11 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                       : ""}
                   </span>
                   <span className="text-2xl font-bold tabular-nums">
-                    {formatSek(ownMonthly(r) + (r.householdBase ?? 0))}
+                    {formatSek(
+                      ownMonthly(r) +
+                        (r.partTimeSalary ?? 0) +
+                        (r.householdBase ?? 0),
+                    )}
                     <span className="text-muted-foreground text-sm font-normal">
                       /mån
                     </span>
@@ -112,6 +118,9 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                 </div>
                 <div className="text-muted-foreground text-xs tabular-nums">
                   {r.name}s ersättning ≈ {formatSek(ownMonthly(r))}
+                  {r.partTimeSalary
+                    ? ` + deltidslön ≈ ${formatSek(r.partTimeSalary)}`
+                    : ""}
                   {r.partnerWorking
                     ? ` + ${r.partnerWorking}s lön ≈ ${formatSek(r.householdBase ?? 0)}`
                     : ""}

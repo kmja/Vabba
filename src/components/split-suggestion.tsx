@@ -6,7 +6,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { LeaveLevers, type PhaseControls } from "@/components/leave-levers";
+import {
+  LeaveLevers,
+  type PhaseControls,
+  type PartTime,
+} from "@/components/leave-levers";
 import {
   OBJECTIVE_DESCRIPTION,
   type Objective,
@@ -36,6 +40,10 @@ export function SplitSuggestion({
   bonusFullB,
   householdBaseA,
   householdBaseB,
+  salaryA,
+  salaryB,
+  partTimeA,
+  partTimeB,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -54,6 +62,10 @@ export function SplitSuggestion({
   bonusFullB: number;
   householdBaseA: number;
   householdBaseB: number;
+  salaryA: number;
+  salaryB: number;
+  partTimeA: PartTime;
+  partTimeB: PartTime;
 }) {
   const rec = result.recommended;
   const aDays = rec.allocatedTotals.A;
@@ -110,7 +122,9 @@ export function SplitSuggestion({
             dailyRate={rec.payout.A.dailyRate}
             pace={paceA}
             bonusFullMonthly={bonusFullA}
-            householdBase={householdBaseA}
+            salary={salaryA}
+            partnerSalary={householdBaseA}
+            partTime={partTimeA}
             onSetTarget={onSetTargetA}
             phase={phaseA}
           />
@@ -120,7 +134,9 @@ export function SplitSuggestion({
             dailyRate={rec.payout.B.dailyRate}
             pace={paceB}
             bonusFullMonthly={bonusFullB}
-            householdBase={householdBaseB}
+            salary={salaryB}
+            partnerSalary={householdBaseB}
+            partTime={partTimeB}
             onSetTarget={onSetTargetB}
             phase={phaseB}
           />

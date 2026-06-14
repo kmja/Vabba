@@ -1,4 +1,4 @@
-import { Coins, Hourglass } from "lucide-react";
+import { Briefcase, Hourglass } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,34 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /** Föräldrapenning + employer föräldralön for `pace`, the way it's drawn. */
-function combinedMonthly(rate: number, bonusFull: number, pace: number): number {
+function fpMonthly(rate: number, bonusFull: number, pace: number): number {
   return approxMonthlyGross(rate, pace) + Math.round((bonusFull * pace) / 7);
+}
+
+/** Part-time salary earned on the non-FP days of the week (if working). */
+function partTimeMonthly(
+  salary: number,
+  pace: number,
+  works: boolean,
+): number {
+  if (!works || salary <= 0) return 0;
+  return Math.round((salary * (7 - clamp(pace, 0, 7))) / 7);
+}
+
+/** Household income while this caregiver is on leave at `pace`. */
+function householdMonthly(
+  rate: number,
+  bonusFull: number,
+  salary: number,
+  works: boolean,
+  partnerSalary: number,
+  pace: number,
+): number {
+  return (
+    fpMonthly(rate, bonusFull, pace) +
+    partTimeMonthly(salary, pace, works) +
+    partnerSalary
+  );
 }
 
 export interface PhaseControls {
@@ -26,12 +52,17 @@ export interface PhaseControls {
   onSetPhase2: (n: number) => void;
 }
 
+export interface PartTime {
+  works: boolean;
+  onToggle: (works: boolean) => void;
+}
+
 /**
- * Per-person controls, framed around **household** income. While this caregiver
- * is on leave the partner is working, so the monthly figure is this caregiver's
- * föräldrapenning + föräldralön + the partner's salary (`householdBase`). The
- * two sliders (household pay and length of leave) are linked through the pace;
- * "Maxa" maximises the combined household income (fastest pace).
+ * Per-person control. The household monthly income (this caregiver's
+ * föräldrapenning + föräldralön, the partner's salary, and — if they work the
+ * rest of the week — their part-time salary) is the headline; you set how long
+ * the leave runs. Because part-time work largely replaces the lost salary, the
+ * real trade-off is time-at-home vs. income, shown live.
  */
 export function LeaveLevers({
   name,
@@ -39,7 +70,9 @@ export function LeaveLevers({
   dailyRate,
   pace,
   bonusFullMonthly = 0,
-  householdBase = 0,
+  salary = 0,
+  partnerSalary = 0,
+  partTime,
   onSetTarget,
   phase,
 }: {
@@ -47,29 +80,47 @@ export function LeaveLevers({
   days: number;
   dailyRate: number;
   pace: number;
-  /** Employer föräldralön at full-time pace (monthly), if any. */
   bonusFullMonthly?: number;
-  /** The working partner's monthly salary, added to the household total. */
-  householdBase?: number;
+  /** This caregiver's own gross monthly salary (for part-time work). */
+  salary?: number;
+  /** The partner's monthly salary, added to the household total. */
+  partnerSalary?: number;
+  partTime: PartTime;
   onSetTarget: (minMonthly: number) => void;
   phase: PhaseControls;
 }) {
   if (days <= 0 || dailyRate <= 0) return null;
 
+  const showPartTime = partnerSalary > 0; // only a meaningful concept with a partner
+
   return (
     <div className="space-y-3 rounded-lg border p-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <span className="text-sm font-medium">{name}</span>
-        <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
-          <input
-            type="checkbox"
-            aria-label={`Byt takt vid 1 år – ${name}`}
-            checked={phase.on}
-            onChange={(e) => phase.onToggle(e.target.checked)}
-            className="accent-primary size-3.5"
-          />
-          Byt takt vid 1 år
-        </label>
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+          {showPartTime && (
+            <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                aria-label={`Jobbar deltid under ledigheten – ${name}`}
+                checked={partTime.works}
+                onChange={(e) => partTime.onToggle(e.target.checked)}
+                className="accent-primary size-3.5"
+              />
+              Jobbar deltid
+            </label>
+          )}
+          <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              aria-label={`Byt takt vid 1 år – ${name}`}
+              checked={phase.on}
+              onChange={(e) => phase.onToggle(e.target.checked)}
+              className="accent-primary size-3.5"
+            />
+            Byt takt vid 1 år
+          </label>
+        </div>
       </div>
 
       {phase.on ? (
@@ -77,16 +128,20 @@ export function LeaveLevers({
           name={name}
           dailyRate={dailyRate}
           bonusFull={bonusFullMonthly}
-          householdBase={householdBase}
+          salary={salary}
+          worksPartTime={partTime.works}
+          partnerSalary={partnerSalary}
           phase={phase}
         />
       ) : (
-        <SinglePaceLevers
+        <DurationLever
           name={name}
           days={days}
           dailyRate={dailyRate}
           bonusFull={bonusFullMonthly}
-          householdBase={householdBase}
+          salary={salary}
+          worksPartTime={partTime.works}
+          partnerSalary={partnerSalary}
           pace={pace}
           onSetTarget={onSetTarget}
         />
@@ -95,12 +150,14 @@ export function LeaveLevers({
   );
 }
 
-function SinglePaceLevers({
+function DurationLever({
   name,
   days,
   dailyRate,
   bonusFull,
-  householdBase,
+  salary,
+  worksPartTime,
+  partnerSalary,
   pace,
   onSetTarget,
 }: {
@@ -108,78 +165,52 @@ function SinglePaceLevers({
   days: number;
   dailyRate: number;
   bonusFull: number;
-  householdBase: number;
+  salary: number;
+  worksPartTime: boolean;
+  partnerSalary: number;
   pace: number;
   onSetTarget: (minMonthly: number) => void;
 }) {
-  // Household monthly = this caregiver's FP + föräldralön + partner salary.
-  // Only the FP+bonus part follows the pace; the partner's salary is constant.
-  const fkFull = approxMonthlyGross(dailyRate, 7);
-  const variableFull = fkFull + bonusFull; // FP + bonus at full pace
   const minDays = Math.max(1, Math.round(days)); // shortest leave (pace 7)
   const maxDays = Math.max(minDays + 1, Math.round(MONTHS_CAP * DAYS_PER_MONTH));
-
   const curDays = clamp(
     pace > 0 ? Math.round((days / pace) * 7) : minDays,
     minDays,
     maxDays,
   );
-  const payFull = variableFull + householdBase; // household at full pace
-  const paySlow =
-    combinedMonthly(dailyRate, bonusFull, (minDays / maxDays) * 7) +
-    householdBase;
-  const curPay = combinedMonthly(dailyRate, bonusFull, pace) + householdBase;
+  const household = householdMonthly(
+    dailyRate,
+    bonusFull,
+    salary,
+    worksPartTime,
+    partnerSalary,
+    pace,
+  );
+  const fpPart = fpMonthly(dailyRate, bonusFull, pace);
+  const workPart = partTimeMonthly(salary, pace, worksPartTime);
 
-  // Map a desired household pay / leave length back to the FK monthly target.
+  // Pace from a chosen calendar length.
   const fkFromDays = (cd: number) =>
     Math.round(approxMonthlyGross(dailyRate, (minDays / cd) * 7));
-  const fkFromPay = (household: number) =>
-    variableFull > 0
-      ? Math.round(
-          (Math.max(0, household - householdBase) / variableFull) * fkFull,
-        )
-      : fkFull;
 
   return (
     <>
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
-            <Coins className="size-3.5" />
-            {householdBase > 0 ? "Hushåll per månad" : "Per månad"}
-            {bonusFull > 0 ? " (inkl. föräldralön)" : ""}
-          </Label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold tabular-nums">
-              {formatSek(curPay)}
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              aria-label={`Maxa ersättning – ${name}`}
-              className="h-7 px-2 text-xs"
-              onClick={() => onSetTarget(fkFull)}
-            >
-              Maxa
-            </Button>
-          </div>
+      <div className="bg-secondary/40 rounded-md px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-muted-foreground text-xs">
+            {partnerSalary > 0 ? "Hushåll per månad" : "Per månad"}
+          </span>
+          <span className="text-lg font-bold tabular-nums">
+            {formatSek(household)}
+          </span>
         </div>
-        <input
-          type="range"
-          aria-label={`Hushållsinkomst per månad – ${name}`}
-          min={Math.round(paySlow)}
-          max={Math.round(payFull)}
-          step={100}
-          value={clamp(curPay, Math.round(paySlow), Math.round(payFull))}
-          onChange={(e) => onSetTarget(fkFromPay(Number(e.target.value)))}
-          className="accent-primary w-full"
-        />
-        {householdBase > 0 && (
-          <p className="text-muted-foreground text-[11px]">
-            varav ≈ {formatSek(householdBase)}/mån i partnerns lön (hen arbetar)
-          </p>
-        )}
+        <div className="text-muted-foreground text-[11px] tabular-nums">
+          ersättning ≈ {formatSek(fpPart)}
+          {workPart > 0 ? ` + deltidslön ≈ ${formatSek(workPart)}` : ""}
+          {partnerSalary > 0
+            ? ` + partnerns lön ≈ ${formatSek(partnerSalary)}`
+            : ""}
+        </div>
       </div>
 
       <div className="space-y-1.5">
@@ -195,11 +226,21 @@ function SinglePaceLevers({
               type="button"
               size="sm"
               variant="outline"
-              aria-label={`Maxa ledighet – ${name}`}
+              aria-label={`Kortast ledighet – ${name}`}
+              className="h-7 px-2 text-xs"
+              onClick={() => onSetTarget(fkFromDays(minDays))}
+            >
+              Kortast
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-label={`Längst ledighet – ${name}`}
               className="h-7 px-2 text-xs"
               onClick={() => onSetTarget(fkFromDays(maxDays))}
             >
-              Maxa
+              Längst
             </Button>
           </div>
         </div>
@@ -215,8 +256,16 @@ function SinglePaceLevers({
         />
       </div>
 
-      <p className="text-muted-foreground text-xs">
-        Mer per månad ger kortare ledighet — och tvärtom. Justeras dag för dag.
+      <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        {worksPartTime && partnerSalary > 0 ? (
+          <>
+            <Briefcase className="size-3.5 shrink-0" />
+            Längre ledighet = mindre hemtid per vecka (du jobbar mer), inte mindre
+            pengar.
+          </>
+        ) : (
+          "Längre ledighet sprider föräldrapenningen tunnare per månad."
+        )}
       </p>
     </>
   );
@@ -227,7 +276,9 @@ function PaceRow({
   name,
   dailyRate,
   bonusFull,
-  householdBase,
+  salary,
+  worksPartTime,
+  partnerSalary,
   value,
   onChange,
 }: {
@@ -235,10 +286,20 @@ function PaceRow({
   name: string;
   dailyRate: number;
   bonusFull: number;
-  householdBase: number;
+  salary: number;
+  worksPartTime: boolean;
+  partnerSalary: number;
   value: number;
   onChange: (n: number) => void;
 }) {
+  const household = householdMonthly(
+    dailyRate,
+    bonusFull,
+    salary,
+    worksPartTime,
+    partnerSalary,
+    value,
+  );
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -246,9 +307,7 @@ function PaceRow({
           {label}
         </Label>
         <span className="text-sm font-semibold tabular-nums">
-          {value} dgr/v · ≈{" "}
-          {formatSek(combinedMonthly(dailyRate, bonusFull, value) + householdBase)}
-          /mån
+          {value} dgr/v · ≈ {formatSek(household)}/mån
         </span>
       </div>
       <input
@@ -269,13 +328,17 @@ function PhaseLevers({
   name,
   dailyRate,
   bonusFull,
-  householdBase,
+  salary,
+  worksPartTime,
+  partnerSalary,
   phase,
 }: {
   name: string;
   dailyRate: number;
   bonusFull: number;
-  householdBase: number;
+  salary: number;
+  worksPartTime: boolean;
+  partnerSalary: number;
   phase: PhaseControls;
 }) {
   return (
@@ -285,7 +348,9 @@ function PhaseLevers({
         name={name}
         dailyRate={dailyRate}
         bonusFull={bonusFull}
-        householdBase={householdBase}
+        salary={salary}
+        worksPartTime={worksPartTime}
+        partnerSalary={partnerSalary}
         value={phase.phase1}
         onChange={phase.onSetPhase1}
       />
@@ -294,7 +359,9 @@ function PhaseLevers({
         name={name}
         dailyRate={dailyRate}
         bonusFull={bonusFull}
-        householdBase={householdBase}
+        salary={salary}
+        worksPartTime={worksPartTime}
+        partnerSalary={partnerSalary}
         value={phase.phase2}
         onChange={phase.onSetPhase2}
       />
