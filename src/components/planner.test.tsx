@@ -43,7 +43,7 @@ describe("<Planner /> wizard", () => {
     next(); // step 3 → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
 
-    expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
+    expect(screen.getByText(/och hur länge/)).toBeTruthy();
     expect(screen.getByText("Fördelning av dagarna")).toBeTruthy();
     expect(screen.getByText("Tidslinje")).toBeTruthy();
     expect(screen.getByText(/Vem är ledig när/)).toBeTruthy(); // Gantt
@@ -171,7 +171,7 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("#days-per-week")).toBeNull();
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText("Så mycket per månad – och hur länge")).toBeTruthy();
+    expect(screen.getByText(/och hur länge/)).toBeTruthy();
   });
 
   it("lets each caregiver set their own pace goal", () => {
@@ -274,8 +274,8 @@ describe("<Planner /> wizard", () => {
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // The monthly card frames income at the household level for each phase.
-    expect(screen.getAllByText(/Hushållet medan/).length).toBeGreaterThan(0);
+    // The card leads with the household income for each leave phase.
+    expect(screen.getAllByText(/Medan .* är ledig/).length).toBeGreaterThan(0);
   });
 
   it("saves the lägstanivå days by default", () => {

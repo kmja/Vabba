@@ -54,12 +54,17 @@ function formatMonths(months: number): string {
   return `≈ ${n.replace(".", ",")} mån`;
 }
 
+/** This caregiver's föräldrapenning + föräldralön at their pace. */
+function ownMonthly(r: MonthlyRow): number {
+  return approxMonthlyGross(r.dailyRate, r.daysPerWeek) + (r.supplement?.monthly ?? 0);
+}
+
 /**
- * Results lead: each vårdnadshavare's rough monthly deposit at their own leave
- * pace, plus how many days that is and how long it lasts. Surfaces the
- * post-12-month SGI condition when a pace is below the weekly floor.
+ * Results lead: what the **household** lives on each month while one caregiver
+ * is on leave and the other works, then the per-vårdnadshavare detail below.
  */
 export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
+  const hasHousehold = rows.some((r) => (r.householdBase ?? 0) > 0);
   const belowSgiFloor = rows.some(
     (r) =>
       (r.secondPhase?.daysPerWeek ?? r.daysPerWeek) <
@@ -74,13 +79,55 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Så mycket per månad – och hur länge</CardTitle>
+        <CardTitle>
+          {hasHousehold
+            ? "Hushållets inkomst – och hur länge"
+            : "Så mycket per månad – och hur länge"}
+        </CardTitle>
         <CardDescription>
-          Föräldrapenning per vårdnadshavare, och vad hushållet får in totalt
-          medan en är ledig och den andra arbetar.
+          {hasHousehold
+            ? "Medan en är ledig arbetar den andra. Så här mycket får hushållet in varje månad."
+            : "Uppskattat månadsbelopp medan inkomstbaserade dagar tas ut."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Household income — the headline */}
+        {hasHousehold && (
+          <div className="bg-secondary/40 space-y-3 rounded-lg border p-4">
+            {rows.map((r, i) => (
+              <div key={i}>
+                <div className="flex items-end justify-between gap-3">
+                  <span className="text-sm">
+                    Medan {r.name} är ledig
+                    {r.leaveMonths != null
+                      ? ` (${formatMonths(r.leaveMonths)})`
+                      : ""}
+                  </span>
+                  <span className="text-2xl font-bold tabular-nums">
+                    {formatSek(ownMonthly(r) + (r.householdBase ?? 0))}
+                    <span className="text-muted-foreground text-sm font-normal">
+                      /mån
+                    </span>
+                  </span>
+                </div>
+                <div className="text-muted-foreground text-xs tabular-nums">
+                  {r.name}s ersättning ≈ {formatSek(ownMonthly(r))}
+                  {r.partnerWorking
+                    ? ` + ${r.partnerWorking}s lön ≈ ${formatSek(r.householdBase ?? 0)}`
+                    : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {hasHousehold && (
+          <div className="text-muted-foreground text-xs font-medium">
+            Per vårdnadshavare
+          </div>
+        )}
+
+        {/* Per-caregiver föräldrapenning detail */}
         {rows.map((r, i) => {
           const gross = approxMonthlyGross(r.dailyRate, r.daysPerWeek);
           return (
@@ -124,24 +171,6 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                   {formatPace(r.secondPhase.daysPerWeek)} dagar/vecka
                 </div>
               )}
-              {r.householdBase ? (
-                <div className="bg-secondary/40 mt-2 rounded-md px-3 py-2 text-xs">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-medium">
-                      Hushållet medan {r.name} är ledig
-                    </span>
-                    <span className="font-semibold tabular-nums">
-                      ≈ {formatSek(gross + (r.supplement?.monthly ?? 0) + r.householdBase)}/mån
-                    </span>
-                  </div>
-                  <div className="text-muted-foreground mt-0.5 tabular-nums">
-                    ersättning ≈ {formatSek(gross + (r.supplement?.monthly ?? 0))}
-                    {r.partnerWorking
-                      ? ` + ${r.partnerWorking}s lön ≈ ${formatSek(r.householdBase)}`
-                      : ""}
-                  </div>
-                </div>
-              ) : null}
               {r.extraDays ? (
                 <div className="text-muted-foreground mt-0.5 text-xs">
                   inkl. {formatDays(r.extraDays)} sparade från tidigare barn
@@ -173,10 +202,6 @@ export function MonthlyEstimate({ rows }: { rows: MonthlyRow[] }) {
                     i ca {r.supplement.months} mån · ≈{" "}
                     {formatSek(r.supplement.total)} totalt
                     {r.aboveCap ? " · täcker även lön över taket" : ""}
-                  </div>
-                  <div className="mt-1 font-medium tabular-nums">
-                    ≈ {formatSek(gross + r.supplement.monthly)}/mån under
-                    föräldralöneperioden
                   </div>
                 </div>
               )}
