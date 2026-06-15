@@ -620,12 +620,12 @@ export function Timeline({
     const valid = MOTIFS.filter((mo) => mo.months.includes(month));
     if (valid.length === 0) return null;
     const seed = (idx * 31 + month * 7 + date.getDate()) % 997;
-    if (seed % 5 < 3) return null; // skip ~60% of rows → sparse
+    if (seed % 5 < 2) return null; // skip ~40% of rows → moderately sparse
     return {
       Icon: valid[seed % valid.length].icon,
       left: 8 + (seed % 82), // 8%–90%
       top: ((seed * 13) % 22) - 4, // small vertical jitter
-      size: 13 + (seed % 9), // 13–21px, small
+      size: 16 + (seed % 17), // 16–32px
     };
   };
 
