@@ -1,11 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   LeaveLevers,
   type PhaseControls,
@@ -77,20 +70,19 @@ export function SplitSuggestion({
 
   return (
     <Card>
-      <CardHeader className="bg-card sticky top-0 z-30 rounded-t-xl border-b pt-2 pb-4">
-        <CardTitle>Justera planen</CardTitle>
-        <CardDescription>{OBJECTIVE_DESCRIPTION[objective]}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Live split slider — drag to explore the trade-off. */}
+      {/* Minimal sticky controls: the caregiver split slider stays pinned
+          while the detail below scrolls. */}
+      <div className="bg-card sticky top-0 z-30 space-y-2 border-b px-6 pt-2 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-semibold">Justera planen</span>
+          {onSplitChange && splitA !== undefined && (
+            <span className="text-muted-foreground text-xs">
+              dra för att testa olika upplägg
+            </span>
+          )}
+        </div>
         {onSplitChange && splitA !== undefined && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="results-split">Justera fördelningen</Label>
-              <span className="text-muted-foreground text-xs">
-                dra för att testa olika upplägg
-              </span>
-            </div>
+          <div className="space-y-1">
             <input
               id="results-split"
               type="range"
@@ -100,7 +92,7 @@ export function SplitSuggestion({
               onChange={(e) => onSplitChange(Number(e.target.value) / 100)}
               className="accent-primary w-full"
             />
-            <div className="flex justify-between text-sm font-medium tabular-nums">
+            <div className="flex justify-between text-xs font-medium tabular-nums">
               <span>
                 {parentName(plan, "A")} · {formatDays(aDays)} ({pctA}%)
               </span>
@@ -110,6 +102,11 @@ export function SplitSuggestion({
             </div>
           </div>
         )}
+      </div>
+      <CardContent className="space-y-4">
+        <p className="text-muted-foreground text-sm">
+          {OBJECTIVE_DESCRIPTION[objective]}
+        </p>
 
         {/* Per-person pay ↔ duration levers */}
         <div className="space-y-3">
