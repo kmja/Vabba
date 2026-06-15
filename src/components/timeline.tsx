@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Apple,
   ArrowRightLeft,
@@ -5,6 +6,7 @@ import {
   Bird,
   Bug,
   CalendarDays,
+  ChevronDown,
   CircleAlert,
   Clock,
   CloudDrizzle,
@@ -103,6 +105,15 @@ const MOTIFS: { icon: LucideIcon; months: number[] }[] = [
   { icon: Cookie, months: [11, 0] },
 ];
 
+// The single most-recognisable icon for each season — used for ~70 % of icons
+// so the season reads at a glance; the remaining 30 % use variety from MOTIFS.
+const SEASON_PRIMARY: { months: number[]; icon: LucideIcon }[] = [
+  { months: [11, 0, 1], icon: Snowflake }, // winter → snowflake
+  { months: [2, 3, 4], icon: Flower2 }, // spring → blossom
+  { months: [5, 6, 7], icon: Sun }, // summer → sun
+  { months: [8, 9, 10], icon: Leaf }, // autumn → falling leaf
+];
+
 // Hue + brightness at the middle of each season; the wash interpolates between
 // them so seasons blend. Spring and summer are brighter (the sun coming out).
 const SEASON_HUES: { day: number; rgb: [number, number, number]; a: number }[] =
@@ -172,7 +183,7 @@ const DAYS_PER_MONTH = 30.44;
 // each leave period keeps a true, card-sized proportion (the timeline simply
 // grows taller) and dragging a length slider visibly moves the timeline.
 const COMPRESS_MONTHS = 15;
-const PX_PER_MONTH = 46;
+const PX_PER_MONTH = 60;
 const MIN_GAP_PX = 12;
 const MAX_GAP_PX = 480;
 const COMPRESSED_PX = 56;
@@ -284,8 +295,9 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
 }
 
 /**
- * The detail for one caregiver's leave period: what the household lives on,
- * how long it lasts, the pace, and the per-day compensation.
+ * The detail for one caregiver's leave period. Collapsed: after-tax household
+ * income, duration, and any conditional notes. Expanded (click chevron): fine
+ * print — gross amounts, per-day rate, pace.
  */
 function PeriodCard({
   row,
@@ -296,9 +308,11 @@ function PeriodCard({
   colorIdx: number;
   side?: "left" | "right";
 }) {
+  const [open, setOpen] = useState(false);
   const gross = approxMonthlyGross(row.dailyRate, row.daysPerWeek);
   const own = ownMonthly(row);
   const hasHousehold = (row.householdBase ?? 0) > 0;
+  const household = householdMonthly(row);
   const months =
     row.leaveMonths != null
       ? formatMonths(row.leaveMonths)
@@ -307,78 +321,107 @@ function PeriodCard({
   return (
     <div
       className={cn(
-        "bg-card rounded-md border p-3 shadow-sm",
+        "bg-card rounded-md border shadow-sm",
         side === "right"
           ? `border-r-4 ${CG_BORDER_R[colorIdx % CG_BORDER_R.length]}`
           : `border-l-4 ${CG_BORDER_L[colorIdx % CG_BORDER_L.length]}`,
       )}
     >
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-sm font-medium">{row.name}</span>
-        {row.goalLabel && (
-          <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
-            {row.goalLabel}
+      <div className="p-3">
+        {/* Header: name + goal tag + expand toggle */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="text-sm font-medium">{row.name}</span>
+            {row.goalLabel && (
+              <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
+                {row.goalLabel}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0 transition-colors"
+          >
+            <ChevronDown
+              className={cn("size-4 transition-transform", open && "rotate-180")}
+            />
+          </button>
+        </div>
+
+        {/* After-tax headline — the number people actually care about */}
+        <div className="mt-1.5 flex items-baseline justify-between gap-2">
+          <span className="text-muted-foreground text-xs">
+            {hasHousehold ? "Hushåll" : "Per månad"} · efter skatt
           </span>
+          <span className="text-xl font-bold tabular-nums">
+            ≈ {formatSek(netAfterTax(household))}
+            <span className="text-muted-foreground text-xs font-normal">/mån</span>
+          </span>
+        </div>
+
+        {/* Duration */}
+        <div className="mt-1 text-xs tabular-nums">
+          <span className="font-medium">{months}</span> · {formatDays(row.days)}
+          {row.secondPhase ? " första året" : ""}
+        </div>
+
+        {/* Household breakdown — always rendered so tests can find the text */}
+        {hasHousehold && (
+          <div className="text-muted-foreground mt-0.5 text-[11px] tabular-nums">
+            {row.name} ≈ {formatSek(own)}
+            {row.partTimeSalary
+              ? ` + deltidslön ≈ ${formatSek(row.partTimeSalary)}`
+              : ""}
+            {row.partnerWorking
+              ? ` + ${row.partnerWorking}s lön ≈ ${formatSek(row.householdBase ?? 0)}`
+              : ""}
+          </div>
         )}
+
+        {/* Conditional notes — always visible */}
+        {row.secondPhase && (
+          <div className="mt-0.5 text-[11px] tabular-nums">
+            Efter 1 år: ≈ {formatSek(row.secondPhase.monthly)}/mån vid{" "}
+            {formatPace(row.secondPhase.daysPerWeek)} dagar/vecka
+          </div>
+        )}
+        {row.supplement && (
+          <div className="mt-0.5 text-[11px]">
+            + Föräldralön (arbetsgivaren) ≈ {formatSek(row.supplement.monthly)}/mån i
+            ca {row.supplement.months} mån
+            {row.aboveCap ? " · täcker även lön över taket" : ""}
+          </div>
+        )}
+        {row.grundnivaFirstDays ? (
+          <div className="mt-0.5 text-[11px]">
+            Första {formatDays(row.grundnivaFirstDays)} på grundnivå (
+            {formatSek(MONEY.grundnivaPerDay)}/dag)
+          </div>
+        ) : null}
+        {row.extraDays ? (
+          <div className="text-muted-foreground mt-0.5 text-[11px]">
+            inkl. {formatDays(row.extraDays)} sparade från tidigare barn
+          </div>
+        ) : null}
       </div>
 
-      {/* Household income — the headline */}
-      <div className="mt-1.5 flex items-baseline justify-between gap-2">
-        <span className="text-muted-foreground text-xs">
-          {hasHousehold ? "Hushåll" : "Per månad"}
-        </span>
-        <span className="text-xl font-bold tabular-nums">
-          {formatSek(householdMonthly(row))}
-          <span className="text-muted-foreground text-xs font-normal">/mån</span>
-        </span>
-      </div>
-      {hasHousehold && (
-        <div className="text-muted-foreground text-[11px] tabular-nums">
-          {row.name} ≈ {formatSek(own)}
-          {row.partTimeSalary
-            ? ` + deltidslön ≈ ${formatSek(row.partTimeSalary)}`
-            : ""}
-          {row.partnerWorking
-            ? ` + ${row.partnerWorking}s lön ≈ ${formatSek(row.householdBase ?? 0)}`
-            : ""}
+      {/* Fine print: gross amounts, per-day rate, pace — shown on demand */}
+      {open && (
+        <div className="text-muted-foreground space-y-0.5 border-t px-3 pb-3 pt-2 text-[11px]">
+          {hasHousehold && (
+            <div className="tabular-nums">
+              Hushåll brutto ≈ {formatSek(household)}/mån
+            </div>
+          )}
+          <div className="tabular-nums">
+            {formatSek(gross)}/mån föräldrapenning · {formatSek(row.dailyRate)}/dag ·
+            ≈ {formatSek(netAfterTax(gross))} efter skatt
+          </div>
+          <div className="tabular-nums">{formatPace(row.daysPerWeek)} dagar/vecka</div>
         </div>
       )}
-
-      {/* Length + pace + per-day compensation */}
-      <div className="mt-1.5 text-xs tabular-nums">
-        <span className="font-medium">{months}</span> · {formatDays(row.days)} ·{" "}
-        {formatPace(row.daysPerWeek)} dagar/vecka
-        {row.secondPhase ? " första året" : ""}
-      </div>
-      <div className="text-muted-foreground text-[11px] tabular-nums">
-        {formatSek(gross)}/mån föräldrapenning · {formatSek(row.dailyRate)}/dag ·
-        ≈ {formatSek(netAfterTax(gross))} efter skatt
-      </div>
-
-      {row.secondPhase && (
-        <div className="mt-0.5 text-[11px] tabular-nums">
-          Efter 1 år: ≈ {formatSek(row.secondPhase.monthly)}/mån vid{" "}
-          {formatPace(row.secondPhase.daysPerWeek)} dagar/vecka
-        </div>
-      )}
-      {row.supplement && (
-        <div className="mt-0.5 text-[11px]">
-          + Föräldralön (arbetsgivaren) ≈ {formatSek(row.supplement.monthly)}/mån
-          i ca {row.supplement.months} mån
-          {row.aboveCap ? " · täcker även lön över taket" : ""}
-        </div>
-      )}
-      {row.grundnivaFirstDays ? (
-        <div className="mt-0.5 text-[11px]">
-          Första {formatDays(row.grundnivaFirstDays)} på grundnivå (
-          {formatSek(MONEY.grundnivaPerDay)}/dag)
-        </div>
-      ) : null}
-      {row.extraDays ? (
-        <div className="text-muted-foreground mt-0.5 text-[11px]">
-          inkl. {formatDays(row.extraDays)} sparade från tidigare barn
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -608,8 +651,8 @@ export function Timeline({
     gapDays[i] = gd;
   });
 
-  // A small, date-appropriate seasonal icon on roughly some rows — sparse and
-  // scattered, drawn faintly behind the content.
+  // Date-appropriate seasonal icon scattered across the timeline rows.
+  // Each season has one dominant icon (≈70 %) plus variety from MOTIFS (≈30 %).
   const decorFor = (date: Date, idx: number) => {
     if (
       date.getTime() <= birth.getTime() ||
@@ -620,9 +663,14 @@ export function Timeline({
     const valid = MOTIFS.filter((mo) => mo.months.includes(month));
     if (valid.length === 0) return null;
     const seed = (idx * 31 + month * 7 + date.getDate()) % 997;
-    if (seed % 5 < 2) return null; // skip ~40% of rows → moderately sparse
+    if (seed % 4 < 1) return null; // skip ~25% → dense
+    const dominant = SEASON_PRIMARY.find((p) => p.months.includes(month));
+    const Icon =
+      dominant && seed % 10 < 7
+        ? dominant.icon // 70 % of icons are the season's signature icon
+        : valid[seed % valid.length].icon; // 30 % variety
     return {
-      Icon: valid[seed % valid.length].icon,
+      Icon,
       left: 8 + (seed % 82), // 8%–90%
       top: ((seed * 13) % 22) - 4, // small vertical jitter
       size: 16 + (seed % 17), // 16–32px
