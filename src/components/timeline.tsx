@@ -12,13 +12,6 @@ import {
 } from "lucide-react";
 
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   type MonthlyRow,
   formatMonths,
   householdMonthly,
@@ -447,16 +440,15 @@ export function Timeline({
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Tidslinje</CardTitle>
-        <CardDescription>
-          Vem är ledig när (rälsarna i kanten) och vad hushållet får in under
-          varje period — längs de viktiga åldersgränserna.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="overflow-hidden rounded-lg">
+    <section className="bg-card text-card-foreground ml-[calc(50%_-_50vw)] w-screen space-y-4 py-6">
+      <div className="space-y-1.5 px-4 sm:px-6">
+        <h2 className="leading-none font-semibold">Tidslinje</h2>
+        <p className="text-muted-foreground text-sm">
+          Vem är ledig när (färgremsorna i kanten) och vad hushållet får in
+          under varje period — längs de viktiga åldersgränserna.
+        </p>
+      </div>
+      <div>
           {items.map((it, i) => {
             const active = segAt(it.date);
             const activeIdx = active
@@ -503,7 +495,7 @@ export function Timeline({
 
         {/* No dated segments to anchor to — just list the period detail. */}
         {periods.length === 0 && rows.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2 px-4 sm:px-6">
             {rows.map((row, i) => (
               <PeriodCard key={`f-${i}`} row={row} colorIdx={i} />
             ))}
@@ -512,7 +504,7 @@ export function Timeline({
 
         {/* Legend for the rails */}
         {cgOrder.length > 0 && (
-          <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+          <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 px-4 text-[11px] sm:px-6">
             {cgOrder.map((name, idx) => (
               <span key={name} className="flex items-center gap-1.5">
                 <span
@@ -528,7 +520,6 @@ export function Timeline({
             {hasLagsta && <span>ljusare = lägstanivå</span>}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </section>
   );
 }
