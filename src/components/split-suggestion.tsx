@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { IconChevronDown } from "@tabler/icons-react";
 
 import {
   LeaveLevers,
@@ -90,7 +90,7 @@ export function SplitSuggestion({
             className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
           >
             {open ? "Färre inställningar" : "Fler inställningar"}
-            <ChevronDown
+            <IconChevronDown
               className={cn("size-4 transition-transform", open && "rotate-180")}
             />
           </button>

@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { IconExternalLink } from "@tabler/icons-react";
 
 const FK_MINA_SIDOR =
   "https://www.forsakringskassan.se/om-webbplatsen/mina-sidor-och-e-legitimation/om-mina-sidor";
@@ -18,7 +18,7 @@ export function FkSourceHint({ what }: { what: string }) {
         className="text-foreground inline-flex items-center gap-0.5 underline underline-offset-2"
       >
         Försäkringskassans Mina sidor
-        <ExternalLink className="size-3" />
+        <IconExternalLink className="size-3" />
       </a>{" "}
       eller i deras app (med BankID).
     </p>

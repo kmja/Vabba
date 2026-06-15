@@ -1,42 +1,40 @@
 import { useState } from "react";
 import {
-  Apple,
-  ArrowRightLeft,
-  Baby,
-  Bird,
-  Bug,
-  CalendarDays,
-  ChevronDown,
-  CircleAlert,
-  Clock,
-  CloudDrizzle,
-  CloudRain,
-  CloudSnow,
-  Coffee,
-  Coins,
-  Cookie,
-  Flower,
-  Flower2,
-  Footprints,
-  IceCreamCone,
-  Laugh,
-  Leaf,
-  MessageCircle,
-  Palmtree,
-  PersonStanding,
-  Sailboat,
-  ShieldCheck,
-  Smile,
-  Snowflake,
-  Sprout,
-  Sun,
-  Umbrella,
-  Users,
-  Wallet,
-  Waves,
-  Wind,
-  type LucideIcon,
-} from "lucide-react";
+  IconAlertCircle,
+  IconApple,
+  IconArrowsLeftRight,
+  IconBabyCarriage,
+  IconBeach,
+  IconBug,
+  IconCalendar,
+  IconChevronDown,
+  IconClock,
+  IconCloudRain,
+  IconCloudSnow,
+  IconCoins,
+  IconCoffee,
+  IconCookie,
+  IconFeather,
+  IconFlower,
+  IconFoodsteps,
+  IconIceCream,
+  IconLeaf,
+  IconMessageCircle,
+  IconMoodHappy,
+  IconMoodSmile,
+  IconSailboat,
+  IconSeeding,
+  IconShieldCheck,
+  IconSnowflake,
+  IconSun,
+  IconUmbrella,
+  IconUser,
+  IconUsers,
+  IconWallet,
+  IconWaveSine,
+  IconWind,
+  type TablerIcon,
+} from "@tabler/icons-react";
 
 import {
   type MonthlyRow,
@@ -72,46 +70,46 @@ export interface LeaveProjection {
 type MilestoneVariant = "legal" | "projected" | "today" | "ambient";
 
 // Relatable, low-key reference points so the long first stretch is readable.
-const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
-  { months: 1.5, icon: Smile, title: "Första leendet" },
-  { months: 4, icon: Laugh, title: "Skrattar och jollrar" },
-  { months: 8, icon: Footprints, title: "Börjar krypa" },
-  { months: 12, icon: PersonStanding, title: "Första stegen" },
-  { months: 18, icon: MessageCircle, title: "Springer och pratar" },
+const DEVELOPMENT: { months: number; icon: TablerIcon; title: string }[] = [
+  { months: 1.5, icon: IconMoodSmile, title: "Första leendet" },
+  { months: 4, icon: IconMoodHappy, title: "Skrattar och jollrar" },
+  { months: 8, icon: IconFoodsteps, title: "Börjar krypa" },
+  { months: 12, icon: IconUser, title: "Första stegen" },
+  { months: 18, icon: IconMessageCircle, title: "Springer och pratar" },
 ];
 // Seasonal imagery scattered sparsely across the timeline. Each motif only
 // appears in the months it makes sense (snow in deep winter, cocoa across
 // autumn/winter, blooms in spring, …) so icons land at reasonable dates.
-const MOTIFS: { icon: LucideIcon; months: number[] }[] = [
-  { icon: Sprout, months: [2, 3] },
-  { icon: Bird, months: [2, 3, 4] },
-  { icon: CloudRain, months: [2, 3] },
-  { icon: Flower2, months: [3, 4, 5] },
-  { icon: Flower, months: [3, 4, 5] },
-  { icon: Bug, months: [4, 5, 6] },
-  { icon: Sun, months: [5, 6, 7] },
-  { icon: Umbrella, months: [5, 6, 7] },
-  { icon: IceCreamCone, months: [5, 6, 7] },
-  { icon: Waves, months: [5, 6, 7] },
-  { icon: Palmtree, months: [6, 7] },
-  { icon: Sailboat, months: [5, 6, 7] },
-  { icon: Apple, months: [7, 8, 9] },
-  { icon: Leaf, months: [8, 9, 10] },
-  { icon: Wind, months: [8, 9, 10] },
-  { icon: CloudDrizzle, months: [8, 9, 10] },
-  { icon: Coffee, months: [8, 9, 10, 11, 0, 1] }, // warm drinks, autumn → winter
-  { icon: CloudSnow, months: [10, 11, 0, 1] },
-  { icon: Snowflake, months: [11, 0, 1] },
-  { icon: Cookie, months: [11, 0] },
+const MOTIFS: { icon: TablerIcon; months: number[] }[] = [
+  { icon: IconSeeding, months: [2, 3] },
+  { icon: IconFeather, months: [2, 3, 4] },
+  { icon: IconCloudRain, months: [2, 3] },
+  { icon: IconFlower, months: [3, 4, 5] },
+  { icon: IconFlower, months: [3, 4, 5] },
+  { icon: IconBug, months: [4, 5, 6] },
+  { icon: IconSun, months: [5, 6, 7] },
+  { icon: IconUmbrella, months: [5, 6, 7] },
+  { icon: IconIceCream, months: [5, 6, 7] },
+  { icon: IconWaveSine, months: [5, 6, 7] },
+  { icon: IconBeach, months: [6, 7] },
+  { icon: IconSailboat, months: [5, 6, 7] },
+  { icon: IconApple, months: [7, 8, 9] },
+  { icon: IconLeaf, months: [8, 9, 10] },
+  { icon: IconWind, months: [8, 9, 10] },
+  { icon: IconCloudRain, months: [8, 9, 10] },
+  { icon: IconCoffee, months: [8, 9, 10, 11, 0, 1] }, // warm drinks, autumn → winter
+  { icon: IconCloudSnow, months: [10, 11, 0, 1] },
+  { icon: IconSnowflake, months: [11, 0, 1] },
+  { icon: IconCookie, months: [11, 0] },
 ];
 
 // The single most-recognisable icon for each season — used for ~70 % of icons
 // so the season reads at a glance; the remaining 30 % use variety from MOTIFS.
-const SEASON_PRIMARY: { months: number[]; icon: LucideIcon }[] = [
-  { months: [11, 0, 1], icon: Snowflake }, // winter → snowflake
-  { months: [2, 3, 4], icon: Flower2 }, // spring → blossom
-  { months: [5, 6, 7], icon: Sun }, // summer → sun
-  { months: [8, 9, 10], icon: Leaf }, // autumn → falling leaf
+const SEASON_PRIMARY: { months: number[]; icon: TablerIcon }[] = [
+  { months: [11, 0, 1], icon: IconSnowflake }, // winter → snowflake
+  { months: [2, 3, 4], icon: IconFlower }, // spring → blossom
+  { months: [5, 6, 7], icon: IconSun }, // summer → sun
+  { months: [8, 9, 10], icon: IconLeaf }, // autumn → falling leaf
 ];
 
 // Hue + brightness at the middle of each season; the wash interpolates between
@@ -164,7 +162,7 @@ const SV_MONTHS = [
 
 interface Milestone {
   date: Date;
-  icon: LucideIcon;
+  icon: TablerIcon;
   title: string;
   desc: string;
   variant: MilestoneVariant;
@@ -344,7 +342,7 @@ function PeriodCard({
             aria-expanded={open}
             className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0 transition-colors"
           >
-            <ChevronDown
+            <IconChevronDown
               className={cn("size-4 transition-transform", open && "rotate-180")}
             />
           </button>
@@ -445,35 +443,35 @@ export function Timeline({
   const legal: Milestone[] = [
     {
       date: birth,
-      icon: Baby,
+      icon: IconBabyCarriage,
       title: "Barnet föds",
       desc: "SGI är fullt skyddad under barnets första år.",
       variant: "legal",
     },
     {
       date: addYears(birth, 1),
-      icon: ShieldCheck,
+      icon: IconShieldCheck,
       title: "1 år",
       desc: "Därefter krävs minst 5 uttag/vecka (eller arbete) för att behålla SGI.",
       variant: "legal",
     },
     {
       date: deadlines.doubleDaysDeadline,
-      icon: Users,
+      icon: IconUsers,
       title: "15 månader",
       desc: "Sista chansen att ta ut dubbeldagar (upp till 60 stycken).",
       variant: "legal",
     },
     {
       date: deadlines.sjukpenningDeadline,
-      icon: Clock,
+      icon: IconClock,
       title: "4 år",
       desc: "Inkomstbaserade dagar måste vara uttagna. Därefter får högst 96 dagar sparas.",
       variant: "legal",
     },
     {
       date: deadlines.expiry,
-      icon: CircleAlert,
+      icon: IconAlertCircle,
       title: "12 år",
       desc: "Alla föräldrapenningdagar förfaller.",
       variant: "legal",
@@ -489,7 +487,7 @@ export function Timeline({
     if (!next) {
       projected.push({
         date: seg.endsAt,
-        icon: Wallet,
+        icon: IconWallet,
         title: "Ledigheten tar slut",
         desc: "Alla planerade föräldrapenningdagar är uttagna i den här takten.",
         variant: "projected",
@@ -497,7 +495,7 @@ export function Timeline({
     } else if (next.caregiver !== seg.caregiver) {
       projected.push({
         date: seg.endsAt,
-        icon: ArrowRightLeft,
+        icon: IconArrowsLeftRight,
         title: "Byte av vårdnadshavare",
         desc: `${next.caregiver} tar över efter ${seg.caregiver}.`,
         variant: "projected",
@@ -505,7 +503,7 @@ export function Timeline({
     } else if (seg.tier === "income" && next.tier === "lagsta") {
       projected.push({
         date: seg.endsAt,
-        icon: Coins,
+        icon: IconCoins,
         title: "Inkomstbaserade dagar slut",
         desc: `${seg.caregiver ? `${seg.caregiver}: e` : "E"}rsättningen går ner till ca ${formatSek(
           next.monthly,
@@ -518,7 +516,7 @@ export function Timeline({
   const showToday = ageMonths >= 0 && ageMonths <= span;
   const today: Milestone = {
     date: asOf,
-    icon: CalendarDays,
+    icon: IconCalendar,
     title: "Idag",
     desc: childAgeLabel(ageMonths),
     variant: "today",

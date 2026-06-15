@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type Dispatch, type SetStateAction } from "react";
-import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
+import { IconArrowLeft, IconArrowRight, IconRefresh } from "@tabler/icons-react";
 
 import {
   Card,
@@ -884,11 +884,11 @@ export function Wizard({
           >
             {step === 1 ? (
               <>
-                <RotateCcw /> Börja om
+                <IconRefresh /> Börja om
               </>
             ) : (
               <>
-                <ArrowLeft /> Bakåt
+                <IconArrowLeft /> Bakåt
               </>
             )}
           </Button>
@@ -900,7 +900,7 @@ export function Wizard({
               disabled={!canAdvance}
               onClick={() => setStep((s) => s + 1)}
             >
-              Nästa <ArrowRight />
+              Nästa <IconArrowRight />
             </Button>
           ) : (
             <Button
@@ -909,7 +909,7 @@ export function Wizard({
               disabled={!valid}
               onClick={onSubmit}
             >
-              Visa plan <ArrowRight />
+              Visa plan <IconArrowRight />
             </Button>
           )}
         </div>

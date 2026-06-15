@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Info } from "lucide-react";
+import { IconInfoCircle } from "@tabler/icons-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -27,7 +27,7 @@ export function Disclaimer({
 }) {
   return (
     <Alert>
-      <Info />
+      <IconInfoCircle />
       <AlertTitle>Planeringshjälp – inte officiell rådgivning</AlertTitle>
       <AlertDescription className="gap-2">
         {children ?? (

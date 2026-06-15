@@ -1,4 +1,4 @@
-import { Briefcase, Hourglass } from "lucide-react";
+import { IconBriefcase, IconHourglass } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -82,7 +82,7 @@ export function LeaveLengthSlider({
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-sm font-medium">
-          <Hourglass className="text-muted-foreground size-3.5" /> {name}
+          <IconHourglass className="text-muted-foreground size-3.5" /> {name}
         </span>
         <span className="text-sm font-semibold tabular-nums">
           ≈ {(curDays / DAYS_PER_MONTH).toFixed(1).replace(".", ",")} mån
@@ -269,7 +269,7 @@ function DurationLever({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
-            <Hourglass className="size-3.5" /> Ledighetens längd
+            <IconHourglass className="size-3.5" /> Ledighetens längd
           </Label>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold tabular-nums">
@@ -312,7 +312,7 @@ function DurationLever({
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
         {worksPartTime && partnerSalary > 0 ? (
           <>
-            <Briefcase className="size-3.5 shrink-0" />
+            <IconBriefcase className="size-3.5 shrink-0" />
             Längre ledighet = mindre hemtid per vecka (du jobbar mer), inte mindre
             pengar.
           </>

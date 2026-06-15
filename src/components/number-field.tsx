@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react";
+import { IconMinus, IconPlus } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +71,7 @@ export function NumberField({
             aria-label="Minska"
             onClick={() => onChange(clamp(value - step))}
           >
-            <Minus />
+            <IconMinus />
           </Button>
           {input}
           <Button
@@ -82,7 +82,7 @@ export function NumberField({
             aria-label="Öka"
             onClick={() => onChange(clamp(value + step))}
           >
-            <Plus />
+            <IconPlus />
           </Button>
         </div>
       ) : (

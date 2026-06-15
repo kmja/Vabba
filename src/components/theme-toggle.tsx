@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { IconMoon, IconSun } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -37,7 +37,7 @@ export function ThemeToggle() {
       aria-label={dark ? "Byt till ljust tema" : "Byt till mörkt tema"}
       title="Växla tema"
     >
-      {dark ? <Sun /> : <Moon />}
+      {dark ? <IconSun /> : <IconMoon />}
     </Button>
   );
 }

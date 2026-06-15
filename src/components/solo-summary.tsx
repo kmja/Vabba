@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { IconChevronDown } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -59,7 +59,7 @@ export function SoloSummary({
           className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
         >
           Fler inställningar
-          <ChevronDown
+          <IconChevronDown
             className={cn("size-4 transition-transform", open && "rotate-180")}
           />
         </button>

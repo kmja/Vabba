@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Pencil, RotateCcw, Share2 } from "lucide-react";
+import { IconCheck, IconPencil, IconRefresh, IconShare2 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { RemainingTiers } from "@/components/remaining-tiers";
@@ -103,14 +103,14 @@ export function Results({
         <h2 className="text-lg font-semibold">Er plan</h2>
         <div className="flex gap-2">
           <Button type="button" size="sm" onClick={onEdit}>
-            <Pencil /> Ändra uppgifter
+            <IconPencil /> Ändra uppgifter
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onShare}>
-            {copied ? <Check /> : <Share2 />}
+            {copied ? <IconCheck /> : <IconShare2 />}
             {copied ? "Kopierad!" : "Dela"}
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={onReset}>
-            <RotateCcw /> Börja om
+            <IconRefresh /> Börja om
           </Button>
         </div>
       </div>

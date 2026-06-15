@@ -1,4 +1,4 @@
-import { CircleAlert, Info, TriangleAlert } from "lucide-react";
+import { IconAlertCircle, IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import type { PlanWarning, WarningLevel } from "@/lib/optimizer";
@@ -32,7 +32,7 @@ export function WarningsList({ warnings }: { warnings: PlanWarning[] }) {
           key={`p-${i}`}
           variant={w.level === "critical" ? "destructive" : "warning"}
         >
-          {w.level === "critical" ? <TriangleAlert /> : <CircleAlert />}
+          {w.level === "critical" ? <IconAlertTriangle /> : <IconAlertCircle />}
           <AlertTitle>{LEVEL_TITLE[w.level]}</AlertTitle>
           <AlertDescription>{w.message}</AlertDescription>
         </Alert>
@@ -41,7 +41,7 @@ export function WarningsList({ warnings }: { warnings: PlanWarning[] }) {
       {info.length > 0 && (
         <div className="rounded-lg border p-4">
           <div className="text-muted-foreground mb-2 flex items-center gap-2 text-sm font-medium">
-            <Info className="size-4" />
+            <IconInfoCircle className="size-4" />
             {LEVEL_TITLE.info}
           </div>
           <ul className="space-y-1.5">

@@ -1,4 +1,4 @@
-import { Stethoscope } from "lucide-react";
+import { IconStethoscope } from "@tabler/icons-react";
 
 import {
   Card,
@@ -22,7 +22,7 @@ export function VabResultCard({ result }: { result: VabResult }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Stethoscope className="size-5" /> Vab – vård av sjukt barn
+          <IconStethoscope className="size-5" /> Vab – vård av sjukt barn
         </CardTitle>
         <CardDescription>
           Tillfällig föräldrapenning, {formatNumber(result.daysPerChild)} dagar
