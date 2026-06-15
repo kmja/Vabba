@@ -1,38 +1,18 @@
 import {
-  Apple,
   ArrowRightLeft,
   Baby,
-  Bird,
-  Bug,
   CalendarDays,
   CircleAlert,
   Clock,
-  CloudDrizzle,
-  CloudRain,
-  CloudSnow,
-  Coffee,
   Coins,
-  Cookie,
-  Flower,
-  Flower2,
   Footprints,
-  IceCreamCone,
   Laugh,
-  Leaf,
   MessageCircle,
-  Palmtree,
   PersonStanding,
-  Sailboat,
   ShieldCheck,
   Smile,
-  Snowflake,
-  Sprout,
-  Sun,
-  Umbrella,
   Users,
   Wallet,
-  Waves,
-  Wind,
   type LucideIcon,
 } from "lucide-react";
 
@@ -77,40 +57,46 @@ const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
   { months: 12, icon: PersonStanding, title: "Första stegen" },
   { months: 18, icon: MessageCircle, title: "Springer och pratar" },
 ];
-// Seasonal imagery scattered across the timeline. Each motif only appears in
-// the months it makes sense (snow in deep winter, cocoa across autumn/winter,
-// blooms in spring, …) so the icons land at reasonable dates. [months 0-indexed]
-const MOTIFS: { icon: LucideIcon; months: number[] }[] = [
-  { icon: Sprout, months: [2, 3] },
-  { icon: Bird, months: [2, 3, 4] },
-  { icon: CloudRain, months: [2, 3] },
-  { icon: Flower2, months: [3, 4, 5] },
-  { icon: Flower, months: [3, 4, 5] },
-  { icon: Bug, months: [4, 5, 6] },
-  { icon: Sun, months: [5, 6, 7] },
-  { icon: Umbrella, months: [5, 6, 7] },
-  { icon: IceCreamCone, months: [5, 6, 7] },
-  { icon: Waves, months: [5, 6, 7] },
-  { icon: Palmtree, months: [6, 7] },
-  { icon: Sailboat, months: [5, 6, 7] },
-  { icon: Apple, months: [7, 8, 9] },
-  { icon: Leaf, months: [8, 9, 10] },
-  { icon: Wind, months: [8, 9, 10] },
-  { icon: CloudDrizzle, months: [8, 9, 10] },
-  { icon: Coffee, months: [8, 9, 10, 11, 0, 1] }, // warm drinks, autumn → winter
-  { icon: CloudSnow, months: [10, 11, 0, 1] },
-  { icon: Snowflake, months: [11, 0, 1] },
-  { icon: Cookie, months: [11, 0] },
-];
+// One signature shape per season, tiled as a faint repeating texture.
+const SNOWFLAKE = "<path d='M12 2v20M2 12h20M4.9 4.9 19.1 19.1M19.1 4.9 4.9 19.1'/>";
+const FLOWER =
+  "<circle cx='12' cy='12' r='2.2'/><circle cx='12' cy='6' r='2.7'/><circle cx='12' cy='18' r='2.7'/><circle cx='6' cy='12' r='2.7'/><circle cx='18' cy='12' r='2.7'/>";
+const SUN =
+  "<circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19'/>";
+const LEAF =
+  "<path d='M5 19c0-8 6-14 15-15 0 9-6 15-15 15Z'/><path d='M5 19C9 13 13 11 18 10'/>";
 
-// Hue at the middle of each season; the background smoothly interpolates
-// between them so the seasons blend rather than hard-cut.
-const SEASON_HUES: { day: number; rgb: [number, number, number] }[] = [
-  { day: 15, rgb: [125, 211, 252] }, // winter — icy blue
-  { day: 105, rgb: [134, 239, 172] }, // spring — fresh green
-  { day: 196, rgb: [250, 220, 90] }, // summer — sunlight yellow
-  { day: 288, rgb: [251, 170, 100] }, // autumn — orange
-];
+/** A faint tiled background-image url for one season's signature shape. */
+function seasonTexture(inner: string): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'` +
+    ` fill='none' stroke='rgba(140,140,140,0.13)' stroke-width='1.5'` +
+    ` stroke-linecap='round' stroke-linejoin='round'>${inner}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+const SEASON_TEXTURE = {
+  winter: seasonTexture(SNOWFLAKE),
+  spring: seasonTexture(FLOWER),
+  summer: seasonTexture(SUN),
+  autumn: seasonTexture(LEAF),
+};
+function seasonPattern(date: Date): string {
+  const m = date.getMonth();
+  if (m === 11 || m <= 1) return SEASON_TEXTURE.winter;
+  if (m <= 4) return SEASON_TEXTURE.spring;
+  if (m <= 7) return SEASON_TEXTURE.summer;
+  return SEASON_TEXTURE.autumn;
+}
+
+// Hue + brightness at the middle of each season; the wash interpolates between
+// them so seasons blend. Spring and summer are brighter (the sun coming out).
+const SEASON_HUES: { day: number; rgb: [number, number, number]; a: number }[] =
+  [
+    { day: 15, rgb: [125, 211, 252], a: 0.1 }, // winter — icy blue
+    { day: 105, rgb: [150, 240, 165], a: 0.17 }, // spring — fresh green, brighter
+    { day: 196, rgb: [253, 224, 90], a: 0.21 }, // summer — sunlight, brightest
+    { day: 288, rgb: [251, 170, 100], a: 0.12 }, // autumn — orange
+  ];
 
 function dayOfYear(d: Date): number {
   const start = Date.UTC(d.getFullYear(), 0, 0);
@@ -118,12 +104,12 @@ function dayOfYear(d: Date): number {
   return Math.floor((here - start) / 86_400_000);
 }
 
-/** Smoothly blended seasonal wash for a date (faint, over the card surface). */
+/** Smoothly blended, brightness-varying seasonal wash for a date. */
 function seasonColor(date: Date): string {
   const ext = [
-    { day: SEASON_HUES[3].day - 365, rgb: SEASON_HUES[3].rgb },
+    { ...SEASON_HUES[3], day: SEASON_HUES[3].day - 365 },
     ...SEASON_HUES,
-    { day: SEASON_HUES[0].day + 365, rgb: SEASON_HUES[0].rgb },
+    { ...SEASON_HUES[0], day: SEASON_HUES[0].day + 365 },
   ];
   const d = dayOfYear(date);
   let i = 0;
@@ -132,7 +118,8 @@ function seasonColor(date: Date): string {
   const b = ext[i + 1];
   const t = b.day === a.day ? 0 : (d - a.day) / (b.day - a.day);
   const mix = (k: number) => Math.round(a.rgb[k] + (b.rgb[k] - a.rgb[k]) * t);
-  return `rgba(${mix(0)}, ${mix(1)}, ${mix(2)}, 0.13)`;
+  const alpha = (a.a + (b.a - a.a) * t).toFixed(3);
+  return `rgba(${mix(0)}, ${mix(1)}, ${mix(2)}, ${alpha})`;
 }
 const SV_MONTHS = [
   "jan",
@@ -500,34 +487,6 @@ export function Timeline({
     }
   }
 
-  // Scatter a couple of date-appropriate seasonal icons into each row's
-  // background — varied size and position — so the imagery spreads all over
-  // the seasons rather than clustering at a single date.
-  const decorFor = (date: Date, idx: number) => {
-    if (
-      date.getTime() <= birth.getTime() ||
-      date.getTime() > ambientCap.getTime()
-    )
-      return [] as { Icon: LucideIcon; left: number; top: number; size: number }[];
-    const month = date.getMonth();
-    const valid = MOTIFS.filter((mo) => mo.months.includes(month));
-    if (valid.length === 0) return [];
-    const out: { Icon: LucideIcon; left: number; top: number; size: number }[] =
-      [];
-    const n = 1 + (idx % 2); // one or two per row
-    for (let j = 0; j < n; j++) {
-      const seed = (idx * 31 + j * 17 + month * 7 + date.getDate()) % 997;
-      const mo = valid[(idx + j * 2) % valid.length];
-      out.push({
-        Icon: mo.icon,
-        left: 6 + (seed % 88), // 6%–94%
-        top: ((seed * 13) % 40) - 10, // −10..30px (a little bleed)
-        size: 24 + ((seed * 7) % 34), // 24–58px, varied
-      });
-    }
-    return out;
-  };
-
   const milestones = [
     ...legal,
     ...projected,
@@ -634,6 +593,15 @@ export function Timeline({
     gapDays[i] = gd;
   });
 
+  // Virtual top of each row, so the tiled texture can continue across rows
+  // (a consistent background-position) instead of restarting every row.
+  const cumY: number[] = [];
+  let acc = 0;
+  for (let i = 0; i < items.length; i++) {
+    cumY[i] = acc;
+    acc += minH[i] || 0;
+  }
+
   const railCell = (idx: number, activeIdx: number, lagsta: boolean) => (
     <div
       className={cn(
@@ -669,28 +637,22 @@ export function Timeline({
             const wash = `linear-gradient(to bottom, ${colorAt(it.date)}, ${colorAt(
               nextItem ? nextItem.date : it.date,
             )})`;
-            const decor = decorFor(it.date, i);
+            const inWindow = it.date.getTime() <= ambientCap.getTime();
+            const texture = inWindow ? seasonPattern(it.date) : null;
             return (
               <div
                 key={i}
-                className="relative isolate flex items-stretch gap-2 sm:gap-3"
-                style={{ minHeight: minH[i] || undefined, backgroundImage: wash }}
+                className="flex items-stretch gap-2 sm:gap-3"
+                style={{
+                  minHeight: minH[i] || undefined,
+                  backgroundImage: texture ? `${texture}, ${wash}` : wash,
+                  backgroundRepeat: texture ? "repeat, no-repeat" : undefined,
+                  backgroundSize: texture ? "40px 40px, 100% 100%" : undefined,
+                  backgroundPosition: texture
+                    ? `0px ${-cumY[i]}px, 0 0`
+                    : undefined,
+                }}
               >
-                {decor.length > 0 && (
-                  <div
-                    aria-hidden
-                    className="text-muted-foreground/20 pointer-events-none absolute inset-0 -z-10"
-                  >
-                    {decor.map((d, j) => (
-                      <d.Icon
-                        key={j}
-                        size={d.size}
-                        className="absolute -translate-x-1/2"
-                        style={{ left: `${d.left}%`, top: d.top }}
-                      />
-                    ))}
-                  </div>
-                )}
                 {leftName && railCell(0, activeIdx, lagsta)}
 
                 <div className="flex min-w-0 flex-1 flex-col py-1.5">
