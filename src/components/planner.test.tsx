@@ -276,18 +276,24 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/s lön ≈/).length).toBeGreaterThan(0);
   });
 
-  it("counts part-time work in household income when a leave is extended", () => {
+  it("only counts part-time work in household income when opted in", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // At full pace nobody works part-time, so no deltidslön.
-    expect(screen.queryByText(/deltidslön/)).toBeNull();
     // Open the collapsible "Justera" controls to reach the per-person levers.
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    // Extend caregiver A's leave → they work the rest of the week.
+    // Extend caregiver A's leave. By default we do NOT assume they work, so the
+    // longer leave just spreads föräldrapenningen thinner — no deltidslön.
     fireEvent.click(
       screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
+    );
+    expect(screen.queryByText(/deltidslön/)).toBeNull();
+    // Opt in to part-time work → their salary for the worked days shows up.
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /Jobbar deltid under ledigheten – Vårdnadshavare A/,
+      }),
     );
     expect(screen.getAllByText(/deltidslön/).length).toBeGreaterThan(0);
   });

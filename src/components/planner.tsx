@@ -42,8 +42,8 @@ const DEFAULT_STATE: ShareableState = {
   phase1B: 3,
   phase2A: 5,
   phase2B: 5,
-  worksPartTimeA: true,
-  worksPartTimeB: true,
+  worksPartTimeA: false,
+  worksPartTimeB: false,
   customSplitA: 0.5,
   includeLagsta: false,
   firstCaregiver: "A",
@@ -185,8 +185,8 @@ export function Planner() {
   const phase2A = form.phase2A ?? 5;
   const phase2B = form.phase2B ?? 5;
   // Whether each caregiver works the rest of the week during a slow leave.
-  const worksPartTimeA = form.worksPartTimeA ?? true;
-  const worksPartTimeB = form.worksPartTimeB ?? true;
+  const worksPartTimeA = form.worksPartTimeA ?? false;
+  const worksPartTimeB = form.worksPartTimeB ?? false;
 
   // The split the results slider shows: the chosen custom share, or the share
   // the current objective happens to produce (so dragging continues naturally).
