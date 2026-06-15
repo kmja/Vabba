@@ -83,6 +83,15 @@ const SV_MONTHS = [
   "dec",
 ];
 
+/** Faint seasonal wash behind a row, by the month it falls in. */
+function seasonBg(date: Date): string {
+  const m = date.getMonth();
+  if (m === 11 || m <= 1) return "bg-sky-400/10"; // vinter — icy blue
+  if (m <= 4) return "bg-green-400/10"; // vår — fresh green
+  if (m <= 7) return "bg-amber-300/15"; // sommar — sunlight yellow
+  return "bg-orange-400/10"; // höst — autumnal orange
+}
+
 interface Milestone {
   date: Date;
   icon: LucideIcon;
@@ -581,10 +590,15 @@ export function Timeline({
               ? cgOrder.indexOf(active.caregiver ?? "Ledig")
               : -1;
             const lagsta = active?.tier === "lagsta";
+            // Faint seasonal wash behind the proportional first two years.
+            const season =
+              it.date.getTime() <= ambientCap.getTime()
+                ? seasonBg(it.date)
+                : "";
             return (
               <div
                 key={i}
-                className="flex items-stretch gap-2 sm:gap-3"
+                className={cn("flex items-stretch gap-2 sm:gap-3", season)}
                 style={{ minHeight: minH[i] || undefined }}
               >
                 {leftName && railCell(0, activeIdx, lagsta)}
