@@ -68,6 +68,20 @@ const SEASONS: { month: number; icon: LucideIcon; title: string }[] = [
   { month: 8, icon: Leaf, title: "Höst" },
   { month: 11, icon: Snowflake, title: "Vinter" },
 ];
+const SV_MONTHS = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "maj",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "okt",
+  "nov",
+  "dec",
+];
 
 interface Milestone {
   date: Date;
@@ -479,25 +493,46 @@ export function Timeline({
     );
   };
 
-  // Merge milestones and period-starts into one date-ordered list of rows.
-  // Each row gets the leave segments as full-height side rails, with the
-  // detail/label in the middle — so nothing is squeezed side-by-side, and the
-  // timeline simply grows taller when content needs the room.
+  // Merge milestones, period-starts and faint month notches into one
+  // date-ordered list of rows. Each row gets the leave segments as full-height
+  // side rails, with the detail/label in the middle — so nothing is squeezed
+  // side-by-side, and the timeline simply grows taller when content needs room.
   type Item =
     | { kind: "milestone"; date: Date; ord: number; m: Milestone }
-    | { kind: "period"; date: Date; ord: number; period: Period };
+    | { kind: "period"; date: Date; ord: number; period: Period }
+    | { kind: "month"; date: Date; ord: number; label: string };
+
+  // Faint month notches across the proportional first ~15 months, skipping any
+  // that land on an existing marker so they read as a quiet ruler underneath.
+  const occupied = milestones.map((m) => m.date.getTime());
+  const monthItems: { date: Date; label: string }[] = [];
+  for (let n = 1; n <= 15; n++) {
+    const date = addMonths(birth, n);
+    if (date.getTime() > deadlines.expiry.getTime()) break;
+    const near = occupied.some(
+      (t) => Math.abs(t - date.getTime()) < 12 * 86_400_000,
+    );
+    if (!near) monthItems.push({ date, label: SV_MONTHS[date.getMonth()] });
+  }
+
   const items: Item[] = [
     ...milestones.map((m) => ({
       kind: "milestone" as const,
       date: m.date,
-      ord: 0,
+      ord: 1,
       m,
     })),
     ...periods.map((p) => ({
       kind: "period" as const,
       date: p.startDate,
-      ord: 1,
+      ord: 2,
       period: p,
+    })),
+    ...monthItems.map((mo) => ({
+      kind: "month" as const,
+      date: mo.date,
+      ord: 0,
+      label: mo.label,
     })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime() || a.ord - b.ord);
 
@@ -567,6 +602,11 @@ export function Timeline({
                         colorIdx={it.period.colorIdx}
                         side={it.period.side}
                       />
+                    </div>
+                  ) : it.kind === "month" ? (
+                    <div className="text-muted-foreground/45 flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase">
+                      <span aria-hidden className="bg-border/70 h-px w-3 shrink-0" />
+                      {it.label}
                     </div>
                   ) : (
                     <MilestoneLabel m={it.m} asOf={asOf} />
