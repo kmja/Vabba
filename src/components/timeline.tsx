@@ -1,18 +1,38 @@
 import {
+  Apple,
   ArrowRightLeft,
   Baby,
+  Bird,
+  Bug,
   CalendarDays,
   CircleAlert,
   Clock,
+  CloudDrizzle,
+  CloudRain,
+  CloudSnow,
+  Coffee,
   Coins,
+  Cookie,
+  Flower,
+  Flower2,
   Footprints,
+  IceCreamCone,
   Laugh,
+  Leaf,
   MessageCircle,
+  Palmtree,
   PersonStanding,
+  Sailboat,
   ShieldCheck,
   Smile,
+  Snowflake,
+  Sprout,
+  Sun,
+  Umbrella,
   Users,
   Wallet,
+  Waves,
+  Wind,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,36 +77,31 @@ const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
   { months: 12, icon: PersonStanding, title: "Första stegen" },
   { months: 18, icon: MessageCircle, title: "Springer och pratar" },
 ];
-// One signature shape per season, tiled as a faint repeating texture.
-const SNOWFLAKE = "<path d='M12 2v20M2 12h20M4.9 4.9 19.1 19.1M19.1 4.9 4.9 19.1'/>";
-const FLOWER =
-  "<circle cx='12' cy='12' r='2.2'/><circle cx='12' cy='6' r='2.7'/><circle cx='12' cy='18' r='2.7'/><circle cx='6' cy='12' r='2.7'/><circle cx='18' cy='12' r='2.7'/>";
-const SUN =
-  "<circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19'/>";
-const LEAF =
-  "<path d='M5 19c0-8 6-14 15-15 0 9-6 15-15 15Z'/><path d='M5 19C9 13 13 11 18 10'/>";
-
-/** A faint tiled background-image url for one season's signature shape. */
-function seasonTexture(inner: string): string {
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 24 24'` +
-    ` fill='none' stroke='rgba(140,140,140,0.13)' stroke-width='1.5'` +
-    ` stroke-linecap='round' stroke-linejoin='round'>${inner}</svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-}
-const SEASON_TEXTURE = {
-  winter: seasonTexture(SNOWFLAKE),
-  spring: seasonTexture(FLOWER),
-  summer: seasonTexture(SUN),
-  autumn: seasonTexture(LEAF),
-};
-function seasonPattern(date: Date): string {
-  const m = date.getMonth();
-  if (m === 11 || m <= 1) return SEASON_TEXTURE.winter;
-  if (m <= 4) return SEASON_TEXTURE.spring;
-  if (m <= 7) return SEASON_TEXTURE.summer;
-  return SEASON_TEXTURE.autumn;
-}
+// Seasonal imagery scattered sparsely across the timeline. Each motif only
+// appears in the months it makes sense (snow in deep winter, cocoa across
+// autumn/winter, blooms in spring, …) so icons land at reasonable dates.
+const MOTIFS: { icon: LucideIcon; months: number[] }[] = [
+  { icon: Sprout, months: [2, 3] },
+  { icon: Bird, months: [2, 3, 4] },
+  { icon: CloudRain, months: [2, 3] },
+  { icon: Flower2, months: [3, 4, 5] },
+  { icon: Flower, months: [3, 4, 5] },
+  { icon: Bug, months: [4, 5, 6] },
+  { icon: Sun, months: [5, 6, 7] },
+  { icon: Umbrella, months: [5, 6, 7] },
+  { icon: IceCreamCone, months: [5, 6, 7] },
+  { icon: Waves, months: [5, 6, 7] },
+  { icon: Palmtree, months: [6, 7] },
+  { icon: Sailboat, months: [5, 6, 7] },
+  { icon: Apple, months: [7, 8, 9] },
+  { icon: Leaf, months: [8, 9, 10] },
+  { icon: Wind, months: [8, 9, 10] },
+  { icon: CloudDrizzle, months: [8, 9, 10] },
+  { icon: Coffee, months: [8, 9, 10, 11, 0, 1] }, // warm drinks, autumn → winter
+  { icon: CloudSnow, months: [10, 11, 0, 1] },
+  { icon: Snowflake, months: [11, 0, 1] },
+  { icon: Cookie, months: [11, 0] },
+];
 
 // Hue + brightness at the middle of each season; the wash interpolates between
 // them so seasons blend. Spring and summer are brighter (the sun coming out).
@@ -593,14 +608,26 @@ export function Timeline({
     gapDays[i] = gd;
   });
 
-  // Virtual top of each row, so the tiled texture can continue across rows
-  // (a consistent background-position) instead of restarting every row.
-  const cumY: number[] = [];
-  let acc = 0;
-  for (let i = 0; i < items.length; i++) {
-    cumY[i] = acc;
-    acc += minH[i] || 0;
-  }
+  // A small, date-appropriate seasonal icon on roughly some rows — sparse and
+  // scattered, drawn faintly behind the content.
+  const decorFor = (date: Date, idx: number) => {
+    if (
+      date.getTime() <= birth.getTime() ||
+      date.getTime() > ambientCap.getTime()
+    )
+      return null;
+    const month = date.getMonth();
+    const valid = MOTIFS.filter((mo) => mo.months.includes(month));
+    if (valid.length === 0) return null;
+    const seed = (idx * 31 + month * 7 + date.getDate()) % 997;
+    if (seed % 5 < 3) return null; // skip ~60% of rows → sparse
+    return {
+      Icon: valid[seed % valid.length].icon,
+      left: 8 + (seed % 82), // 8%–90%
+      top: ((seed * 13) % 22) - 4, // small vertical jitter
+      size: 13 + (seed % 9), // 13–21px, small
+    };
+  };
 
   const railCell = (idx: number, activeIdx: number, lagsta: boolean) => (
     <div
@@ -637,22 +664,21 @@ export function Timeline({
             const wash = `linear-gradient(to bottom, ${colorAt(it.date)}, ${colorAt(
               nextItem ? nextItem.date : it.date,
             )})`;
-            const inWindow = it.date.getTime() <= ambientCap.getTime();
-            const texture = inWindow ? seasonPattern(it.date) : null;
+            const decor = decorFor(it.date, i);
             return (
               <div
                 key={i}
-                className="flex items-stretch gap-2 sm:gap-3"
-                style={{
-                  minHeight: minH[i] || undefined,
-                  backgroundImage: texture ? `${texture}, ${wash}` : wash,
-                  backgroundRepeat: texture ? "repeat, no-repeat" : undefined,
-                  backgroundSize: texture ? "40px 40px, 100% 100%" : undefined,
-                  backgroundPosition: texture
-                    ? `0px ${-cumY[i]}px, 0 0`
-                    : undefined,
-                }}
+                className="relative isolate flex items-stretch gap-2 sm:gap-3"
+                style={{ minHeight: minH[i] || undefined, backgroundImage: wash }}
               >
+                {decor && (
+                  <decor.Icon
+                    aria-hidden
+                    size={decor.size}
+                    className="text-muted-foreground/25 pointer-events-none absolute -z-10 -translate-x-1/2"
+                    style={{ left: `${decor.left}%`, top: decor.top }}
+                  />
+                )}
                 {leftName && railCell(0, activeIdx, lagsta)}
 
                 <div className="flex min-w-0 flex-1 flex-col py-1.5">
