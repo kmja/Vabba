@@ -117,15 +117,7 @@ export function Results({
 
       <WarningsList warnings={warnings.filter((w) => w.level !== "info")} />
 
-      {/* The timeline is the centrepiece: who's home when, what the household
-          lives on each period, and the legal age gates. */}
-      <Timeline
-        deadlines={deadlines}
-        asOf={asOf}
-        projection={projection ?? undefined}
-        rows={monthlyRows}
-      />
-
+      {/* Adjust controls live above the timeline as a collapsible section. */}
       {soloMode && solo ? (
         <SoloSummary
           payout={solo.payout}
@@ -161,6 +153,15 @@ export function Results({
           partTimeB={partTimeB}
         />
       ) : null}
+
+      {/* The timeline is the centrepiece: who's home when, what the household
+          lives on each period, and the legal age gates. */}
+      <Timeline
+        deadlines={deadlines}
+        asOf={asOf}
+        projection={projection ?? undefined}
+        rows={monthlyRows}
+      />
 
       <RemainingTiers remaining={remaining} savedLagstaDays={savedLagstaDays} />
 

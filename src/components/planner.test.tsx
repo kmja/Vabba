@@ -239,6 +239,8 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     // Both caregivers start on full pace.
     expect(screen.queryByText("Förläng ledigheten")).toBeNull();
+    // Open the collapsible "Justera" controls to reach the per-person levers.
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     // Use caregiver A's "Längst" lever button to stretch their leave.
     fireEvent.click(
       screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
@@ -252,6 +254,7 @@ describe("<Planner /> wizard", () => {
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     fireEvent.click(
       screen.getByRole("checkbox", {
         name: /Byt takt vid 1 år – Vårdnadshavare A/,
@@ -278,6 +281,8 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
     // At full pace nobody works part-time, so no deltidslön.
     expect(screen.queryByText(/deltidslön/)).toBeNull();
+    // Open the collapsible "Justera" controls to reach the per-person levers.
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     // Extend caregiver A's leave → they work the rest of the week.
     fireEvent.click(
       screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
