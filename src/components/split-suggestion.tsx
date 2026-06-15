@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   LeaveLevers,
+  LeaveLengthSlider,
   type PhaseControls,
   type PartTime,
 } from "@/components/leave-levers";
@@ -75,7 +76,6 @@ export function SplitSuggestion({
 
   return (
     <Card>
-      {/* Always-visible split slider; the per-person detail expands below. */}
       <div className="space-y-3 px-6">
         <div className="flex items-center justify-between gap-2">
           <span className="font-semibold">Justera planen</span>
@@ -85,37 +85,66 @@ export function SplitSuggestion({
             aria-expanded={open}
             className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
           >
-            Fler inställningar
+            {open ? "Färre inställningar" : "Fler inställningar"}
             <ChevronDown
               className={cn("size-4 transition-transform", open && "rotate-180")}
             />
           </button>
         </div>
-        {onSplitChange && splitA !== undefined && (
-          <div className="space-y-1">
-            <input
-              id="results-split"
-              type="range"
-              min={0}
-              max={100}
-              value={pctA}
-              onChange={(e) => onSplitChange(Number(e.target.value) / 100)}
-              className="accent-primary w-full"
+
+        {/* Collapsed: each caregiver's leave-length slider — drag and watch the
+            timeline below shift. */}
+        {!open && (
+          <div className="space-y-2">
+            <LeaveLengthSlider
+              name={parentName(plan, "A")}
+              days={aDays}
+              dailyRate={rec.payout.A.dailyRate}
+              pace={paceA}
+              onSetTarget={onSetTargetA}
             />
-            <div className="flex justify-between text-xs font-medium tabular-nums">
-              <span>
-                {parentName(plan, "A")} · {formatDays(aDays)} ({pctA}%)
-              </span>
-              <span>
-                {parentName(plan, "B")} · {formatDays(bDays)} ({100 - pctA}%)
-              </span>
-            </div>
+            <LeaveLengthSlider
+              name={parentName(plan, "B")}
+              days={bDays}
+              dailyRate={rec.payout.B.dailyRate}
+              pace={paceB}
+              onSetTarget={onSetTargetB}
+            />
           </div>
         )}
       </div>
 
       {open && (
         <CardContent className="space-y-4">
+          {/* Day split between the caregivers */}
+          {onSplitChange && splitA !== undefined && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Fördelning av dagarna</span>
+                <span className="text-muted-foreground text-xs">
+                  dra för att testa olika upplägg
+                </span>
+              </div>
+              <input
+                id="results-split"
+                type="range"
+                min={0}
+                max={100}
+                value={pctA}
+                onChange={(e) => onSplitChange(Number(e.target.value) / 100)}
+                className="accent-primary w-full"
+              />
+              <div className="flex justify-between text-xs font-medium tabular-nums">
+                <span>
+                  {parentName(plan, "A")} · {formatDays(aDays)} ({pctA}%)
+                </span>
+                <span>
+                  {parentName(plan, "B")} · {formatDays(bDays)} ({100 - pctA}%)
+                </span>
+              </div>
+            </div>
+          )}
+
           <p className="text-muted-foreground text-sm">
             {OBJECTIVE_DESCRIPTION[objective]}
           </p>

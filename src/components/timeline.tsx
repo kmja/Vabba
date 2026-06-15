@@ -55,11 +55,13 @@ interface Period {
 
 const DAYS_PER_MONTH = 30.44;
 // Rows are spaced proportionally to the real time between them within ~15
-// months; longer gaps collapse to a compact label.
+// months; longer gaps collapse to a compact label. The scale is generous so
+// each leave period keeps a true, card-sized proportion (the timeline simply
+// grows taller) and dragging a length slider visibly moves the timeline.
 const COMPRESS_MONTHS = 15;
-const PX_PER_MONTH = 26;
+const PX_PER_MONTH = 46;
 const MIN_GAP_PX = 12;
-const MAX_GAP_PX = 150;
+const MAX_GAP_PX = 480;
 const COMPRESSED_PX = 56;
 
 const CG_BAR = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];

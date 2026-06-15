@@ -43,6 +43,65 @@ function householdMonthly(
   );
 }
 
+/** Two views of the same dial: a caregiver's leave as calendar length ↔ pace. */
+function leaveLengthModel(days: number, pace: number, dailyRate: number) {
+  const minDays = Math.max(1, Math.round(days)); // shortest leave (pace 7)
+  const maxDays = Math.max(minDays + 1, Math.round(MONTHS_CAP * DAYS_PER_MONTH));
+  const curDays = clamp(
+    pace > 0 ? Math.round((days / pace) * 7) : minDays,
+    minDays,
+    maxDays,
+  );
+  // Föräldrapenning monthly target for a chosen calendar length (drives pace).
+  const fkFromDays = (cd: number) =>
+    Math.round(approxMonthlyGross(dailyRate, (minDays / cd) * 7));
+  return { minDays, maxDays, curDays, fkFromDays };
+}
+
+/** Compact, standalone "Ledighetens längd" slider for one caregiver. */
+export function LeaveLengthSlider({
+  name,
+  days,
+  dailyRate,
+  pace,
+  onSetTarget,
+}: {
+  name: string;
+  days: number;
+  dailyRate: number;
+  pace: number;
+  onSetTarget: (minMonthly: number) => void;
+}) {
+  if (days <= 0 || dailyRate <= 0) return null;
+  const { minDays, maxDays, curDays, fkFromDays } = leaveLengthModel(
+    days,
+    pace,
+    dailyRate,
+  );
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          <Hourglass className="text-muted-foreground size-3.5" /> {name}
+        </span>
+        <span className="text-sm font-semibold tabular-nums">
+          ≈ {(curDays / DAYS_PER_MONTH).toFixed(1).replace(".", ",")} mån
+        </span>
+      </div>
+      <input
+        type="range"
+        aria-label={`Ledighetens längd i dagar – ${name}`}
+        min={minDays}
+        max={maxDays}
+        step={1}
+        value={curDays}
+        onChange={(e) => onSetTarget(fkFromDays(Number(e.target.value)))}
+        className="accent-primary w-full"
+      />
+    </div>
+  );
+}
+
 export interface PhaseControls {
   on: boolean;
   phase1: number;
@@ -171,12 +230,10 @@ function DurationLever({
   pace: number;
   onSetTarget: (minMonthly: number) => void;
 }) {
-  const minDays = Math.max(1, Math.round(days)); // shortest leave (pace 7)
-  const maxDays = Math.max(minDays + 1, Math.round(MONTHS_CAP * DAYS_PER_MONTH));
-  const curDays = clamp(
-    pace > 0 ? Math.round((days / pace) * 7) : minDays,
-    minDays,
-    maxDays,
+  const { minDays, maxDays, curDays, fkFromDays } = leaveLengthModel(
+    days,
+    pace,
+    dailyRate,
   );
   const household = householdMonthly(
     dailyRate,
@@ -188,10 +245,6 @@ function DurationLever({
   );
   const fpPart = fpMonthly(dailyRate, bonusFull, pace);
   const workPart = partTimeMonthly(salary, pace, worksPartTime);
-
-  // Pace from a chosen calendar length.
-  const fkFromDays = (cd: number) =>
-    Math.round(approxMonthlyGross(dailyRate, (minDays / cd) * 7));
 
   return (
     <>

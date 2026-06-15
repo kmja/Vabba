@@ -223,6 +223,8 @@ describe("<Planner /> wizard", () => {
     fillToResults(container, { incomeA: "50000", incomeB: "50000" });
     next(); // → step 4
     fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    // The day-split slider lives in the expanded "Justera" controls.
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     const slider = container.querySelector("#results-split");
     expect(slider).not.toBeNull();
     // Equal (capped) rates → maxPayout splits the 390 income-based days 50/50.

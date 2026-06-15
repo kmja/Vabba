@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   LeaveLevers,
+  LeaveLengthSlider,
   type PhaseControls,
   type PartTime,
 } from "@/components/leave-levers";
@@ -59,6 +60,19 @@ export function SoloSummary({
           />
         </button>
       </div>
+
+      {/* Collapsed: the leave-length slider; drag and watch the timeline shift. */}
+      {!open && (
+        <div className="px-6">
+          <LeaveLengthSlider
+            name={name}
+            days={total}
+            dailyRate={payout.dailyRate}
+            pace={daysPerWeek}
+            onSetTarget={onSetTarget}
+          />
+        </div>
+      )}
 
       {open && (
         <CardContent className="space-y-4">
