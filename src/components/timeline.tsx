@@ -721,8 +721,8 @@ export function Timeline({
                   <decor.Icon
                     aria-hidden
                     size={decor.size}
-                    className="text-muted-foreground/25 pointer-events-none absolute -z-10 -translate-x-1/2"
-                    style={{ left: `${decor.left}%`, top: decor.top }}
+                    className="text-muted-foreground pointer-events-none absolute -z-10 -translate-x-1/2"
+                    style={{ left: `${decor.left}%`, top: decor.top, opacity: 0.12 }}
                   />
                 )}
                 {leftName && railCell(0, activeIdx, lagsta)}
