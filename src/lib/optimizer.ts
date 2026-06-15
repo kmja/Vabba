@@ -83,6 +83,7 @@ export type WarningLevel = "info" | "warning" | "critical";
 export type WarningCode =
   | "reservedForfeit"
   | "sgiProtection"
+  | "sgiPaceEnforced"
   | "sgiGap"
   | "timingBeforeAge4"
   | "timingAfterAge4"

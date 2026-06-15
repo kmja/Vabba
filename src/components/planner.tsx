@@ -13,8 +13,13 @@ import {
   planDeadlines,
   type PlanInput,
 } from "@/lib/calc";
-import { isPlannableBirthDate, optimize, optimizeSolo } from "@/lib/optimizer";
-import { lagstanivaDailyAmount, MONEY } from "@/lib/rules";
+import {
+  isPlannableBirthDate,
+  optimize,
+  optimizeSolo,
+  type PlanWarning,
+} from "@/lib/optimizer";
+import { lagstanivaDailyAmount, MONEY, SGI_PROTECTION } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
 import { addYears, differenceInDays } from "@/lib/dates";
 import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
@@ -126,6 +131,10 @@ export function Planner() {
     () => (valid ? planDeadlines(effectivePlan) : null),
     [effectivePlan, valid],
   );
+  const oneYear = useMemo(
+    () => (deadlines ? addYears(deadlines.birth, 1) : null),
+    [deadlines],
+  );
   const twoParent = useMemo(
     () =>
       valid && asOf && !soloMode
@@ -149,7 +158,7 @@ export function Planner() {
   const remaining = soloMode
     ? (solo?.remaining ?? null)
     : (twoParent?.remaining ?? null);
-  const warnings = soloMode
+  const baseWarnings: PlanWarning[] = soloMode
     ? (solo?.warnings ?? [])
     : (twoParent?.recommended.warnings ?? []);
 
@@ -329,24 +338,37 @@ export function Planner() {
   // (first → second), each drawing income-based days before lägstanivå, at a
   // pace that may switch at the 1-year mark.
   const projection: LeaveProjection | null = useMemo(() => {
-    if (!asOf || !deadlines || !remaining || remaining.remaining.total <= 0) {
+    if (!asOf || !deadlines || !oneYear || !remaining || remaining.remaining.total <= 0) {
       return null;
     }
     const start = deadlines.birth > asOf ? deadlines.birth : asOf;
-    const oneYear = addYears(deadlines.birth, 1);
+    const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
     const lagstaRate = lagstanivaDailyAmount();
 
+    // Build the pace schedule for a caregiver, enforcing the SGI minimum of
+    // 5 days/week for leave taken after the child turns 1. Part-time workers
+    // are exempt because their work + FP days already cover the requirement.
     const scheduleFor = (id: "A" | "B") => {
+      const worksPartTime = id === "A" ? worksPartTimeA : worksPartTimeB;
+      const floor = worksPartTime ? 1 : sgiMin;
       if (id === "A" ? switchA : switchB) {
         const p1 = id === "A" ? phase1A : phase1B;
         const p2 = id === "A" ? phase2A : phase2B;
         return [
-          { until: oneYear, pace: p1 > 0 ? p1 : 1 },
-          { until: null, pace: p2 > 0 ? p2 : 1 },
+          { until: oneYear, pace: Math.max(1, p1) },
+          { until: null, pace: Math.max(floor, p2 > 0 ? p2 : 1) },
         ];
       }
-      const p = id === "A" ? paceA : paceB;
-      return [{ until: null, pace: p > 0 ? p : 7 }];
+      const p = Math.max(1, id === "A" ? paceA : paceB);
+      if (!worksPartTime && p < sgiMin) {
+        // Silently split at year 1: use the chosen pace while SGI is protected,
+        // then enforce the minimum so it stays protected afterwards.
+        return [
+          { until: oneYear, pace: p },
+          { until: null, pace: sgiMin },
+        ];
+      }
+      return [{ until: null, pace: p }];
     };
 
     const blocks: LeaveBlock[] = [];
@@ -381,6 +403,7 @@ export function Planner() {
   }, [
     asOf,
     deadlines,
+    oneYear,
     remaining,
     soloMode,
     solo,
@@ -401,10 +424,56 @@ export function Planner() {
     phase1B,
     phase2A,
     phase2B,
+    worksPartTimeA,
+    worksPartTimeB,
   ]);
+
+  // Warn when the SGI enforcement actually fired (leave extends past year 1 and
+  // the pace was below the 5-day minimum for a caregiver not working part-time).
+  const sgiEnforced: PlanWarning[] = useMemo(() => {
+    const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
+    const out: PlanWarning[] = [];
+    if (!oneYear || !projection) return out;
+    const check = (name: string, pace: number, works: boolean, sw: boolean) => {
+      if (works || sw || pace >= sgiMin) return;
+      const extended = projection.segments.some(
+        (s) => s.caregiver === name && s.endsAt.getTime() > oneYear.getTime(),
+      );
+      if (extended) {
+        out.push({
+          level: "warning",
+          code: "sgiPaceEnforced",
+          message: `${name}s takt höjs till ${sgiMin} dagar/vecka efter barnets 1-årsdag för att SGI:n ska skyddas.`,
+        });
+      }
+    };
+    if (soloMode) {
+      check(soloName, paceA, worksPartTimeA, switchA);
+    } else {
+      check(nameA, paceA, worksPartTimeA, switchA);
+      check(nameB, paceB, worksPartTimeB, switchB);
+    }
+    return out;
+  }, [
+    oneYear,
+    projection,
+    soloMode,
+    soloName,
+    nameA,
+    nameB,
+    paceA,
+    paceB,
+    worksPartTimeA,
+    worksPartTimeB,
+    switchA,
+    switchB,
+  ]);
+
+  const warnings = [...baseWarnings, ...sgiEnforced];
 
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     const segs = projection?.segments ?? [];
+    const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
     const monthsFor = (name: string): number | undefined => {
       const mine = segs.filter((s) => s.caregiver === name);
       if (mine.length === 0) return undefined;
@@ -412,26 +481,41 @@ export function Planner() {
         differenceInDays(mine[0].startsAt, mine[mine.length - 1].endsAt) / 30.4
       );
     };
-    const phaseInfo = (id: "A" | "B", rate: number) => {
+    const phaseInfo = (id: "A" | "B", rate: number, cgName: string) => {
+      const worksPartTime = id === "A" ? worksPartTimeA : worksPartTimeB;
       if (id === "A" ? switchA : switchB) {
         const p1 = id === "A" ? phase1A : phase1B;
-        const p2 = id === "A" ? phase2A : phase2B;
+        const p2Raw = id === "A" ? phase2A : phase2B;
+        // Clamp phase2 to the SGI minimum for caregivers not working part-time.
+        const p2 = !worksPartTime ? Math.max(p2Raw, sgiMin) : p2Raw;
         return {
           startPace: p1,
           secondPhase: { daysPerWeek: p2, monthly: approxMonthlyGross(rate, p2) },
         };
       }
-      return {
-        startPace: id === "A" ? paceA : paceB,
-        secondPhase: undefined,
-      };
+      // Auto-enforcement: if the leave extends past year 1 and pace is below the
+      // SGI minimum, show the enforced phase as a secondPhase on the card.
+      const p = id === "A" ? paceA : paceB;
+      if (!worksPartTime && p < sgiMin && oneYear) {
+        const cgSegs = segs.filter((s) => s.caregiver === cgName);
+        const extendsPostY1 = cgSegs.some(
+          (s) => s.endsAt.getTime() > oneYear.getTime(),
+        );
+        if (extendsPostY1) {
+          return {
+            startPace: p,
+            secondPhase: { daysPerWeek: sgiMin, monthly: approxMonthlyGross(rate, sgiMin) },
+          };
+        }
+      }
+      return { startPace: p, secondPhase: undefined };
     };
     // Part-time salary earned on the non-FP days, at the leave's start pace.
     const partTimeFor = (salary: number, pace: number, works: boolean) =>
       works ? Math.round((salary * (7 - Math.max(0, Math.min(7, pace)))) / 7) : 0;
 
     if (soloMode && solo) {
-      const ph = phaseInfo("A", solo.payout.dailyRate);
+      const ph = phaseInfo("A", solo.payout.dailyRate, soloName);
       return [
         {
           name: soloName,
@@ -452,8 +536,8 @@ export function Planner() {
     }
     if (twoParent) {
       const rec = twoParent.recommended;
-      const phA = phaseInfo("A", rec.payout.A.dailyRate);
-      const phB = phaseInfo("B", rec.payout.B.dailyRate);
+      const phA = phaseInfo("A", rec.payout.A.dailyRate, nameA);
+      const phB = phaseInfo("B", rec.payout.B.dailyRate, nameB);
       return [
         {
           name: nameA,
@@ -490,7 +574,7 @@ export function Planner() {
       ];
     }
     return [];
-  }, [projection, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB]);
+  }, [projection, oneYear, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB]);
 
   const vabResult = useMemo(
     () =>
