@@ -10,7 +10,6 @@ import type { PhaseControls, PartTime } from "@/components/leave-levers";
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
-import { ExtraRulesCard } from "@/components/extra-rules-card";
 import { WarningsList } from "@/components/warnings-list";
 import { Timeline, type LeaveProjection } from "@/components/timeline";
 import type { PlanDeadlines, PlanInput, RemainingSummary } from "@/lib/calc";
@@ -116,7 +115,7 @@ export function Results({
         </div>
       </div>
 
-      <WarningsList warnings={warnings} />
+      <WarningsList warnings={warnings.filter((w) => w.level !== "info")} />
 
       {/* The timeline is the centrepiece: who's home when, what the household
           lives on each period, and the legal age gates. */}
@@ -170,8 +169,6 @@ export function Results({
       {birthDays && birthDays.days > 0 && (
         <BirthDaysCard result={birthDays} caregiverName={birthDaysName} />
       )}
-
-      <ExtraRulesCard />
     </div>
   );
 }

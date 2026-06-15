@@ -196,17 +196,6 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText("Förläng ledigheten").length).toBeGreaterThan(0);
   });
 
-  it("surfaces the SGI caveat when the pace drops below 5/week", () => {
-    const { container } = render(<Planner />);
-    fillToResults(container);
-    fireEvent.change(container.querySelector("#days-per-week")!, {
-      target: { value: "3" },
-    });
-    next();
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText(/Tänk på SGI/)).toBeTruthy();
-  });
-
   it("lets you choose a custom split with the slider", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {
