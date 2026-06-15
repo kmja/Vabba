@@ -77,39 +77,30 @@ const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
   { months: 12, icon: PersonStanding, title: "Första stegen" },
   { months: 18, icon: MessageCircle, title: "Springer och pratar" },
 ];
-// Faint seasonal imagery — a mix of icons scattered across the timeline's full
-// width at roughly the dates the season is at its most evocative in Sweden.
-// [month is 0-indexed]
-const SEASON_EVENTS: {
-  month: number;
-  day: number;
-  icons: LucideIcon[];
-  label: string;
-}[] = [
-  {
-    month: 3,
-    day: 20,
-    label: "Vår",
-    icons: [Flower2, Bird, Sprout, Bug, Flower, CloudRain, Flower2],
-  },
-  {
-    month: 5,
-    day: 21,
-    label: "Sommar",
-    icons: [Sun, Umbrella, IceCreamCone, Waves, Palmtree, Sailboat, Sun],
-  },
-  {
-    month: 8,
-    day: 25,
-    label: "Höst",
-    icons: [Leaf, Wind, Apple, Bird, CloudDrizzle, Leaf, Leaf],
-  },
-  {
-    month: 10,
-    day: 25,
-    label: "Vinter",
-    icons: [Snowflake, Coffee, CloudSnow, Cookie, Snowflake, CloudSnow],
-  },
+// Seasonal imagery scattered across the timeline. Each motif only appears in
+// the months it makes sense (snow in deep winter, cocoa across autumn/winter,
+// blooms in spring, …) so the icons land at reasonable dates. [months 0-indexed]
+const MOTIFS: { icon: LucideIcon; months: number[] }[] = [
+  { icon: Sprout, months: [2, 3] },
+  { icon: Bird, months: [2, 3, 4] },
+  { icon: CloudRain, months: [2, 3] },
+  { icon: Flower2, months: [3, 4, 5] },
+  { icon: Flower, months: [3, 4, 5] },
+  { icon: Bug, months: [4, 5, 6] },
+  { icon: Sun, months: [5, 6, 7] },
+  { icon: Umbrella, months: [5, 6, 7] },
+  { icon: IceCreamCone, months: [5, 6, 7] },
+  { icon: Waves, months: [5, 6, 7] },
+  { icon: Palmtree, months: [6, 7] },
+  { icon: Sailboat, months: [5, 6, 7] },
+  { icon: Apple, months: [7, 8, 9] },
+  { icon: Leaf, months: [8, 9, 10] },
+  { icon: Wind, months: [8, 9, 10] },
+  { icon: CloudDrizzle, months: [8, 9, 10] },
+  { icon: Coffee, months: [8, 9, 10, 11, 0, 1] }, // warm drinks, autumn → winter
+  { icon: CloudSnow, months: [10, 11, 0, 1] },
+  { icon: Snowflake, months: [11, 0, 1] },
+  { icon: Cookie, months: [11, 0] },
 ];
 
 // Hue at the middle of each season; the background smoothly interpolates
@@ -509,20 +500,33 @@ export function Timeline({
     }
   }
 
-  // Seasonal imagery scattered across the width at its date.
-  const seasonEvents: {
-    date: Date;
-    icons: LucideIcon[];
-    label: string;
-  }[] = [];
-  for (let yr = birth.getFullYear(); yr <= ambientCap.getFullYear(); yr++) {
-    for (const e of SEASON_EVENTS) {
-      const date = new Date(yr, e.month, e.day);
-      if (inAmbientWindow(date)) {
-        seasonEvents.push({ date, icons: e.icons, label: e.label });
-      }
+  // Scatter a couple of date-appropriate seasonal icons into each row's
+  // background — varied size and position — so the imagery spreads all over
+  // the seasons rather than clustering at a single date.
+  const decorFor = (date: Date, idx: number) => {
+    if (
+      date.getTime() <= birth.getTime() ||
+      date.getTime() > ambientCap.getTime()
+    )
+      return [] as { Icon: LucideIcon; left: number; top: number; size: number }[];
+    const month = date.getMonth();
+    const valid = MOTIFS.filter((mo) => mo.months.includes(month));
+    if (valid.length === 0) return [];
+    const out: { Icon: LucideIcon; left: number; top: number; size: number }[] =
+      [];
+    const n = 1 + (idx % 2); // one or two per row
+    for (let j = 0; j < n; j++) {
+      const seed = (idx * 31 + j * 17 + month * 7 + date.getDate()) % 997;
+      const mo = valid[(idx + j * 2) % valid.length];
+      out.push({
+        Icon: mo.icon,
+        left: 6 + (seed % 88), // 6%–94%
+        top: ((seed * 13) % 40) - 10, // −10..30px (a little bleed)
+        size: 24 + ((seed * 7) % 34), // 24–58px, varied
+      });
     }
-  }
+    return out;
+  };
 
   const milestones = [
     ...legal,
@@ -576,21 +580,11 @@ export function Timeline({
   type Item =
     | { kind: "milestone"; date: Date; ord: number; m: Milestone }
     | { kind: "period"; date: Date; ord: number; period: Period }
-    | { kind: "month"; date: Date; ord: number; label: string }
-    | {
-        kind: "season";
-        date: Date;
-        ord: number;
-        icons: LucideIcon[];
-        label: string;
-      };
+    | { kind: "month"; date: Date; ord: number; label: string };
 
   // Faint month notches across the proportional first ~15 months, skipping any
   // that land on an existing marker so they read as a quiet ruler underneath.
-  const occupied = [
-    ...milestones.map((m) => m.date.getTime()),
-    ...seasonEvents.map((e) => e.date.getTime()),
-  ];
+  const occupied = milestones.map((m) => m.date.getTime());
   const monthItems: { date: Date; label: string }[] = [];
   for (let n = 1; n <= 15; n++) {
     const date = addMonths(birth, n);
@@ -619,13 +613,6 @@ export function Timeline({
       date: mo.date,
       ord: 0,
       label: mo.label,
-    })),
-    ...seasonEvents.map((e) => ({
-      kind: "season" as const,
-      date: e.date,
-      ord: 0,
-      icons: e.icons,
-      label: e.label,
     })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime() || a.ord - b.ord);
 
@@ -682,12 +669,28 @@ export function Timeline({
             const wash = `linear-gradient(to bottom, ${colorAt(it.date)}, ${colorAt(
               nextItem ? nextItem.date : it.date,
             )})`;
+            const decor = decorFor(it.date, i);
             return (
               <div
                 key={i}
-                className="flex items-stretch gap-2 sm:gap-3"
+                className="relative isolate flex items-stretch gap-2 sm:gap-3"
                 style={{ minHeight: minH[i] || undefined, backgroundImage: wash }}
               >
+                {decor.length > 0 && (
+                  <div
+                    aria-hidden
+                    className="text-muted-foreground/20 pointer-events-none absolute inset-0 -z-10"
+                  >
+                    {decor.map((d, j) => (
+                      <d.Icon
+                        key={j}
+                        size={d.size}
+                        className="absolute -translate-x-1/2"
+                        style={{ left: `${d.left}%`, top: d.top }}
+                      />
+                    ))}
+                  </div>
+                )}
                 {leftName && railCell(0, activeIdx, lagsta)}
 
                 <div className="flex min-w-0 flex-1 flex-col py-1.5">
@@ -708,26 +711,6 @@ export function Timeline({
                     <div className="text-muted-foreground/45 flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase">
                       <span aria-hidden className="bg-border/70 h-px w-3 shrink-0" />
                       {it.label}
-                    </div>
-                  ) : it.kind === "season" ? (
-                    <div
-                      className="text-muted-foreground/40 relative h-5 w-full"
-                      title={it.label}
-                      aria-label={it.label}
-                    >
-                      {it.icons.map((I, k) => (
-                        <I
-                          key={k}
-                          className={cn(
-                            "absolute size-3.5 -translate-x-1/2",
-                            k % 2 === 1 && "size-3 opacity-70",
-                          )}
-                          style={{
-                            left: `${((k + 0.5) / it.icons.length) * 100}%`,
-                            top: (k % 3) * 5,
-                          }}
-                        />
-                      ))}
                     </div>
                   ) : (
                     <MilestoneLabel m={it.m} asOf={asOf} />
