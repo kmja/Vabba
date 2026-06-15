@@ -1,22 +1,38 @@
 import {
+  Apple,
   ArrowRightLeft,
   Baby,
+  Bird,
+  Bug,
   CalendarDays,
   CircleAlert,
   Clock,
+  CloudDrizzle,
+  CloudRain,
+  CloudSnow,
+  Coffee,
   Coins,
+  Cookie,
+  Flower,
   Flower2,
   Footprints,
+  IceCreamCone,
   Laugh,
   Leaf,
   MessageCircle,
+  Palmtree,
   PersonStanding,
+  Sailboat,
   ShieldCheck,
   Smile,
   Snowflake,
+  Sprout,
   Sun,
+  Umbrella,
   Users,
   Wallet,
+  Waves,
+  Wind,
   type LucideIcon,
 } from "lucide-react";
 
@@ -61,19 +77,39 @@ const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
   { months: 12, icon: PersonStanding, title: "Första stegen" },
   { months: 18, icon: MessageCircle, title: "Springer och pratar" },
 ];
-// Faint seasonal phenomena — drawn as little clusters of icons at roughly the
-// dates they happen in Sweden. [month is 0-indexed]
+// Faint seasonal imagery — a mix of icons scattered across the timeline's full
+// width at roughly the dates the season is at its most evocative in Sweden.
+// [month is 0-indexed]
 const SEASON_EVENTS: {
   month: number;
   day: number;
-  icon: LucideIcon;
-  count: number;
+  icons: LucideIcon[];
   label: string;
 }[] = [
-  { month: 3, day: 25, icon: Flower2, count: 4, label: "Blomning" },
-  { month: 5, day: 24, icon: Sun, count: 3, label: "Sommar" },
-  { month: 9, day: 10, icon: Leaf, count: 5, label: "Lövfall" },
-  { month: 10, day: 25, icon: Snowflake, count: 5, label: "Första snön" },
+  {
+    month: 3,
+    day: 20,
+    label: "Vår",
+    icons: [Flower2, Bird, Sprout, Bug, Flower, CloudRain, Flower2],
+  },
+  {
+    month: 5,
+    day: 21,
+    label: "Sommar",
+    icons: [Sun, Umbrella, IceCreamCone, Waves, Palmtree, Sailboat, Sun],
+  },
+  {
+    month: 8,
+    day: 25,
+    label: "Höst",
+    icons: [Leaf, Wind, Apple, Bird, CloudDrizzle, Leaf, Leaf],
+  },
+  {
+    month: 10,
+    day: 25,
+    label: "Vinter",
+    icons: [Snowflake, Coffee, CloudSnow, Cookie, Snowflake, CloudSnow],
+  },
 ];
 
 // Hue at the middle of each season; the background smoothly interpolates
@@ -473,18 +509,17 @@ export function Timeline({
     }
   }
 
-  // Seasonal icon clusters (blooming, sun, leaves, first snow) at their dates.
+  // Seasonal imagery scattered across the width at its date.
   const seasonEvents: {
     date: Date;
-    icon: LucideIcon;
-    count: number;
+    icons: LucideIcon[];
     label: string;
   }[] = [];
   for (let yr = birth.getFullYear(); yr <= ambientCap.getFullYear(); yr++) {
     for (const e of SEASON_EVENTS) {
       const date = new Date(yr, e.month, e.day);
       if (inAmbientWindow(date)) {
-        seasonEvents.push({ date, icon: e.icon, count: e.count, label: e.label });
+        seasonEvents.push({ date, icons: e.icons, label: e.label });
       }
     }
   }
@@ -546,8 +581,7 @@ export function Timeline({
         kind: "season";
         date: Date;
         ord: number;
-        icon: LucideIcon;
-        count: number;
+        icons: LucideIcon[];
         label: string;
       };
 
@@ -590,8 +624,7 @@ export function Timeline({
       kind: "season" as const,
       date: e.date,
       ord: 0,
-      icon: e.icon,
-      count: e.count,
+      icons: e.icons,
       label: e.label,
     })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime() || a.ord - b.ord);
@@ -641,16 +674,19 @@ export function Timeline({
               ? cgOrder.indexOf(active.caregiver ?? "Ledig")
               : -1;
             const lagsta = active?.tier === "lagsta";
-            // Faint, blended seasonal wash behind the proportional first years.
-            const wash =
-              it.date.getTime() <= ambientCap.getTime()
-                ? seasonColor(it.date)
-                : undefined;
+            // Blend the wash as a gradient from this row's date to the next, so
+            // it flows smoothly through the seasons regardless of row heights.
+            const colorAt = (d: Date) =>
+              d.getTime() <= ambientCap.getTime() ? seasonColor(d) : "transparent";
+            const nextItem = items[i + 1];
+            const wash = `linear-gradient(to bottom, ${colorAt(it.date)}, ${colorAt(
+              nextItem ? nextItem.date : it.date,
+            )})`;
             return (
               <div
                 key={i}
                 className="flex items-stretch gap-2 sm:gap-3"
-                style={{ minHeight: minH[i] || undefined, backgroundColor: wash }}
+                style={{ minHeight: minH[i] || undefined, backgroundImage: wash }}
               >
                 {leftName && railCell(0, activeIdx, lagsta)}
 
@@ -675,23 +711,23 @@ export function Timeline({
                     </div>
                   ) : it.kind === "season" ? (
                     <div
-                      className="text-muted-foreground/40 flex items-center gap-0.5"
+                      className="text-muted-foreground/40 relative h-5 w-full"
                       title={it.label}
                       aria-label={it.label}
                     >
-                      {Array.from({ length: it.count }).map((_, k) => {
-                        const I = it.icon;
-                        return (
-                          <I
-                            key={k}
-                            className={cn(
-                              "size-3.5",
-                              k % 2 === 1 && "size-2.5 opacity-70",
-                              k % 3 === 2 && "translate-y-0.5",
-                            )}
-                          />
-                        );
-                      })}
+                      {it.icons.map((I, k) => (
+                        <I
+                          key={k}
+                          className={cn(
+                            "absolute size-3.5 -translate-x-1/2",
+                            k % 2 === 1 && "size-3 opacity-70",
+                          )}
+                          style={{
+                            left: `${((k + 0.5) / it.icons.length) * 100}%`,
+                            top: (k % 3) * 5,
+                          }}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <MilestoneLabel m={it.m} asOf={asOf} />
