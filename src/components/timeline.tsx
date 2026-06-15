@@ -5,7 +5,16 @@ import {
   CircleAlert,
   Clock,
   Coins,
+  Footprints,
+  Laugh,
+  Leaf,
+  MessageCircle,
+  PersonStanding,
   ShieldCheck,
+  Smile,
+  Snowflake,
+  Sprout,
+  Sun,
   Users,
   Wallet,
   type LucideIcon,
@@ -19,7 +28,13 @@ import {
 } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
 import type { PlanDeadlines } from "@/lib/calc";
-import { addYears, differenceInDays, monthsBetween } from "@/lib/dates";
+import {
+  addDays,
+  addMonths,
+  addYears,
+  differenceInDays,
+  monthsBetween,
+} from "@/lib/dates";
 import {
   approxLeaveMonths,
   approxMonthlyGross,
@@ -36,7 +51,23 @@ export interface LeaveProjection {
   segments: LeaveInterval[];
 }
 
-type MilestoneVariant = "legal" | "projected" | "today";
+type MilestoneVariant = "legal" | "projected" | "today" | "ambient";
+
+// Relatable, low-key reference points so the long first stretch is readable.
+const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
+  { months: 1.5, icon: Smile, title: "Första leendet" },
+  { months: 4, icon: Laugh, title: "Skrattar och jollrar" },
+  { months: 8, icon: Footprints, title: "Börjar krypa" },
+  { months: 12, icon: PersonStanding, title: "Första stegen" },
+  { months: 18, icon: MessageCircle, title: "Springer och pratar" },
+];
+// Meteorological season starts (Sweden): spring, summer, autumn, winter.
+const SEASONS: { month: number; icon: LucideIcon; title: string }[] = [
+  { month: 2, icon: Sprout, title: "Vår" },
+  { month: 5, icon: Sun, title: "Sommar" },
+  { month: 8, icon: Leaf, title: "Höst" },
+  { month: 11, icon: Snowflake, title: "Vinter" },
+];
 
 interface Milestone {
   date: Date;
@@ -105,6 +136,28 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
   const isToday = m.variant === "today";
   const isProjected = m.variant === "projected";
   const isPast = !isToday && m.date.getTime() < asOf.getTime();
+
+  // Developmental & seasonal hints are quiet, single-line reference points.
+  if (m.variant === "ambient") {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-2 text-xs",
+          isPast ? "text-muted-foreground/60" : "text-muted-foreground",
+        )}
+      >
+        <Icon className="size-4 shrink-0" />
+        <span>{m.title}</span>
+        <time
+          dateTime={m.date.toISOString().slice(0, 10)}
+          className="ml-auto text-[10px] tabular-nums opacity-80"
+        >
+          {formatDate(m.date)}
+        </time>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
@@ -346,9 +399,45 @@ export function Timeline({
     variant: "today",
   };
 
+  // Developmental & seasonal reference points across the first two years, so
+  // the long pre-1-year stretch has relatable markers to read against.
+  const ambientCap = addMonths(birth, 24);
+  const inAmbientWindow = (d: Date) =>
+    d.getTime() > birth.getTime() &&
+    d.getTime() <= ambientCap.getTime() &&
+    d.getTime() <= deadlines.expiry.getTime();
+  const ambient: Milestone[] = [];
+  for (const d of DEVELOPMENT) {
+    const date = addDays(birth, Math.round(d.months * 30.44));
+    if (inAmbientWindow(date)) {
+      ambient.push({
+        date,
+        icon: d.icon,
+        title: d.title,
+        desc: "",
+        variant: "ambient",
+      });
+    }
+  }
+  for (let yr = birth.getFullYear(); yr <= ambientCap.getFullYear(); yr++) {
+    for (const s of SEASONS) {
+      const date = new Date(yr, s.month, 1);
+      if (inAmbientWindow(date)) {
+        ambient.push({
+          date,
+          icon: s.icon,
+          title: s.title,
+          desc: "",
+          variant: "ambient",
+        });
+      }
+    }
+  }
+
   const milestones = [
     ...legal,
     ...projected,
+    ...ambient,
     ...(showToday ? [today] : []),
   ].sort((a, b) => a.date.getTime() - b.date.getTime());
 

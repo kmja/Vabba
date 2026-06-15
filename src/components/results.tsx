@@ -117,51 +117,54 @@ export function Results({
 
       <WarningsList warnings={warnings.filter((w) => w.level !== "info")} />
 
-      {/* Adjust controls live above the timeline as a collapsible section. */}
-      {soloMode && solo ? (
-        <SoloSummary
-          payout={solo.payout}
-          total={solo.allocatedTotal}
-          name={soloName}
-          daysPerWeek={paceA}
-          onSetTarget={onSetTargetA}
-          phase={phaseA}
-          bonusFullMonthly={bonusFullA}
-          salary={salaryA}
-          partTime={partTimeA}
-        />
-      ) : twoParent ? (
-        <SplitSuggestion
-          result={twoParent}
-          objective={objective}
-          plan={plan}
-          splitA={splitA}
-          onSplitChange={onSplitChange}
-          paceA={paceA}
-          paceB={paceB}
-          onSetTargetA={onSetTargetA}
-          onSetTargetB={onSetTargetB}
-          phaseA={phaseA}
-          phaseB={phaseB}
-          bonusFullA={bonusFullA}
-          bonusFullB={bonusFullB}
-          householdBaseA={householdBaseA}
-          householdBaseB={householdBaseB}
-          salaryA={salaryA}
-          salaryB={salaryB}
-          partTimeA={partTimeA}
-          partTimeB={partTimeB}
-        />
-      ) : null}
+      {/* The adjust controls stay pinned above the timeline (and release once
+          the timeline scrolls past), so you can drag and watch it shift. */}
+      <div>
+        {soloMode && solo ? (
+          <SoloSummary
+            payout={solo.payout}
+            total={solo.allocatedTotal}
+            name={soloName}
+            daysPerWeek={paceA}
+            onSetTarget={onSetTargetA}
+            phase={phaseA}
+            bonusFullMonthly={bonusFullA}
+            salary={salaryA}
+            partTime={partTimeA}
+          />
+        ) : twoParent ? (
+          <SplitSuggestion
+            result={twoParent}
+            objective={objective}
+            plan={plan}
+            splitA={splitA}
+            onSplitChange={onSplitChange}
+            paceA={paceA}
+            paceB={paceB}
+            onSetTargetA={onSetTargetA}
+            onSetTargetB={onSetTargetB}
+            phaseA={phaseA}
+            phaseB={phaseB}
+            bonusFullA={bonusFullA}
+            bonusFullB={bonusFullB}
+            householdBaseA={householdBaseA}
+            householdBaseB={householdBaseB}
+            salaryA={salaryA}
+            salaryB={salaryB}
+            partTimeA={partTimeA}
+            partTimeB={partTimeB}
+          />
+        ) : null}
 
-      {/* The timeline is the centrepiece: who's home when, what the household
-          lives on each period, and the legal age gates. */}
-      <Timeline
-        deadlines={deadlines}
-        asOf={asOf}
-        projection={projection ?? undefined}
-        rows={monthlyRows}
-      />
+        {/* The timeline is the centrepiece: who's home when, what the household
+            lives on each period, and the legal age gates. */}
+        <Timeline
+          deadlines={deadlines}
+          asOf={asOf}
+          projection={projection ?? undefined}
+          rows={monthlyRows}
+        />
+      </div>
 
       <RemainingTiers remaining={remaining} savedLagstaDays={savedLagstaDays} />
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -45,8 +44,13 @@ export function SoloSummary({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <Card>
-      <div className="flex items-center justify-between gap-2 px-6">
+    <section
+      className={cn(
+        "bg-card text-card-foreground ml-[calc(50%_-_50vw)] w-screen space-y-3 border-b py-3",
+        !open && "sticky top-0 z-30",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 px-4 sm:px-6">
         <span className="font-semibold">Justera planen</span>
         <button
           type="button"
@@ -63,7 +67,7 @@ export function SoloSummary({
 
       {/* Collapsed: the leave-length slider; drag and watch the timeline shift. */}
       {!open && (
-        <div className="px-6">
+        <div className="px-4 sm:px-6">
           <LeaveLengthSlider
             name={name}
             days={total}
@@ -75,7 +79,7 @@ export function SoloSummary({
       )}
 
       {open && (
-        <CardContent className="space-y-4">
+        <div className="space-y-4 px-4 sm:px-6">
           <p className="text-muted-foreground text-sm">
             Som ensam vårdnadshavare har du rätt till alla dagarna.
           </p>
@@ -140,8 +144,8 @@ export function SoloSummary({
             Förslaget fördelar alla återstående dagar — du kan förstås ta ut
             färre. Ersättningen är en uppskattning före skatt.
           </p>
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </section>
   );
 }

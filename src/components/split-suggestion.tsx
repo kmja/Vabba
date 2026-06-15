@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
 import {
   LeaveLevers,
   LeaveLengthSlider,
@@ -75,8 +74,13 @@ export function SplitSuggestion({
   const diffVsMax = maxAlt ? rec.payout.total - maxAlt.payout.total : 0;
 
   return (
-    <Card>
-      <div className="space-y-3 px-6">
+    <section
+      className={cn(
+        "bg-card text-card-foreground ml-[calc(50%_-_50vw)] w-screen space-y-3 border-b py-3",
+        !open && "sticky top-0 z-30",
+      )}
+    >
+      <div className="space-y-3 px-4 sm:px-6">
         <div className="flex items-center justify-between gap-2">
           <span className="font-semibold">Justera planen</span>
           <button
@@ -115,7 +119,7 @@ export function SplitSuggestion({
       </div>
 
       {open && (
-        <CardContent className="space-y-4">
+        <div className="space-y-4 px-4 sm:px-6">
           {/* Day split between the caregivers */}
           {onSplitChange && splitA !== undefined && (
             <div className="space-y-1">
@@ -217,8 +221,8 @@ export function SplitSuggestion({
             De reserverade dagarna (90 per vårdnadshavare) behålls alltid.
             Beloppet är före skatt; eventuell föräldralön visas separat ovan.
           </p>
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </section>
   );
 }
