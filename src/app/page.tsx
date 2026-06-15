@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { Disclaimer } from "@/components/disclaimer";
 import { Planner } from "@/components/planner";
 
 export const metadata: Metadata = {
@@ -20,8 +19,6 @@ export default function Home() {
           dagar eller SGI.
         </p>
       </header>
-
-      <Disclaimer />
 
       <Planner />
     </div>
