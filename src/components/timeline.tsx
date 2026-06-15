@@ -5,6 +5,7 @@ import {
   CircleAlert,
   Clock,
   Coins,
+  Flower2,
   Footprints,
   Laugh,
   Leaf,
@@ -13,7 +14,6 @@ import {
   ShieldCheck,
   Smile,
   Snowflake,
-  Sprout,
   Sun,
   Users,
   Wallet,
@@ -61,13 +61,52 @@ const DEVELOPMENT: { months: number; icon: LucideIcon; title: string }[] = [
   { months: 12, icon: PersonStanding, title: "Första stegen" },
   { months: 18, icon: MessageCircle, title: "Springer och pratar" },
 ];
-// Meteorological season starts (Sweden): spring, summer, autumn, winter.
-const SEASONS: { month: number; icon: LucideIcon; title: string }[] = [
-  { month: 2, icon: Sprout, title: "Vår" },
-  { month: 5, icon: Sun, title: "Sommar" },
-  { month: 8, icon: Leaf, title: "Höst" },
-  { month: 11, icon: Snowflake, title: "Vinter" },
+// Faint seasonal phenomena — drawn as little clusters of icons at roughly the
+// dates they happen in Sweden. [month is 0-indexed]
+const SEASON_EVENTS: {
+  month: number;
+  day: number;
+  icon: LucideIcon;
+  count: number;
+  label: string;
+}[] = [
+  { month: 3, day: 25, icon: Flower2, count: 4, label: "Blomning" },
+  { month: 5, day: 24, icon: Sun, count: 3, label: "Sommar" },
+  { month: 9, day: 10, icon: Leaf, count: 5, label: "Lövfall" },
+  { month: 10, day: 25, icon: Snowflake, count: 5, label: "Första snön" },
 ];
+
+// Hue at the middle of each season; the background smoothly interpolates
+// between them so the seasons blend rather than hard-cut.
+const SEASON_HUES: { day: number; rgb: [number, number, number] }[] = [
+  { day: 15, rgb: [125, 211, 252] }, // winter — icy blue
+  { day: 105, rgb: [134, 239, 172] }, // spring — fresh green
+  { day: 196, rgb: [250, 220, 90] }, // summer — sunlight yellow
+  { day: 288, rgb: [251, 170, 100] }, // autumn — orange
+];
+
+function dayOfYear(d: Date): number {
+  const start = Date.UTC(d.getFullYear(), 0, 0);
+  const here = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.floor((here - start) / 86_400_000);
+}
+
+/** Smoothly blended seasonal wash for a date (faint, over the card surface). */
+function seasonColor(date: Date): string {
+  const ext = [
+    { day: SEASON_HUES[3].day - 365, rgb: SEASON_HUES[3].rgb },
+    ...SEASON_HUES,
+    { day: SEASON_HUES[0].day + 365, rgb: SEASON_HUES[0].rgb },
+  ];
+  const d = dayOfYear(date);
+  let i = 0;
+  while (i < ext.length - 2 && d >= ext[i + 1].day) i++;
+  const a = ext[i];
+  const b = ext[i + 1];
+  const t = b.day === a.day ? 0 : (d - a.day) / (b.day - a.day);
+  const mix = (k: number) => Math.round(a.rgb[k] + (b.rgb[k] - a.rgb[k]) * t);
+  return `rgba(${mix(0)}, ${mix(1)}, ${mix(2)}, 0.13)`;
+}
 const SV_MONTHS = [
   "jan",
   "feb",
@@ -82,15 +121,6 @@ const SV_MONTHS = [
   "nov",
   "dec",
 ];
-
-/** Faint seasonal wash behind a row, by the month it falls in. */
-function seasonBg(date: Date): string {
-  const m = date.getMonth();
-  if (m === 11 || m <= 1) return "bg-sky-400/10"; // vinter — icy blue
-  if (m <= 4) return "bg-green-400/10"; // vår — fresh green
-  if (m <= 7) return "bg-amber-300/15"; // sommar — sunlight yellow
-  return "bg-orange-400/10"; // höst — autumnal orange
-}
 
 interface Milestone {
   date: Date;
@@ -422,8 +452,8 @@ export function Timeline({
     variant: "today",
   };
 
-  // Developmental & seasonal reference points across the first two years, so
-  // the long pre-1-year stretch has relatable markers to read against.
+  // Developmental reference points across the first two years, so the long
+  // pre-1-year stretch has relatable markers to read against.
   const ambientCap = addMonths(birth, 24);
   const inAmbientWindow = (d: Date) =>
     d.getTime() > birth.getTime() &&
@@ -442,17 +472,19 @@ export function Timeline({
       });
     }
   }
+
+  // Seasonal icon clusters (blooming, sun, leaves, first snow) at their dates.
+  const seasonEvents: {
+    date: Date;
+    icon: LucideIcon;
+    count: number;
+    label: string;
+  }[] = [];
   for (let yr = birth.getFullYear(); yr <= ambientCap.getFullYear(); yr++) {
-    for (const s of SEASONS) {
-      const date = new Date(yr, s.month, 1);
+    for (const e of SEASON_EVENTS) {
+      const date = new Date(yr, e.month, e.day);
       if (inAmbientWindow(date)) {
-        ambient.push({
-          date,
-          icon: s.icon,
-          title: s.title,
-          desc: "",
-          variant: "ambient",
-        });
+        seasonEvents.push({ date, icon: e.icon, count: e.count, label: e.label });
       }
     }
   }
@@ -509,11 +541,22 @@ export function Timeline({
   type Item =
     | { kind: "milestone"; date: Date; ord: number; m: Milestone }
     | { kind: "period"; date: Date; ord: number; period: Period }
-    | { kind: "month"; date: Date; ord: number; label: string };
+    | { kind: "month"; date: Date; ord: number; label: string }
+    | {
+        kind: "season";
+        date: Date;
+        ord: number;
+        icon: LucideIcon;
+        count: number;
+        label: string;
+      };
 
   // Faint month notches across the proportional first ~15 months, skipping any
   // that land on an existing marker so they read as a quiet ruler underneath.
-  const occupied = milestones.map((m) => m.date.getTime());
+  const occupied = [
+    ...milestones.map((m) => m.date.getTime()),
+    ...seasonEvents.map((e) => e.date.getTime()),
+  ];
   const monthItems: { date: Date; label: string }[] = [];
   for (let n = 1; n <= 15; n++) {
     const date = addMonths(birth, n);
@@ -542,6 +585,14 @@ export function Timeline({
       date: mo.date,
       ord: 0,
       label: mo.label,
+    })),
+    ...seasonEvents.map((e) => ({
+      kind: "season" as const,
+      date: e.date,
+      ord: 0,
+      icon: e.icon,
+      count: e.count,
+      label: e.label,
     })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime() || a.ord - b.ord);
 
@@ -590,16 +641,16 @@ export function Timeline({
               ? cgOrder.indexOf(active.caregiver ?? "Ledig")
               : -1;
             const lagsta = active?.tier === "lagsta";
-            // Faint seasonal wash behind the proportional first two years.
-            const season =
+            // Faint, blended seasonal wash behind the proportional first years.
+            const wash =
               it.date.getTime() <= ambientCap.getTime()
-                ? seasonBg(it.date)
-                : "";
+                ? seasonColor(it.date)
+                : undefined;
             return (
               <div
                 key={i}
-                className={cn("flex items-stretch gap-2 sm:gap-3", season)}
-                style={{ minHeight: minH[i] || undefined }}
+                className="flex items-stretch gap-2 sm:gap-3"
+                style={{ minHeight: minH[i] || undefined, backgroundColor: wash }}
               >
                 {leftName && railCell(0, activeIdx, lagsta)}
 
@@ -621,6 +672,26 @@ export function Timeline({
                     <div className="text-muted-foreground/45 flex items-center gap-1.5 text-[9px] font-medium tracking-wide uppercase">
                       <span aria-hidden className="bg-border/70 h-px w-3 shrink-0" />
                       {it.label}
+                    </div>
+                  ) : it.kind === "season" ? (
+                    <div
+                      className="text-muted-foreground/40 flex items-center gap-0.5"
+                      title={it.label}
+                      aria-label={it.label}
+                    >
+                      {Array.from({ length: it.count }).map((_, k) => {
+                        const I = it.icon;
+                        return (
+                          <I
+                            key={k}
+                            className={cn(
+                              "size-3.5",
+                              k % 2 === 1 && "size-2.5 opacity-70",
+                              k % 3 === 2 && "translate-y-0.5",
+                            )}
+                          />
+                        );
+                      })}
                     </div>
                   ) : (
                     <MilestoneLabel m={it.m} asOf={asOf} />
