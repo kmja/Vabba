@@ -158,6 +158,10 @@ export function Wizard({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // The question currently in focus (its FlowQuestion id); "" = none.
   const [activeQ, setActiveQ] = useState("q-date");
+  // Questions the user has actually answered/passed this session. Defaults
+  // alone must not render as answered — a fresh plan should look untouched.
+  const [visited, setVisited] = useState<Set<string>>(() => new Set());
+  const seen = (qid: string) => visited.has(qid);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -276,6 +280,13 @@ export function Wizard({
 
   /** Collapse the answered question and bring the next one into focus. */
   const advanceQ = (qid: string) => {
+    flushSync(() =>
+      setVisited((prev) => {
+        const out = new Set(prev);
+        out.add(qid);
+        return out;
+      }),
+    );
     const flow = flowOf(current);
     const next = flow[flow.indexOf(qid) + 1];
     if (next) {
@@ -403,7 +414,7 @@ export function Wizard({
           CHILD_NUMBERS.find((c) => c.value === childNumber)?.label ?? "Första"
         }
         open={activeQ === "q-order"}
-        answered
+        answered={childNumber >= 2 || seen("q-order")}
         onOpen={() => openQ("q-order")}
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -441,7 +452,7 @@ export function Wizard({
           "Ett barn"
         }
         open={activeQ === "q-count"}
-        answered
+        answered={plan.childrenInBirth >= 2 || seen("q-count")}
         onOpen={() => openQ("q-count")}
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -550,7 +561,7 @@ export function Wizard({
           label="Namn"
           value={displayName}
           open={activeQ === `${prefix}-q-name`}
-          answered
+          answered={!!value.name?.trim() || seen(`${prefix}-q-name`)}
           onOpen={() => openQ(`${prefix}-q-name`)}
         >
           <div className="space-y-1.5">
@@ -620,7 +631,7 @@ export function Wizard({
               : "Ingen"
           }
           open={activeQ === `${prefix}-q-supplement`}
-          answered
+          answered={!supplement.enabled || seen(`${prefix}-q-supplement`)}
           onOpen={() => openQ(`${prefix}-q-supplement`)}
         >
           <div className="grid grid-cols-2 gap-2">
@@ -652,7 +663,7 @@ export function Wizard({
           label={`Vad vill ${goalName} uppnå?`}
           value={goalValue}
           open={activeQ === `${prefix}-q-goal`}
-          answered
+          answered={mode !== "manual" || seen(`${prefix}-q-goal`)}
           onOpen={() => openQ(`${prefix}-q-goal`)}
         >
           <div className="grid gap-2">
@@ -728,7 +739,7 @@ export function Wizard({
           label="Spara dagar?"
           value={saveDays > 0 ? `${saveDays} dagar` : "Inga"}
           open={activeQ === `${prefix}-q-save`}
-          answered
+          answered={saveDays > 0 || seen(`${prefix}-q-save`)}
           onOpen={() => openQ(`${prefix}-q-save`)}
         >
           <NumberField
@@ -755,7 +766,7 @@ export function Wizard({
             label="Dagar från tidigare barn"
             value={extraDays > 0 ? `${extraDays} dagar` : "Inga"}
             open={activeQ === `${prefix}-q-extra`}
-            answered
+            answered={extraDays > 0 || seen(`${prefix}-q-extra`)}
             onOpen={() => openQ(`${prefix}-q-extra`)}
           >
             <NumberField
