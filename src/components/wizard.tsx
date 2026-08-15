@@ -167,7 +167,7 @@ export function Wizard({
   const contentRef = useRef<HTMLDivElement>(null);
 
   const FIELD_SELECTOR =
-    'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]), select';
+    'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
 
   /** Focusable fields, excluding those inside collapsed (inert) panels. */
   const visibleFields = (root: ParentNode | null): HTMLElement[] =>
@@ -1046,10 +1046,6 @@ export function Wizard({
         >
           {current === 1 && (
             <>
-              <p className="text-muted-foreground text-xs">
-                Allt räknas ut och sparas lokalt i din webbläsare — inget
-                skickas.
-              </p>
               {babyFlow}
               {!valid && (
                 <p className="text-destructive text-xs">

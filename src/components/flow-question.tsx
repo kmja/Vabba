@@ -65,8 +65,10 @@ export function FlowQuestion({
         </span>
         <span
           className={cn(
-            "shrink-0 text-sm font-medium transition-colors duration-300",
-            open ? "text-foreground" : "text-muted-foreground",
+            "min-w-0 transition-all duration-300",
+            open
+              ? "text-foreground flex-1 text-xl font-semibold sm:text-lg"
+              : "text-muted-foreground shrink-0 text-sm font-medium",
           )}
         >
           {label}

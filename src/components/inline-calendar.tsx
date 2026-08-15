@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
 
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { isValidIsoDate, parseIsoDate, toIsoDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -33,8 +32,9 @@ function mondayIndex(d: Date): number {
 
 /**
  * An always-expanded month calendar with big day targets, for picking dates
- * inline in the wizard flow (no native picker popup). Includes a typed-date
- * fallback input for keyboard users and autofill.
+ * inline in the wizard flow (no native picker popup). Swipe left/right to
+ * move between months. A visually hidden date input remains as the
+ * autofill/automation hook for the same value.
  */
 export function InlineCalendar({
   value,
@@ -46,7 +46,7 @@ export function InlineCalendar({
   /** ISO yyyy-mm-dd (or empty). */
   value: string;
   onPick: (iso: string) => void;
-  /** Id for the typed-date fallback input (keeps old test/autofill hooks). */
+  /** Id for the hidden fallback input (autofill/automation hook). */
   inputId: string;
   yearsBack?: number;
   yearsForward?: number;
@@ -97,8 +97,28 @@ export function InlineCalendar({
       ),
     );
 
+  // Swipe between months (horizontal only — vertical stays page scroll).
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      shiftMonth(dx < 0 ? 1 : -1);
+    }
+  };
+
   const isSameDay = (a: Date, b: Date | null) =>
     b != null && toIsoDate(a) === toIsoDate(b);
+
+  const monthKey = `${first.getUTCFullYear()}-${first.getUTCMonth()}`;
 
   return (
     <div className="space-y-2">
@@ -112,7 +132,10 @@ export function InlineCalendar({
           <IconChevronLeft className="size-4" />
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-base font-medium sm:text-sm">
+          <span
+            data-calendar-month
+            className="text-base font-medium sm:text-sm"
+          >
             {SV_MONTHS[first.getUTCMonth()]}
           </span>
           <Select
@@ -144,7 +167,13 @@ export function InlineCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div
+        key={monthKey}
+        data-calendar-grid
+        className="animate-flow-in grid touch-pan-y grid-cols-7 gap-1"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         {SV_DAYS.map((d, i) => (
           <div
             key={`${d}-${i}`}
@@ -177,19 +206,17 @@ export function InlineCalendar({
         )}
       </div>
 
-      {/* Typed fallback (and the autofill/test hook for the same value). */}
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground shrink-0 text-xs">
-          eller skriv:
-        </span>
-        <Input
-          id={inputId}
-          type="date"
-          value={value}
-          onChange={(e) => e.target.value && onPick(e.target.value)}
-          className="max-w-44"
-        />
-      </div>
+      {/* Hidden hook for browser autofill and automation — not part of the
+          visible flow (the calendar is the input). */}
+      <input
+        id={inputId}
+        type="date"
+        tabIndex={-1}
+        aria-hidden
+        value={value}
+        onChange={(e) => e.target.value && onPick(e.target.value)}
+        className="sr-only"
+      />
     </div>
   );
 }

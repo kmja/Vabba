@@ -128,6 +128,19 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/Kim är hemma/)).toBeTruthy();
   });
 
+  it("swipes between months in the calendar", () => {
+    const { container } = render(<Planner />);
+    const grid = container.querySelector("[data-calendar-grid]")!;
+    const month = () =>
+      container.querySelector("[data-calendar-month]")!.textContent;
+    const before = month();
+    fireEvent.touchStart(grid, { touches: [{ clientX: 220, clientY: 10 }] });
+    fireEvent.touchEnd(grid, {
+      changedTouches: [{ clientX: 60, clientY: 12 }],
+    });
+    expect(month()).not.toBe(before);
+  });
+
   it("collapses an answered question and opens the next one", () => {
     const { container } = render(<Planner />);
     // Picking a date auto-advances to the child-order question.
