@@ -106,9 +106,14 @@ export function Wizard({
   const setParentDays = (id: ParentId, daysUsed: TierCount) =>
     setParent(id, { ...plan.parents[id], daysUsed });
 
-  const stepTitles = soloMode
-    ? ["Barnet", "Du som är hemma"]
-    : ["Barnet", "Hemma först", "Den andra vårdnadshavaren"];
+  // Always three steps — the number of caregivers is never asked. Step 2 is
+  // whoever goes on leave first; step 3 is the other caregiver, with an
+  // "I'm alone" opt-out.
+  const stepTitles = [
+    "Barnet",
+    soloMode ? "Du som är hemma" : "Hemma först",
+    "Den andra vårdnadshavaren",
+  ];
   const stepCount = stepTitles.length;
   const current = Math.min(step, stepCount);
   const visibleIds: ParentId[] = soloMode ? ["A"] : ["A", "B"];
@@ -728,68 +733,60 @@ export function Wizard({
 
         {current === 2 && (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="first-caregiver">Vem är hemma först?</Label>
-              <Select
-                id="first-caregiver"
-                value={soloMode ? "solo" : firstCaregiver}
-                onChange={(e) =>
-                  setForm((f) =>
-                    e.target.value === "solo"
-                      ? { ...f, soloMode: true, firstCaregiver: "A" }
-                      : {
-                          ...f,
-                          soloMode: false,
-                          firstCaregiver: e.target.value as "A" | "B",
-                        },
-                  )
-                }
-              >
-                <option value="A">{nameA}</option>
-                <option value="B">{nameB}</option>
-                <option value="solo">
-                  Jag planerar ensam (en vårdnadshavare)
-                </option>
-              </Select>
-              <p className="text-muted-foreground text-xs">
-                {soloMode
-                  ? "Resten av steget handlar om dig."
-                  : "Ofta börjar den som fött barnet. Resten av steget handlar om den här personen."}
-              </p>
-            </div>
-            <Separator />
+            <p className="text-muted-foreground text-sm">
+              {soloMode
+                ? "Dina uppgifter — du har alla dagarna."
+                : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
+            </p>
 
             {caregiverBasics(firstId)}
             {caregiverPlanFields(firstId)}
 
             <Separator />
-            {advanced(
-              <>
-                {caregiverAdvanced(firstId)}
-                {soloMode && extrasAdvanced}
-              </>,
-            )}
+            {advanced(caregiverAdvanced(firstId))}
           </>
         )}
 
-        {current === 3 && !soloMode && (
+        {current === 3 && (
           <>
-            <p className="text-muted-foreground text-sm">
-              {plan.parents[secondId].name?.trim() ||
-                `Vårdnadshavare ${secondId}`}{" "}
-              tar över när{" "}
-              {plan.parents[firstId].name?.trim() ||
-                `Vårdnadshavare ${firstId}`}{" "}
-              är klar.
-            </p>
+            <CheckRow
+              id="solo-mode"
+              checked={soloMode}
+              onChange={(b) =>
+                setForm((f) => ({
+                  ...f,
+                  soloMode: b,
+                  ...(b ? { firstCaregiver: "A" as const } : {}),
+                }))
+              }
+            >
+              Jag planerar ensam — det finns ingen andra vårdnadshavare
+            </CheckRow>
 
-            {caregiverBasics(secondId)}
-            {caregiverPlanFields(secondId)}
+            {soloMode ? (
+              <p className="text-muted-foreground text-sm">
+                Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
+              </p>
+            ) : (
+              <>
+                <p className="text-muted-foreground text-sm">
+                  {plan.parents[secondId].name?.trim() ||
+                    `Vårdnadshavare ${secondId}`}{" "}
+                  tar över när{" "}
+                  {plan.parents[firstId].name?.trim() ||
+                    `Vårdnadshavare ${firstId}`}{" "}
+                  är klar.
+                </p>
+
+                {caregiverBasics(secondId)}
+                {caregiverPlanFields(secondId)}
+              </>
+            )}
 
             <Separator />
             {advanced(
               <>
-                {caregiverAdvanced(secondId)}
+                {!soloMode && caregiverAdvanced(secondId)}
                 {extrasAdvanced}
               </>,
             )}

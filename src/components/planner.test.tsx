@@ -78,40 +78,39 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/Vårdnadshavare B är hemma/)).toBeTruthy();
   });
 
-  it("lets you choose which caregiver is home first", () => {
+  it("puts the step-2 caregiver first on the timeline", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
-    next(); // → step 2
-    fireEvent.change(container.querySelector("#first-caregiver")!, {
-      target: { value: "B" },
+    next(); // → step 2: whoever is described here goes first
+    fireEvent.change(container.querySelector("#a-name")!, {
+      target: { value: "Kim" },
     });
-    // Step 2 now edits caregiver B (the one going first).
-    fireEvent.change(container.querySelector("#b-income")!, {
-      target: { value: "30000" },
-    });
-    next(); // → step 3 edits A
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
+    next(); // → step 3
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
     showPlan();
-    expect(screen.getByText(/Vårdnadshavare B är hemma/)).toBeTruthy();
+    expect(screen.getByText(/Kim är hemma/)).toBeTruthy();
   });
 
-  it("supports planning alone via the who-is-home-first select", () => {
+  it("supports planning alone via the step-3 opt-out", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
-    next(); // → step 2
-    fireEvent.change(container.querySelector("#first-caregiver")!, {
-      target: { value: "solo" },
-    });
+    next(); // → step 2: the one going on leave first
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "40000" },
     });
-    // Solo mode has two steps — "Visa plan" sits right here.
+    next(); // → step 3: the other caregiver — or nobody
+    fireEvent.click(container.querySelector("#solo-mode")!);
+    // The second caregiver's fields disappear.
+    expect(container.querySelector("#b-income")).toBeNull();
     showPlan();
     expect(screen.getByText("Justera planen")).toBeTruthy();
     expect(screen.getByText(/1 av 1/)).toBeTruthy();
