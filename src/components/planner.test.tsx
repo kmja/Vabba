@@ -12,12 +12,19 @@ afterEach(() => {
 /**
  * Integration smoke test for the wizard → results flow. The pure logic is
  * covered exhaustively in lib/*.test.ts; here we confirm the React layer steps
- * through inputs → optimizer → rendered results without runtime errors.
+ * through inputs → solver → rendered results without runtime errors.
+ *
+ * Wizard flow: Barnet → Hemma först (first caregiver) → Den andra (second).
  */
 function next() {
   fireEvent.click(screen.getByRole("button", { name: /Nästa/ }));
 }
 
+function showPlan() {
+  fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+}
+
+/** Fill the wizard to the LAST step (both incomes set), without submitting. */
 function fillToResults(
   container: HTMLElement,
   opts: { incomeA?: string; incomeB?: string } = {},
@@ -25,63 +32,79 @@ function fillToResults(
   fireEvent.change(container.querySelector("#birth-date")!, {
     target: { value: "2025-01-15" },
   });
-  next(); // → step 2
+  next(); // → step 2: the caregiver going first (A by default)
   fireEvent.change(container.querySelector("#a-income")!, {
     target: { value: opts.incomeA ?? "45000" },
   });
+  next(); // → step 3: the other caregiver
   fireEvent.change(container.querySelector("#b-income")!, {
     target: { value: opts.incomeB ?? "30000" },
   });
-  next(); // → step 3
   return container;
 }
 
+/** An ISO date ~n days into the future (the projection starts "today"). */
+function futureIso(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 describe("<Planner /> wizard", () => {
-  it("walks the steps and lands on a results page", () => {
+  it("walks the steps and lands on a results page with period blocks", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
-    next(); // step 3 → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
 
     expect(screen.getByText("Justera planen")).toBeTruthy();
-    expect(screen.getByText("Tidslinje")).toBeTruthy();
-    expect(screen.getByText(/Vem är ledig när/)).toBeTruthy(); // Gantt
-    // The timeline now leads with the household income per leave period.
+    expect(screen.getByText("Perioder")).toBeTruthy();
+    // Two caregivers → two period blocks to flip through.
+    expect(screen.getByText(/1 av 2/)).toBeTruthy();
+    // The period card leads with the household income.
     expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
     // Household-income default: the lower earner (B) takes the 300 income-based
     // days while the higher earner (A) keeps their 90 reserved and stays at work.
-    expect(screen.getAllByText(/300 dagar/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/90 dagar/).length).toBeGreaterThan(0);
   });
 
-  it("marks the handoff between caregivers on the timeline", () => {
+  it("flips between the period blocks", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
-    next(); // step 3 → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText("Byte av vårdnadshavare")).toBeTruthy();
+    showPlan();
+    expect(screen.getByText(/Vårdnadshavare A är hemma/)).toBeTruthy();
+    // The next-button is labelled with the next caregiver's name (exact match
+    // to avoid the overview chip, whose label is "Period 2: …").
+    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
+    expect(screen.getByText(/Vårdnadshavare B är hemma/)).toBeTruthy();
   });
 
-  it("lets you choose which caregiver takes leave first", () => {
+  it("lets you choose which caregiver is home first", () => {
     const { container } = render(<Planner />);
-    fillToResults(container); // → step 3, two caregivers, A first by default
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next(); // → step 2
     fireEvent.change(container.querySelector("#first-caregiver")!, {
       target: { value: "B" },
     });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // B now leads, so A is the one who takes over at the handover.
-    expect(
-      screen.getByText(/tar över efter Vårdnadshavare B/),
-    ).toBeTruthy();
+    // Step 2 now edits caregiver B (the one going first).
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    next(); // → step 3 edits A
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    showPlan();
+    expect(screen.getByText(/Vårdnadshavare B är hemma/)).toBeTruthy();
   });
 
   it("adds the 10 birth-days for the other parent", () => {
     const { container } = render(<Planner />);
-    fillToResults(container); // → step 3
-    next(); // → step 4
+    fillToResults(container); // → last step
+    fireEvent.click(container.querySelector("#more-options")!);
     fireEvent.click(container.querySelector("#birth-days-enabled")!);
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     expect(screen.getByText("10 dagar vid barns födelse")).toBeTruthy();
   });
 
@@ -90,39 +113,35 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
-    next(); // → step 2
+    next(); // → step 2 (caregiver A)
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
-    });
-    fireEvent.change(container.querySelector("#b-income")!, {
-      target: { value: "30000" },
     });
     fireEvent.click(container.querySelector("#a-240")!); // A no longer qualifies
     next(); // → step 3
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getAllByText(/grundnivå/).length).toBeGreaterThan(0);
-  });
-
-  it("includes employer föräldralön on the results page", () => {
-    const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
-    next(); // → step 2
-    fireEvent.change(container.querySelector("#a-income")!, {
-      target: { value: "45000" },
-    });
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
-    fireEvent.click(container.querySelector("#a-supplement")!); // A has föräldralön
-    next(); // → step 3
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
+    expect(screen.getAllByText(/grundnivå/).length).toBeGreaterThan(0);
+  });
+
+  it("includes employer föräldralön by default and lets you opt out", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    showPlan();
+    // Föräldralön is assumed (most collective agreements have it).
     expect(
       screen.getAllByText(/Föräldralön \(arbetsgivaren\)/).length,
     ).toBeGreaterThan(0);
+    // Opt out for both caregivers → it disappears.
+    fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
+    next(); // → step 2
+    fireEvent.click(container.querySelector("#a-no-supplement")!);
+    next(); // → step 3
+    fireEvent.click(container.querySelector("#b-no-supplement")!);
+    showPlan();
+    expect(screen.queryByText(/Föräldralön \(arbetsgivaren\)/)).toBeNull();
   });
 
   it("blocks step 1 until a birth date is entered", () => {
@@ -134,8 +153,7 @@ describe("<Planner /> wizard", () => {
   it("can reopen the inputs from the results page", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
-    next();
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
     expect(container.querySelector("#birth-date")).not.toBeNull();
   });
@@ -143,92 +161,85 @@ describe("<Planner /> wizard", () => {
   it("includes vab on the results page when enabled", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "40000" });
-    next(); // → step 4
+    fireEvent.click(container.querySelector("#more-options")!);
     fireEvent.click(container.querySelector("#vab-enabled")!);
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     expect(screen.getByText("Vab – vård av sjukt barn")).toBeTruthy();
   });
 
-  it("auto-computes the pace when both caregivers choose to prolong", () => {
+  it("asks each caregiver's goal and solves a date goal from the wizard", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
-    next();
+    next(); // → step 2
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    fireEvent.change(container.querySelector("#a-goal-date")!, {
+      target: { value: futureIso(60) },
+    });
+    next(); // → step 3
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
-    // Each caregiver picks "förläng" independently.
-    fireEvent.click(container.querySelector("#a-pace-prolong")!);
-    fireEvent.click(container.querySelector("#b-pace-prolong")!);
-    fireEvent.change(container.querySelector("#min-monthly-a")!, {
-      target: { value: "15000" },
-    });
-    fireEvent.change(container.querySelector("#min-monthly-b")!, {
-      target: { value: "12000" },
-    });
-    next(); // → step 3: no manual pace selector when nobody is on full pace
-    expect(container.querySelector("#days-per-week")).toBeNull();
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
+    showPlan();
+    // The goal shows up as A's plan ("Hemma till …") in the Justera section.
+    expect(screen.getAllByText(/Hemma till/).length).toBeGreaterThan(0);
   });
 
-  it("lets each caregiver set their own pace goal", () => {
-    const { container } = render(<Planner />);
-    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    // Back up to step 2 to set per-caregiver paces (fillToResults left us on 3).
-    fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
-    fireEvent.click(container.querySelector("#a-pace-full")!);
-    fireEvent.click(container.querySelector("#b-pace-prolong")!);
-    fireEvent.change(container.querySelector("#min-monthly-b")!, {
-      target: { value: "12000" },
-    });
-    next(); // → step 3: A is on full pace, so the schedule selector shows
-    expect(container.querySelector("#days-per-week")).not.toBeNull();
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // Both caregivers' goal labels are shown on their timeline period cards.
-    expect(screen.getAllByText("Full takt").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Förläng ledigheten").length).toBeGreaterThan(0);
-  });
-
-  it("lets you choose a custom split with the slider", () => {
+  it("solves the longest leave within a household budget from the wizard", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
-    next();
+    next(); // → step 2
     fireEvent.change(container.querySelector("#a-income")!, {
-      target: { value: "50000" },
+      target: { value: "45000" },
     });
-    fireEvent.change(container.querySelector("#b-income")!, {
-      target: { value: "50000" },
-    });
-    fireEvent.click(screen.getByRole("radio", { name: /Egen fördelning/ }));
-    const slider = container.querySelector("#custom-split");
-    expect(slider).not.toBeNull();
-    fireEvent.change(slider!, { target: { value: "20" } }); // give B more
     next(); // → step 3
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    expect(screen.getByText("Justera planen")).toBeTruthy();
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    fireEvent.click(container.querySelector("#b-goal-budget")!);
+    showPlan();
+    expect(screen.getAllByText(/Inom budget/).length).toBeGreaterThan(0);
+  });
+
+  it("saves the days a caregiver sets aside in the wizard", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    // Second caregiver (B) saves 30 days for later.
+    fireEvent.change(container.querySelector("#b-save-days")!, {
+      target: { value: "30" },
+    });
+    showPlan();
+    expect(screen.getAllByText(/till senare/).length).toBeGreaterThan(0);
+  });
+
+  it("editing a period's end date flips that caregiver to a date goal", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    showPlan();
+    fireEvent.change(container.querySelector("#period-end-0")!, {
+      target: { value: futureIso(45) },
+    });
+    // The edit becomes a "hemma till" goal, with an undo affordance.
+    expect(screen.getByText(/Släpp slutdatumet/)).toBeTruthy();
+    expect(screen.getAllByText(/Hemma till/).length).toBeGreaterThan(0);
   });
 
   it("has a live split slider on the results page that updates the numbers", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "50000", incomeB: "50000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     // The day-split slider lives in the expanded "Justera" controls.
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     const slider = container.querySelector("#results-split");
     expect(slider).not.toBeNull();
     // Equal (capped) rates → maxPayout splits the 390 income-based days 50/50.
-    expect(screen.getAllByText(/195 dagar/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/195 dagar/).length).toBeGreaterThanOrEqual(1);
     // Drag to give caregiver A 75% of the days → numbers update live.
     fireEvent.change(slider!, { target: { value: "75" } });
     expect(screen.getAllByText(/293 dagar/).length).toBeGreaterThan(0);
@@ -237,8 +248,7 @@ describe("<Planner /> wizard", () => {
   it("stretches one caregiver's leave with the per-person lever", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     // Both caregivers start on full pace.
     expect(screen.queryByText("Förläng ledigheten")).toBeNull();
     // Open the collapsible "Justera" controls to reach the per-person levers.
@@ -253,8 +263,7 @@ describe("<Planner /> wizard", () => {
   it("supports a second leave period (switch pace at 1 year)", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     fireEvent.click(
@@ -269,9 +278,8 @@ describe("<Planner /> wizard", () => {
   it("shows combined household income while one caregiver is on leave", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    // Each leave period in the timeline combines both incomes — the leave-taker's
+    showPlan();
+    // Each period card combines both incomes — the leave-taker's
     // föräldrapenning plus the working partner's salary.
     expect(screen.getAllByText(/s lön ≈/).length).toBeGreaterThan(0);
   });
@@ -279,8 +287,7 @@ describe("<Planner /> wizard", () => {
   it("only counts part-time work in household income when opted in", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    showPlan();
     // Open the collapsible "Justera" controls to reach the per-person levers.
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     // Extend caregiver A's leave. By default we do NOT assume they work, so the
@@ -298,70 +305,77 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/deltidslön/).length).toBeGreaterThan(0);
   });
 
-  it("plans backwards from a target date and saves the leftover days", () => {
-    const { container } = render(<Planner />);
-    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    fireEvent.click(screen.getByRole("radio", { name: /Hemma till ett datum/ }));
-    // Target ~4 months out: far fewer calendar days than allocated benefit
-    // days, so the plan truncates and the rest are saved for later.
-    const target = new Date();
-    target.setDate(target.getDate() + 120);
-    fireEvent.change(container.querySelector("#goal-date")!, {
-      target: { value: target.toISOString().slice(0, 10) },
-    });
-    expect(screen.getAllByText(/till senare/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Ledig till/).length).toBeGreaterThan(0);
-  });
-
-  it("solves the longest leave that clears a household budget floor", () => {
-    const { container } = render(<Planner />);
-    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    fireEvent.click(
-      screen.getByRole("radio", { name: /Så länge budgeten tillåter/ }),
-    );
-    expect(container.querySelector("#goal-budget")).not.toBeNull();
-    // The solved plan is summarised (end date + lowest household net).
-    expect(screen.getAllByText(/Ledig till/).length).toBeGreaterThan(0);
-    // The manual per-person levers step aside while the solver owns the paces.
-    expect(
-      screen.queryByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
-    ).toBeNull();
-  });
-
   it("saves the lägstanivå days by default", () => {
     const { container } = render(<Planner />);
-    fillToResults(container); // → step 3
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    fillToResults(container);
+    showPlan();
     expect(screen.getByText(/ingår inte i planen/)).toBeTruthy();
   });
 
-  it("includes the lägstanivå days when the schedule toggle is on", () => {
+  it("includes the lägstanivå days when the step-1 toggle is on", () => {
     const { container } = render(<Planner />);
-    fillToResults(container); // → step 3
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
     fireEvent.click(container.querySelector("#include-lagsta")!);
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    next(); // → step 2
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    next(); // → step 3
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    showPlan();
     // Household default (45k/30k): the lower earner B takes the 300 income-based
-    // days plus all 90 flat days = 390 once lägstanivå is included.
+    // days plus all 90 flat days = 390 once lägstanivå is included. B's card
+    // sits on the second period block.
+    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
     expect(screen.getAllByText(/390 dagar/).length).toBeGreaterThan(0);
   });
 
-  it("folds leftover days from previous children into the lead", () => {
+  it("adds extra days for twins", () => {
     const { container } = render(<Planner />);
-    fillToResults(container); // → step 3
-    fireEvent.click(container.querySelector("#has-extra")!);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    fireEvent.click(container.querySelector("#twins")!);
+    next(); // → step 2
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    next(); // → step 3
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    showPlan();
+    // Twins add 90 income-based days: B now carries 300 + 90 = 390.
+    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
+    expect(screen.getAllByText(/390 dagar/).length).toBeGreaterThan(0);
+  });
+
+  it("asks about days from previous children from the second child on", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    // First child: the carried-over field is not asked.
+    next();
+    expect(container.querySelector("#a-extra")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
+    fireEvent.click(container.querySelector("#child-number-2")!);
+    next(); // → step 2 — now it is.
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
     fireEvent.change(container.querySelector("#a-extra")!, {
       target: { value: "40" },
     });
-    next(); // → step 4
-    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    next(); // → step 3
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    showPlan();
     expect(
       screen.getAllByText(/sparade från tidigare barn/).length,
     ).toBeGreaterThan(0);

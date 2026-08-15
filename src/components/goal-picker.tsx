@@ -5,23 +5,11 @@ import type { GoalMode } from "@/lib/goal-seek";
 import { addMonths, addYears, toIsoDate } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 
-/** Everything the results page needs to render and drive the goal picker. */
-export interface GoalControls {
-  mode: GoalMode;
-  dateStr: string;
-  budget: number;
-  /** One-line result of the active goal (end date, saved days, lowest net). */
-  summary: string | null;
-  onMode: (mode: GoalMode) => void;
-  onDate: (iso: string) => void;
-  onBudget: (kr: number) => void;
-}
-
 const MODES: { value: GoalMode; label: string; desc: string }[] = [
   {
     value: "manual",
     label: "Justera själv",
-    desc: "Ställ in takt och fördelning med reglagen.",
+    desc: "Full takt som utgångsläge — finjustera med reglagen på resultatsidan.",
   },
   {
     value: "untilDate",
@@ -45,10 +33,12 @@ function forskolestart(birth: Date): Date {
 }
 
 /**
- * Results-page goal selector: solve the plan backwards from a target date or a
- * household budget floor, instead of adjusting paces by hand.
+ * One caregiver's goal, asked in the wizard: adjust by hand, be home until a
+ * date, or the longest leave within a household budget.
  */
-export function GoalPicker({
+export function CaregiverGoalControl({
+  idPrefix,
+  name,
   mode,
   dateStr,
   budget,
@@ -57,82 +47,91 @@ export function GoalPicker({
   onDate,
   onBudget,
 }: {
+  idPrefix: string;
+  name: string;
   mode: GoalMode;
   dateStr: string;
   budget: number;
-  birth: Date;
+  /** Parsed birth date (valid once step 1 is done); null hides the presets. */
+  birth: Date | null;
   onMode: (mode: GoalMode) => void;
   onDate: (iso: string) => void;
   onBudget: (kr: number) => void;
 }) {
-  const presets: { label: string; date: Date }[] = [
-    { label: "Förskolestart", date: forskolestart(birth) },
-    { label: "1,5 år", date: addMonths(birth, 18) },
-    { label: "2 år", date: addYears(birth, 2) },
-  ];
+  const presets: { label: string; date: Date }[] = birth
+    ? [
+        { label: "Förskolestart", date: forskolestart(birth) },
+        { label: "1,5 år", date: addMonths(birth, 18) },
+        { label: "2 år", date: addYears(birth, 2) },
+      ]
+    : [];
 
   return (
     <div className="space-y-3">
-      <Label>Vad vill ni uppnå?</Label>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <Label>Vad vill {name} uppnå?</Label>
+      <div className="grid gap-2">
         {MODES.map((m) => (
           <label
             key={m.value}
-            className={`flex cursor-pointer flex-col gap-1 rounded-lg border p-3 ${
+            className={`flex cursor-pointer gap-2.5 rounded-lg border p-3 ${
               mode === m.value ? "border-primary bg-secondary/40" : ""
             }`}
           >
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="radio"
-                id={`goal-${m.value}`}
-                name="goal-mode"
-                checked={mode === m.value}
-                onChange={() => onMode(m.value)}
-                className="accent-primary size-4 shrink-0"
-              />
-              {m.label}
+            <input
+              type="radio"
+              id={`${idPrefix}-goal-${m.value}`}
+              name={`${idPrefix}-goal`}
+              checked={mode === m.value}
+              onChange={() => onMode(m.value)}
+              className="accent-primary mt-0.5 size-4 shrink-0"
+            />
+            <span>
+              <span className="block text-sm font-medium">{m.label}</span>
+              <span className="text-muted-foreground block text-xs">
+                {m.desc}
+              </span>
             </span>
-            <span className="text-muted-foreground text-xs">{m.desc}</span>
           </label>
         ))}
       </div>
 
       {mode === "untilDate" && (
         <div className="space-y-2">
-          <Label htmlFor="goal-date">Hemma till och med</Label>
+          <Label htmlFor={`${idPrefix}-goal-date`}>Hemma till och med</Label>
           <Input
-            id="goal-date"
+            id={`${idPrefix}-goal-date`}
             type="date"
             value={dateStr}
             onChange={(e) => onDate(e.target.value)}
             className="max-w-48"
           />
-          <div className="flex flex-wrap gap-2">
-            {presets.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => onDate(toIsoDate(p.date))}
-                className="text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs"
-              >
-                {p.label} · {formatDate(p.date)}
-              </button>
-            ))}
-          </div>
+          {presets.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {presets.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => onDate(toIsoDate(p.date))}
+                  className="text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs"
+                >
+                  {p.label} · {formatDate(p.date)}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {mode === "budget" && (
         <NumberField
-          id="goal-budget"
+          id={`${idPrefix}-goal-budget-floor`}
           label="Hushållets lägsta inkomst efter skatt (kr/mån)"
           value={budget}
           step={1000}
           slider
           sliderMax={60000}
           onChange={onBudget}
-          hint="Varje period tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
+          hint="Perioden tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
         />
       )}
     </div>

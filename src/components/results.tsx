@@ -7,12 +7,12 @@ import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import type { PhaseControls, PartTime } from "@/components/leave-levers";
-import type { GoalControls } from "@/components/goal-picker";
+import { PeriodPager, type PeriodEditing } from "@/components/period-pager";
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
 import { WarningsList } from "@/components/warnings-list";
-import { Timeline, type LeaveProjection } from "@/components/timeline";
+import type { LeaveProjection } from "@/components/timeline";
 import type { PlanDeadlines, PlanInput, RemainingSummary } from "@/lib/calc";
 import type {
   Objective,
@@ -32,7 +32,6 @@ export function Results({
   solo,
   remaining,
   deadlines,
-  asOf,
   paceA,
   paceB,
   splitA,
@@ -49,8 +48,10 @@ export function Results({
   salaryB,
   partTimeA,
   partTimeB,
-  goal,
-  goalMarker,
+  goalSummary,
+  goalTextA,
+  goalTextB,
+  periodEdit,
   monthlyRows,
   projection,
   vabResult,
@@ -71,7 +72,6 @@ export function Results({
   solo: SoloResult | null;
   remaining: RemainingSummary;
   deadlines: PlanDeadlines;
-  asOf: Date;
   paceA: number;
   paceB: number;
   splitA: number;
@@ -88,9 +88,12 @@ export function Results({
   salaryB: number;
   partTimeA: PartTime;
   partTimeB: PartTime;
-  goal: GoalControls;
-  /** Target-date marker for the timeline (when the "hemma till" goal is set). */
-  goalMarker?: { date: Date; met: boolean };
+  /** One-line result of the solved plan (end date, saved days, lowest net). */
+  goalSummary: string | null;
+  /** Per-caregiver goal description; null = manual (the sliders apply). */
+  goalTextA: string | null;
+  goalTextB: string | null;
+  periodEdit: PeriodEditing;
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -137,8 +140,8 @@ export function Results({
             bonusFullMonthly={bonusFullA}
             salary={salaryA}
             partTime={partTimeA}
-            goal={goal}
-            birth={deadlines.birth}
+            goalSummary={goalSummary}
+            goalText={goalTextA}
           />
         ) : twoParent ? (
           <SplitSuggestion
@@ -161,19 +164,19 @@ export function Results({
             salaryB={salaryB}
             partTimeA={partTimeA}
             partTimeB={partTimeB}
-            goal={goal}
-            birth={deadlines.birth}
+            goalSummary={goalSummary}
+            goalTextA={goalTextA}
+            goalTextB={goalTextB}
           />
         ) : null}
 
-        {/* The timeline is the centrepiece: who's home when, what the household
-            lives on each period, and the legal age gates. */}
-        <Timeline
-          deadlines={deadlines}
-          asOf={asOf}
+        {/* The centrepiece: each stretch of leave as a block to flip through,
+            with directly editable dates. */}
+        <PeriodPager
           projection={projection ?? undefined}
           rows={monthlyRows}
-          goal={goalMarker}
+          deadlines={deadlines}
+          editing={periodEdit}
         />
       </div>
 

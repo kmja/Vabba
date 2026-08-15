@@ -187,7 +187,7 @@ const MIN_GAP_PX = 12;
 const MAX_GAP_PX = 480;
 const COMPRESSED_PX = 56;
 
-const CG_BAR = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];
+export const CG_BAR = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];
 const CG_BORDER_L = [
   "border-l-chart-1",
   "border-l-chart-2",
@@ -296,9 +296,9 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
 /**
  * The detail for one caregiver's leave period. Collapsed: after-tax household
  * income, duration, and any conditional notes. Expanded (click chevron): fine
- * print — gross amounts, per-day rate, pace.
+ * print — gross amounts, per-day rate, pace. Shared with the period pager.
  */
-function PeriodCard({
+export function PeriodCard({
   row,
   colorIdx,
   side = "left",

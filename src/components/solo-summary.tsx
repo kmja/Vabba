@@ -9,7 +9,6 @@ import {
   type PhaseControls,
   type PartTime,
 } from "@/components/leave-levers";
-import { GoalPicker, type GoalControls } from "@/components/goal-picker";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
 import { cn } from "@/lib/utils";
@@ -32,8 +31,8 @@ export function SoloSummary({
   bonusFullMonthly,
   salary,
   partTime,
-  goal,
-  birth,
+  goalSummary,
+  goalText,
 }: {
   payout: ParentPayout;
   total: number;
@@ -44,11 +43,12 @@ export function SoloSummary({
   bonusFullMonthly: number;
   salary: number;
   partTime: PartTime;
-  goal: GoalControls;
-  birth: Date;
+  /** One-line result of the solved plan, shown when a goal is active. */
+  goalSummary: string | null;
+  /** The goal description; null = manual (slider + levers apply). */
+  goalText: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const goalActive = goal.mode !== "manual";
   return (
     <section
       className={cn(
@@ -71,14 +71,14 @@ export function SoloSummary({
         </button>
       </div>
 
-      {/* Collapsed: the leave-length slider; drag and watch the timeline
-          shift. With a goal active, its solved result instead. */}
+      {/* Collapsed: the leave-length slider — or, when a goal drives the
+          length, its description instead. */}
       {!open && (
-        <div className="px-4 sm:px-6">
-          {goalActive ? (
-            goal.summary && (
-              <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
-            )
+        <div className="space-y-2 px-4 sm:px-6">
+          {goalText ? (
+            <p className="text-sm tabular-nums">
+              <span className="font-medium">{name}:</span> {goalText}
+            </p>
           ) : (
             <LeaveLengthSlider
               name={name}
@@ -88,24 +88,16 @@ export function SoloSummary({
               onSetTarget={onSetTarget}
             />
           )}
+          {goalSummary && (
+            <p className="text-muted-foreground text-xs tabular-nums">
+              {goalSummary}
+            </p>
+          )}
         </div>
       )}
 
       {open && (
         <div className="space-y-4 px-4 sm:px-6">
-          <GoalPicker
-            mode={goal.mode}
-            dateStr={goal.dateStr}
-            budget={goal.budget}
-            birth={birth}
-            onMode={goal.onMode}
-            onDate={goal.onDate}
-            onBudget={goal.onBudget}
-          />
-          {goalActive && goal.summary && (
-            <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
-          )}
-
           <p className="text-muted-foreground text-sm">
             Som ensam vårdnadshavare har du rätt till alla dagarna.
           </p>
@@ -153,7 +145,12 @@ export function SoloSummary({
             </p>
           </div>
 
-          {!goalActive && (
+          {goalText ? (
+            <p className="text-sm">
+              <span className="font-medium">{name}:</span> {goalText} — ändra i
+              perioderna nedan eller i guiden.
+            </p>
+          ) : (
             <LeaveLevers
               name={name}
               days={total}

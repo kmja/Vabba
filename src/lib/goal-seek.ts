@@ -1,20 +1,21 @@
 /**
- * goal-seek.ts — Solve the leave plan backwards from a life constraint.
+ * goal-seek.ts — Solve each caregiver's leave from their own goal.
  *
- * The projection engine answers "given days and paces, when does the leave
- * end?". This module inverts it:
+ * Caregivers are home in turn; each one's stretch is solved independently from
+ * where the previous one ended (the cursor), according to their chosen mode:
  *
- * - `solveUntilDate`: "we want to be home until <date>" — if the days are
- *   plentiful the leave runs at full pace and is cut at the target (the rest
- *   are saved for later); if they're scarce the paces are stretched just enough
- *   to reach the date; if even maximal stretching falls short, the shortfall is
- *   reported in benefit days.
- * - `solveBudget`: "the household needs at least <kr>/month after tax" — each
- *   leave stretch runs at the slowest pace that still clears the floor, which
- *   maximises the calendar length of the leave.
+ * - `manual`: draw days at a chosen pace (with the optional switch-at-1-year
+ *   phases), exactly like adjusting the levers by hand.
+ * - `untilDate`: be home until a target date — plenty of days → full pace and
+ *   the rest saved for later; scarce days → the pace stretches just enough;
+ *   out of reach → the shortfall is reported in benefit days.
+ * - `budget`: every stretch runs at the slowest pace that keeps household net
+ *   income above a floor, maximising the calendar length of the leave.
  *
- * Both respect the SGI rule: after the child turns 1, a caregiver on leave must
- * draw at least 5 days/week (unless they work part-time the rest of the week).
+ * All modes respect the SGI rule: after the child turns 1, a caregiver on
+ * leave must draw at least 5 days/week (unless they work part-time the rest of
+ * the week). A caregiver can also deliberately save days (`saveDays`) and
+ * delay their start (`startAt`), which leaves a gap where both work.
  *
  * Pure and framework-agnostic.
  */
@@ -32,10 +33,10 @@ const DAYS_PER_MONTH = 30.4;
 const MIN_PACE = 0.5;
 const MAX_PACE = 7;
 
-/** How the results-page paces are chosen. */
+/** How a caregiver's stretch is planned. */
 export type GoalMode = "manual" | "untilDate" | "budget";
 
-export interface GoalCaregiverCtx {
+export interface CaregiverPlanSpec {
   name: string;
   /** Works the non-benefit days of the week (exempt from the 5/7 SGI floor). */
   worksPartTime: boolean;
@@ -43,267 +44,292 @@ export interface GoalCaregiverCtx {
   salary: number;
   /** The other caregiver's gross monthly salary while this one is home. */
   partnerSalary: number;
+  /** Income-based days allocated to this caregiver (incl. carried-over). */
+  incomeDays: number;
+  incomeRate: number;
+  /** Flat lägstanivå days allocated (0 when they're excluded from the plan). */
+  lagstaDays: number;
+  lagstaRate: number;
+  mode: GoalMode;
+  /** manual: days/week (defaults to 7). */
+  manualPace?: number;
+  /** manual: explicit switch-at-1-year phases (from the results levers). */
+  switchPhases?: { phase1: number; phase2: number } | null;
+  /** untilDate: stay home until this date. */
+  targetDate?: Date | null;
+  /** budget: household net floor in kr/month. */
+  budgetFloor?: number;
+  /** Days to deliberately leave unused (drawn from lägsta first). */
+  saveDays?: number;
+  /** Start this caregiver's stretch later (a gap where both work). */
+  startAt?: Date | null;
 }
 
-/** A caregiver's allocated days, in leave order, before any schedule exists. */
-export interface GoalBlockSpec {
-  caregiver: string;
-  tier: "income" | "lagsta";
-  days: number;
-  /** Daily kr for this tier. */
-  rate: number;
-}
-
-export interface GoalSpec {
-  birth: Date;
-  /** Where the projection starts (birth, or today for an ongoing plan). */
-  start: Date;
-  blocks: GoalBlockSpec[];
-  caregivers: GoalCaregiverCtx[];
-}
-
-export interface GoalResult {
-  /** Dated leave segments (already truncated at the target when applicable). */
-  intervals: LeaveInterval[];
-  /** When the continuous leave ends (null when there is nothing to project). */
+export interface CaregiverOutcome {
+  name: string;
+  startsAt: Date | null;
   endsAt: Date | null;
-  /** untilDate: reached the date. budget: the floor holds in every stretch. */
+  /** Days actually drawn (allocated − saved). */
+  usedDays: number;
+  /** Days left unused: deliberate `saveDays` + anything cut by a date goal. */
+  savedDays: number;
+  paces: { phase1: number; phase2: number };
+  /** untilDate: reached the date. budget: the floor holds. manual: true. */
   targetMet: boolean;
-  /** untilDate only: benefit days missing to reach the target (0 otherwise). */
+  /** untilDate only: benefit days missing to reach the target. */
   shortfallDays: number;
-  /** untilDate only: leftover days per caregiver when the leave is cut early. */
-  savedByCaregiver: Record<string, number>;
-  savedTotal: number;
-  /** Days actually drawn per caregiver (allocated − saved). */
-  usedDays: Record<string, number>;
-  /** Lowest household net (own benefit + partner salary + part-time salary). */
-  minHouseholdNet: number | null;
-  /** Caregivers whose post-1-year pace was lifted to the SGI minimum. */
-  sgiLifted: string[];
-  /** Solved paces per caregiver (phase1 = before the 1st birthday). */
-  paces: Record<string, { phase1: number; phase2: number }>;
+  /** True when the post-1-year SGI floor lifted this caregiver's pace. */
+  sgiLifted: boolean;
 }
 
-function partTimeSalary(ctx: GoalCaregiverCtx, pace: number): number {
-  if (!ctx.worksPartTime) return 0;
+export interface PlanSolve {
+  /** All caregivers' dated segments, in leave order. */
+  intervals: LeaveInterval[];
+  perCaregiver: CaregiverOutcome[];
+  endsAt: Date | null;
+  savedTotal: number;
+  /** Lowest household net (benefit + partner salary + part-time salary). */
+  minHouseholdNet: number | null;
+}
+
+// -----------------------------------------------------------------------------
+// Shared helpers
+// -----------------------------------------------------------------------------
+
+function partTimeSalary(spec: CaregiverPlanSpec, pace: number): number {
+  if (!spec.worksPartTime) return 0;
   const p = Math.max(0, Math.min(MAX_PACE, pace));
-  return (ctx.salary * (MAX_PACE - p)) / MAX_PACE;
+  return (spec.salary * (MAX_PACE - p)) / MAX_PACE;
 }
 
 function householdNet(
-  ctx: GoalCaregiverCtx,
+  spec: CaregiverPlanSpec,
   rate: number,
   pace: number,
 ): number {
   const ownGross = (rate * pace * DAYS_PER_MONTH) / 7;
-  return netAfterTax(ownGross + ctx.partnerSalary + partTimeSalary(ctx, pace));
+  return netAfterTax(
+    ownGross + spec.partnerSalary + partTimeSalary(spec, pace),
+  );
 }
 
-/** The SGI floor for a caregiver's pace after the child's 1st birthday. */
-function postYearFloor(ctx: GoalCaregiverCtx): number {
-  return ctx.worksPartTime ? MIN_PACE : SGI_PROTECTION.minDaysPerWeekAfterAge1;
+/** The SGI floor for this caregiver's pace after the child's 1st birthday. */
+function postYearFloor(spec: CaregiverPlanSpec): number {
+  return spec.worksPartTime
+    ? MIN_PACE
+    : SGI_PROTECTION.minDaysPerWeekAfterAge1;
 }
 
-function scheduleFor(phase1: number, phase2: number, oneYear: Date): PaceBreak[] {
+function schedule(
+  phase1: number,
+  phase2: number,
+  oneYear: Date,
+): PaceBreak[] {
   return [
     { until: oneYear, pace: phase1 },
     { until: null, pace: phase2 },
   ];
 }
 
-function ctxFor(spec: GoalSpec, name: string): GoalCaregiverCtx {
-  return (
-    spec.caregivers.find((c) => c.name === name) ?? {
-      name,
-      worksPartTime: false,
-      salary: 0,
-      partnerSalary: 0,
-    }
-  );
-}
-
-/** Build dated intervals from per-caregiver phase paces. */
-function intervalsAt(
-  spec: GoalSpec,
-  paces: Record<string, { phase1: number; phase2: number }>,
-  oneYear: Date,
-): LeaveInterval[] {
-  const blocks: LeaveBlock[] = spec.blocks.map((b) => {
-    const p = paces[b.caregiver] ?? { phase1: MAX_PACE, phase2: MAX_PACE };
-    return { ...b, schedule: scheduleFor(p.phase1, p.phase2, oneYear) };
-  });
-  return buildLeaveIntervals(spec.start, blocks);
-}
-
-function endOf(intervals: LeaveInterval[], start: Date): Date {
-  return intervals.length > 0 ? intervals[intervals.length - 1].endsAt : start;
-}
-
-/** Sum of allocated days per caregiver in the spec. */
-function allocatedByCaregiver(spec: GoalSpec): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const b of spec.blocks) {
-    out[b.caregiver] = (out[b.caregiver] ?? 0) + b.days;
-  }
-  return out;
-}
-
-function minNetOver(
-  spec: GoalSpec,
-  intervals: LeaveInterval[],
-): number | null {
-  let min: number | null = null;
-  for (const seg of intervals) {
-    const ctx = ctxFor(spec, seg.caregiver ?? "");
-    const net = netAfterTax(
-      seg.monthly + ctx.partnerSalary + partTimeSalary(ctx, seg.pace),
-    );
-    if (min === null || net < min) min = net;
-  }
-  return min;
-}
-
-function sgiLiftedNames(
-  spec: GoalSpec,
-  paces: Record<string, { phase1: number; phase2: number }>,
-  intervals: LeaveInterval[],
-  oneYear: Date,
-): string[] {
-  const out: string[] = [];
-  for (const [name, p] of Object.entries(paces)) {
-    const ctx = ctxFor(spec, name);
-    if (ctx.worksPartTime) continue;
-    const extendsPast = intervals.some(
-      (s) => s.caregiver === name && s.endsAt.getTime() > oneYear.getTime(),
-    );
-    if (extendsPast && p.phase1 < SGI_PROTECTION.minDaysPerWeekAfterAge1 - 1e-9)
-      out.push(name);
-  }
-  return out;
-}
-
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-/**
- * Cut the intervals at `cutoff` and account how many benefit days each
- * caregiver actually drew. A straddling interval is shortened pro rata.
- */
+interface Pools {
+  income: number;
+  lagsta: number;
+  saved: number;
+}
+
+/** Apply the deliberate `saveDays` — lägsta days are set aside first. */
+function applySaveDays(spec: CaregiverPlanSpec): Pools {
+  const total = spec.incomeDays + spec.lagstaDays;
+  const save = Math.max(0, Math.min(spec.saveDays ?? 0, total));
+  const fromLagsta = Math.min(save, spec.lagstaDays);
+  const fromIncome = save - fromLagsta;
+  return {
+    income: spec.incomeDays - fromIncome,
+    lagsta: spec.lagstaDays - fromLagsta,
+    saved: save,
+  };
+}
+
+function blocksFor(
+  spec: CaregiverPlanSpec,
+  pools: Pools,
+  phases: { phase1: number; phase2: number },
+  oneYear: Date,
+): LeaveBlock[] {
+  const sched = schedule(phases.phase1, phases.phase2, oneYear);
+  return [
+    {
+      caregiver: spec.name,
+      tier: "income" as const,
+      days: pools.income,
+      rate: spec.incomeRate,
+      schedule: sched,
+    },
+    {
+      caregiver: spec.name,
+      tier: "lagsta" as const,
+      days: pools.lagsta,
+      rate: spec.lagstaRate,
+      schedule: sched,
+    },
+  ].filter((b) => b.days > 0);
+}
+
+/** Cut intervals at `cutoff`; returns the clipped list and the days drawn. */
 function truncateAt(
   intervals: LeaveInterval[],
   cutoff: Date,
-): { clipped: LeaveInterval[]; usedDays: Record<string, number> } {
+): { clipped: LeaveInterval[]; used: number } {
   const clipped: LeaveInterval[] = [];
-  const usedDays: Record<string, number> = {};
+  let used = 0;
   for (const seg of intervals) {
     if (seg.startsAt.getTime() >= cutoff.getTime()) break;
     const cut = seg.endsAt.getTime() > cutoff.getTime();
     const end = cut ? cutoff : seg.endsAt;
     const calDays = Math.max(0, differenceInDays(seg.startsAt, end));
-    const days = (calDays / 7) * seg.pace;
-    const key = seg.caregiver ?? "";
-    usedDays[key] = (usedDays[key] ?? 0) + days;
+    used += (calDays / 7) * seg.pace;
     clipped.push(cut ? { ...seg, endsAt: end } : seg);
     if (cut) break;
   }
-  return { clipped, usedDays };
+  return { clipped, used };
 }
 
-function buildResult(
-  spec: GoalSpec,
-  paces: Record<string, { phase1: number; phase2: number }>,
+// -----------------------------------------------------------------------------
+// Per-caregiver solvers
+// -----------------------------------------------------------------------------
+
+interface OneResult {
+  intervals: LeaveInterval[];
+  outcome: CaregiverOutcome;
+}
+
+function outcomeOf(
+  spec: CaregiverPlanSpec,
   intervals: LeaveInterval[],
+  phases: { phase1: number; phase2: number },
+  pools: Pools,
   oneYear: Date,
-  extra: Pick<
-    GoalResult,
-    "targetMet" | "shortfallDays" | "savedByCaregiver" | "usedDays"
-  >,
-): GoalResult {
-  const savedTotal = Object.values(extra.savedByCaregiver).reduce(
-    (a, b) => a + b,
-    0,
+  extra: Pick<CaregiverOutcome, "targetMet" | "shortfallDays"> & {
+    extraSaved?: number;
+  },
+): OneResult {
+  const allocated = spec.incomeDays + spec.lagstaDays;
+  const saved = pools.saved + (extra.extraSaved ?? 0);
+  const extendsPastYear = intervals.some(
+    (s) => s.endsAt.getTime() > oneYear.getTime(),
   );
   return {
     intervals,
-    endsAt: intervals.length > 0 ? endOf(intervals, spec.start) : null,
-    minHouseholdNet: minNetOver(spec, intervals),
-    sgiLifted: sgiLiftedNames(spec, paces, intervals, oneYear),
-    paces,
-    savedTotal,
-    ...extra,
+    outcome: {
+      name: spec.name,
+      startsAt: intervals.length > 0 ? intervals[0].startsAt : null,
+      endsAt:
+        intervals.length > 0 ? intervals[intervals.length - 1].endsAt : null,
+      usedDays: Math.max(0, allocated - saved),
+      savedDays: saved,
+      paces: phases,
+      targetMet: extra.targetMet,
+      shortfallDays: extra.shortfallDays,
+      sgiLifted:
+        !spec.worksPartTime &&
+        extendsPastYear &&
+        phases.phase1 < SGI_PROTECTION.minDaysPerWeekAfterAge1 - 1e-9,
+    },
   };
 }
 
-/**
- * Reach `target` as the end of the continuous leave.
- *
- * Plenty of days → full pace, cut at the target, leftovers saved. Scarce days →
- * the paces are scaled down together (never below the SGI floor after year 1)
- * just enough to land on the target. Impossible → maximal stretch plus a
- * shortfall in benefit days.
- */
-export function solveUntilDate(spec: GoalSpec, target: Date): GoalResult {
-  const oneYear = addYears(spec.birth, 1);
-  const allocated = allocatedByCaregiver(spec);
-  const names = Object.keys(allocated);
+function solveManual(
+  spec: CaregiverPlanSpec,
+  pools: Pools,
+  cursor: Date,
+  oneYear: Date,
+): OneResult {
+  const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
+  let phases: { phase1: number; phase2: number };
+  if (spec.switchPhases) {
+    const floor = spec.worksPartTime ? MIN_PACE : sgiMin;
+    phases = {
+      phase1: Math.max(MIN_PACE, spec.switchPhases.phase1),
+      phase2: Math.max(floor, spec.switchPhases.phase2),
+    };
+  } else {
+    const p = Math.max(1, spec.manualPace ?? MAX_PACE);
+    // Below the SGI floor and not part-time: keep the chosen pace while SGI is
+    // protected (year 1), then lift to the minimum.
+    phases = {
+      phase1: p,
+      phase2: !spec.worksPartTime && p < sgiMin ? sgiMin : p,
+    };
+  }
+  const intervals = buildLeaveIntervals(
+    cursor,
+    blocksFor(spec, pools, phases, oneYear),
+  );
+  return outcomeOf(spec, intervals, phases, pools, oneYear, {
+    targetMet: true,
+    shortfallDays: 0,
+  });
+}
 
-  // s ∈ [0, 1]: 0 = paces at their floors (longest leave), 1 = full pace.
-  const pacesAt = (s: number) => {
-    const out: Record<string, { phase1: number; phase2: number }> = {};
-    for (const name of names) {
-      const f2 = postYearFloor(ctxFor(spec, name));
-      out[name] = {
-        phase1: round1(MIN_PACE + s * (MAX_PACE - MIN_PACE)),
-        phase2: round1(f2 + s * (MAX_PACE - f2)),
-      };
-    }
-    return out;
+function solveUntilDate(
+  spec: CaregiverPlanSpec,
+  pools: Pools,
+  cursor: Date,
+  oneYear: Date,
+  target: Date,
+): OneResult {
+  const f2 = postYearFloor(spec);
+  const pacesAt = (s: number) => ({
+    phase1: round1(MIN_PACE + s * (MAX_PACE - MIN_PACE)),
+    phase2: round1(f2 + s * (MAX_PACE - f2)),
+  });
+  const intervalsAt = (s: number) =>
+    buildLeaveIntervals(cursor, blocksFor(spec, pools, pacesAt(s), oneYear));
+  const endAt = (s: number) => {
+    const iv = intervalsAt(s);
+    return iv.length > 0 ? iv[iv.length - 1].endsAt : cursor;
   };
-  const endAt = (s: number) =>
-    endOf(intervalsAt(spec, pacesAt(s), oneYear), spec.start);
 
-  const noSaved: Record<string, number> = {};
-  for (const name of names) noSaved[name] = 0;
+  // Already past the target when this caregiver would start: nothing to take.
+  if (target.getTime() <= cursor.getTime()) {
+    return outcomeOf(spec, [], pacesAt(1), pools, oneYear, {
+      targetMet: false,
+      shortfallDays: 0,
+      extraSaved: pools.income + pools.lagsta,
+    });
+  }
 
-  // Plenty of days: run at full pace and cut the leave at the target.
+  // Plenty of days: full pace, cut at the target, the rest saved.
   if (endAt(1).getTime() >= target.getTime()) {
-    const paces = pacesAt(1);
-    const full = intervalsAt(spec, paces, oneYear);
-    const { clipped, usedDays } = truncateAt(full, target);
-    const saved: Record<string, number> = {};
-    for (const name of names) {
-      saved[name] = Math.max(0, allocated[name] - (usedDays[name] ?? 0));
-      usedDays[name] = usedDays[name] ?? 0;
-    }
-    return buildResult(spec, paces, clipped, oneYear, {
+    const { clipped, used } = truncateAt(intervalsAt(1), target);
+    const available = pools.income + pools.lagsta;
+    return outcomeOf(spec, clipped, pacesAt(1), pools, oneYear, {
       targetMet: true,
       shortfallDays: 0,
-      savedByCaregiver: saved,
-      usedDays,
+      extraSaved: Math.max(0, available - used),
     });
   }
 
   // Even maximal stretching falls short: report the missing days.
   const endSlow = endAt(0);
   if (endSlow.getTime() < target.getTime()) {
-    const paces = pacesAt(0);
-    const intervals = intervalsAt(spec, paces, oneYear);
+    const intervals = intervalsAt(0);
     const tailPace =
       intervals.length > 0
         ? intervals[intervals.length - 1].pace
         : SGI_PROTECTION.minDaysPerWeekAfterAge1;
     const missingCal = differenceInDays(endSlow, target);
-    return buildResult(spec, paces, intervals, oneYear, {
+    return outcomeOf(spec, intervals, pacesAt(0), pools, oneYear, {
       targetMet: false,
       shortfallDays: Math.ceil((missingCal / 7) * tailPace),
-      savedByCaregiver: noSaved,
-      usedDays: allocated,
     });
   }
 
-  // Stretch just enough: the fastest pace scale whose end still reaches the
-  // target (end date decreases monotonically in s).
+  // Stretch just enough: fastest pace scale that still reaches the target.
   let lo = 0;
   let hi = 1;
   for (let i = 0; i < 40; i++) {
@@ -311,40 +337,29 @@ export function solveUntilDate(spec: GoalSpec, target: Date): GoalResult {
     if (endAt(mid).getTime() >= target.getTime()) lo = mid;
     else hi = mid;
   }
-  const paces = pacesAt(lo);
-  const intervals = intervalsAt(spec, paces, oneYear);
-  return buildResult(spec, paces, intervals, oneYear, {
+  return outcomeOf(spec, intervalsAt(lo), pacesAt(lo), pools, oneYear, {
     targetMet: true,
     shortfallDays: 0,
-    savedByCaregiver: noSaved,
-    usedDays: allocated,
   });
 }
 
-/**
- * The slowest pace per stretch that keeps the household's net monthly income
- * at or above `floorNet` — the longest affordable leave. Where even full pace
- * can't clear the floor, the income-maximising pace is used and the result is
- * flagged (`targetMet: false`).
- */
-export function solveBudget(spec: GoalSpec, floorNet: number): GoalResult {
-  const oneYear = addYears(spec.birth, 1);
-  const allocated = allocatedByCaregiver(spec);
-
+function solveBudget(
+  spec: CaregiverPlanSpec,
+  pools: Pools,
+  cursor: Date,
+  oneYear: Date,
+  floorNet: number,
+): OneResult {
   // Smallest pace in [minPace, 7] whose household net clears the floor; if
   // none does, the pace that pays the most (part-timers can earn more at a
   // LOWER pace, so this is not always 7).
-  const paceForFloor = (
-    ctx: GoalCaregiverCtx,
-    rate: number,
-    minPace: number,
-  ): number => {
+  const paceForFloor = (rate: number, minPace: number): number => {
     let best: number | null = null;
     let argmax = minPace;
     let maxNet = -Infinity;
     for (let i = Math.round(minPace * 10); i <= MAX_PACE * 10; i++) {
       const pace = i / 10;
-      const net = householdNet(ctx, rate, pace);
+      const net = householdNet(spec, rate, pace);
       if (net > maxNet) {
         maxNet = net;
         argmax = pace;
@@ -354,27 +369,91 @@ export function solveBudget(spec: GoalSpec, floorNet: number): GoalResult {
     return best ?? argmax;
   };
 
-  const paces: Record<string, { phase1: number; phase2: number }> = {};
-  const blocks: LeaveBlock[] = spec.blocks.map((b) => {
-    const ctx = ctxFor(spec, b.caregiver);
-    const phase1 = paceForFloor(ctx, b.rate, MIN_PACE);
-    const phase2 = paceForFloor(ctx, b.rate, postYearFloor(ctx));
-    // Represent the caregiver by their income-tier paces (shown on the card).
-    if (b.tier === "income" || !paces[b.caregiver]) {
-      paces[b.caregiver] = { phase1, phase2 };
-    }
-    return { ...b, schedule: scheduleFor(phase1, phase2, oneYear) };
-  });
+  const f2 = postYearFloor(spec);
+  const phases = {
+    phase1: paceForFloor(spec.incomeRate, MIN_PACE),
+    phase2: paceForFloor(spec.incomeRate, f2),
+  };
+  const lagstaPhases = {
+    phase1: paceForFloor(spec.lagstaRate, MIN_PACE),
+    phase2: paceForFloor(spec.lagstaRate, f2),
+  };
+  const blocks: LeaveBlock[] = [
+    {
+      caregiver: spec.name,
+      tier: "income" as const,
+      days: pools.income,
+      rate: spec.incomeRate,
+      schedule: schedule(phases.phase1, phases.phase2, oneYear),
+    },
+    {
+      caregiver: spec.name,
+      tier: "lagsta" as const,
+      days: pools.lagsta,
+      rate: spec.lagstaRate,
+      schedule: schedule(lagstaPhases.phase1, lagstaPhases.phase2, oneYear),
+    },
+  ].filter((b) => b.days > 0);
 
-  const intervals = buildLeaveIntervals(spec.start, blocks);
-  const minNet = minNetOver(spec, intervals);
-  const noSaved: Record<string, number> = {};
-  for (const name of Object.keys(allocated)) noSaved[name] = 0;
-
-  return buildResult(spec, paces, intervals, oneYear, {
-    targetMet: minNet === null || minNet >= floorNet - 1,
+  const intervals = buildLeaveIntervals(cursor, blocks);
+  let met = true;
+  for (const seg of intervals) {
+    const net = netAfterTax(
+      seg.monthly + spec.partnerSalary + partTimeSalary(spec, seg.pace),
+    );
+    if (net < floorNet - 1) met = false;
+  }
+  return outcomeOf(spec, intervals, phases, pools, oneYear, {
+    targetMet: met,
     shortfallDays: 0,
-    savedByCaregiver: noSaved,
-    usedDays: allocated,
   });
+}
+
+// -----------------------------------------------------------------------------
+// The plan: caregivers in turn
+// -----------------------------------------------------------------------------
+
+export function solvePlan(
+  birth: Date,
+  start: Date,
+  caregivers: CaregiverPlanSpec[],
+): PlanSolve {
+  const oneYear = addYears(birth, 1);
+  const intervals: LeaveInterval[] = [];
+  const perCaregiver: CaregiverOutcome[] = [];
+  let cursor = start;
+
+  for (const spec of caregivers) {
+    if (spec.startAt && spec.startAt.getTime() > cursor.getTime()) {
+      cursor = spec.startAt;
+    }
+    const pools = applySaveDays(spec);
+    const one =
+      spec.mode === "untilDate" && spec.targetDate
+        ? solveUntilDate(spec, pools, cursor, oneYear, spec.targetDate)
+        : spec.mode === "budget"
+          ? solveBudget(spec, pools, cursor, oneYear, spec.budgetFloor ?? 0)
+          : solveManual(spec, pools, cursor, oneYear);
+    intervals.push(...one.intervals);
+    perCaregiver.push(one.outcome);
+    if (one.outcome.endsAt) cursor = one.outcome.endsAt;
+  }
+
+  let minNet: number | null = null;
+  for (const seg of intervals) {
+    const spec = caregivers.find((c) => c.name === seg.caregiver);
+    if (!spec) continue;
+    const net = netAfterTax(
+      seg.monthly + spec.partnerSalary + partTimeSalary(spec, seg.pace),
+    );
+    if (minNet === null || net < minNet) minNet = net;
+  }
+
+  return {
+    intervals,
+    perCaregiver,
+    endsAt: intervals.length > 0 ? intervals[intervals.length - 1].endsAt : null,
+    savedTotal: perCaregiver.reduce((a, o) => a + o.savedDays, 0),
+    minHouseholdNet: minNet,
+  };
 }

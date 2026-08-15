@@ -49,14 +49,32 @@ export interface ShareableState {
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
   /**
-   * Goal-seek mode on the results page: adjust paces manually, solve them to
-   * be home until a target date, or solve for the longest leave that keeps the
-   * household above a net monthly budget floor.
+   * Which child this is for the family (1 = first, 2 = second, 3 = third,
+   * 4 = fourth or later). From 2 the wizard asks about days carried over from
+   * previous children.
    */
-  goalMode?: GoalMode;
+  childNumber?: number;
+  /**
+   * Per-caregiver goal: adjust paces manually, be home until a target date,
+   * or the longest leave that keeps household net income above a floor.
+   */
+  goalModeA?: GoalMode;
+  goalModeB?: GoalMode;
   /** ISO date (yyyy-mm-dd) for the "hemma till ett datum" goal. */
-  goalDate?: string;
+  goalDateA?: string;
+  goalDateB?: string;
   /** Net kr/month floor for the "längsta ledighet inom budget" goal. */
+  goalBudgetA?: number;
+  goalBudgetB?: number;
+  /** Days each caregiver deliberately saves for later (klämdagar, lov …). */
+  saveDaysA?: number;
+  saveDaysB?: number;
+  /** Optional later start of a caregiver's period (ISO), from the pager. */
+  periodStartA?: string;
+  periodStartB?: string;
+  /** Legacy single goal (pre per-caregiver); migrated on load. */
+  goalMode?: GoalMode;
+  goalDate?: string;
   goalBudget?: number;
   /**
    * Whether to spend the 90 flat lägstanivå days (180 kr) in the plan. When

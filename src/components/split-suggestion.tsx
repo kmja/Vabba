@@ -7,7 +7,6 @@ import {
   type PhaseControls,
   type PartTime,
 } from "@/components/leave-levers";
-import { GoalPicker, type GoalControls } from "@/components/goal-picker";
 import {
   OBJECTIVE_DESCRIPTION,
   type Objective,
@@ -42,8 +41,9 @@ export function SplitSuggestion({
   salaryB,
   partTimeA,
   partTimeB,
-  goal,
-  birth,
+  goalSummary,
+  goalTextA,
+  goalTextB,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -66,15 +66,17 @@ export function SplitSuggestion({
   salaryB: number;
   partTimeA: PartTime;
   partTimeB: PartTime;
-  goal: GoalControls;
-  birth: Date;
+  /** One-line result of the solved plan, shown when any goal is active. */
+  goalSummary: string | null;
+  /** Per-caregiver goal text; null = manual (slider + levers apply). */
+  goalTextA: string | null;
+  goalTextB: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const rec = result.recommended;
   const aDays = rec.allocatedTotals.A;
   const bDays = rec.allocatedTotals.B;
   const pctA = Math.round((splitA ?? 0.5) * 100);
-  const goalActive = goal.mode !== "manual";
 
   const maxAlt = result.alternatives.find((a) => a.objective === "maxPayout");
   const diffVsMax = maxAlt ? rec.payout.total - maxAlt.payout.total : 0;
@@ -102,15 +104,16 @@ export function SplitSuggestion({
           </button>
         </div>
 
-        {/* Collapsed: each caregiver's leave-length slider — drag and watch the
-            timeline below shift. With a goal active, its solved result instead. */}
-        {!open &&
-          (goalActive ? (
-            goal.summary && (
-              <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
-            )
-          ) : (
-            <div className="space-y-2">
+        {/* Collapsed: each caregiver's leave-length slider — or, when a goal
+            drives their length, its description instead. */}
+        {!open && (
+          <div className="space-y-2">
+            {goalTextA ? (
+              <p className="text-sm tabular-nums">
+                <span className="font-medium">{parentName(plan, "A")}:</span>{" "}
+                {goalTextA}
+              </p>
+            ) : (
               <LeaveLengthSlider
                 name={parentName(plan, "A")}
                 days={aDays}
@@ -118,6 +121,13 @@ export function SplitSuggestion({
                 pace={paceA}
                 onSetTarget={onSetTargetA}
               />
+            )}
+            {goalTextB ? (
+              <p className="text-sm tabular-nums">
+                <span className="font-medium">{parentName(plan, "B")}:</span>{" "}
+                {goalTextB}
+              </p>
+            ) : (
               <LeaveLengthSlider
                 name={parentName(plan, "B")}
                 days={bDays}
@@ -125,26 +135,18 @@ export function SplitSuggestion({
                 pace={paceB}
                 onSetTarget={onSetTargetB}
               />
-            </div>
-          ))}
+            )}
+            {goalSummary && (
+              <p className="text-muted-foreground text-xs tabular-nums">
+                {goalSummary}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {open && (
         <div className="space-y-4 px-4 sm:px-6">
-          {/* Goal: solve the paces from a date or budget instead of by hand. */}
-          <GoalPicker
-            mode={goal.mode}
-            dateStr={goal.dateStr}
-            budget={goal.budget}
-            birth={birth}
-            onMode={goal.onMode}
-            onDate={goal.onDate}
-            onBudget={goal.onBudget}
-          />
-          {goalActive && goal.summary && (
-            <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
-          )}
-
           {/* Day split between the caregivers */}
           {onSplitChange && splitA !== undefined && (
             <div className="space-y-1">
@@ -178,13 +180,19 @@ export function SplitSuggestion({
             {OBJECTIVE_DESCRIPTION[objective]}
           </p>
 
-          {/* Per-person pay ↔ duration levers (hidden while a goal drives
-              the paces — the solver and the levers would fight). */}
-          {!goalActive && (
-            <div className="space-y-3">
-              <div className="text-muted-foreground text-xs">
-                Finjustera takten per vårdnadshavare:
-              </div>
+          {/* Per-person pay ↔ duration levers. A caregiver whose length is
+              driven by a goal shows its description instead — the solver and
+              the levers would fight. */}
+          <div className="space-y-3">
+            <div className="text-muted-foreground text-xs">
+              Finjustera takten per vårdnadshavare:
+            </div>
+            {goalTextA ? (
+              <p className="text-sm">
+                <span className="font-medium">{parentName(plan, "A")}:</span>{" "}
+                {goalTextA} — ändra i perioderna nedan eller i guiden.
+              </p>
+            ) : (
               <LeaveLevers
                 name={parentName(plan, "A")}
                 days={aDays}
@@ -197,6 +205,13 @@ export function SplitSuggestion({
                 onSetTarget={onSetTargetA}
                 phase={phaseA}
               />
+            )}
+            {goalTextB ? (
+              <p className="text-sm">
+                <span className="font-medium">{parentName(plan, "B")}:</span>{" "}
+                {goalTextB} — ändra i perioderna nedan eller i guiden.
+              </p>
+            ) : (
               <LeaveLevers
                 name={parentName(plan, "B")}
                 days={bDays}
@@ -209,8 +224,8 @@ export function SplitSuggestion({
                 onSetTarget={onSetTargetB}
                 phase={phaseB}
               />
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Total payout */}
           <div className="bg-secondary/40 rounded-lg border p-4 text-center">
