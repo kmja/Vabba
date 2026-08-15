@@ -125,6 +125,25 @@
   }
 }
 
+/* App-shell (phones, while the wizard is showing): the page as a whole never
+   scrolls — the site header and the wizard's progress/nav bars are fixed
+   chrome, and only the question area in between scrolls. The keyboard
+   (interactive-widget=resizes-content) shrinks that area instead of covering
+   the nav. */
+@media (max-width: 639px) {
+  body.app-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body.app-shell main {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 0.75rem;
+    padding-bottom: 0;
+  }
+}
+
 /* Step content slides in as the wizard advances. */
 @keyframes flow-in {
   from {

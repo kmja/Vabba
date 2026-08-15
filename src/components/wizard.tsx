@@ -163,6 +163,8 @@ export function Wizard({
   const seen = (qid: string) => visited.has(qid);
 
   const formRef = useRef<HTMLFormElement>(null);
+  // The scrollable question area between the fixed progress/nav bars.
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const FIELD_SELECTOR =
     'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]), select';
@@ -217,8 +219,12 @@ export function Wizard({
     });
     // Forward nav auto-scrolls via the focused field; on back, start the
     // step from the top instead of inheriting the old scroll depth.
-    if (focus) focusFieldIn(formRef.current);
-    else window.scrollTo(0, 0);
+    if (focus) {
+      focusFieldIn(formRef.current);
+    } else {
+      contentRef.current?.scrollTo?.(0, 0);
+      window.scrollTo(0, 0);
+    }
   };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
@@ -1000,9 +1006,10 @@ export function Wizard({
   );
 
   return (
-    <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0">
+    <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
       <form
         ref={formRef}
+        className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col"
         onSubmit={(e) => e.preventDefault()}
         onKeyDown={onFormKeyDown}
         onFocus={(e) => {
@@ -1032,7 +1039,11 @@ export function Wizard({
           </div>
         </div>
 
-        <div key={current} className="animate-flow-in space-y-5 px-4 py-5 sm:px-6">
+        <div
+          key={current}
+          ref={contentRef}
+          className="animate-flow-in space-y-5 px-4 py-5 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6"
+        >
           {current === 1 && (
             <>
               <p className="text-muted-foreground text-xs">

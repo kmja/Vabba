@@ -107,6 +107,14 @@ export function Planner() {
     setAsOf(new Date());
   }, []);
 
+  // While the wizard is showing, phones get the app-shell layout: fixed
+  // header/nav chrome and a single scrollable question area (see globals.css).
+  const wizardVisible = !(form.submitted ?? false);
+  useEffect(() => {
+    document.body.classList.toggle("app-shell", wizardVisible);
+    return () => document.body.classList.remove("app-shell");
+  }, [wizardVisible]);
+
   // A shared link (#p=…) takes precedence over stored state. Applied on mount.
   useEffect(() => {
     const hash = window.location.hash;
