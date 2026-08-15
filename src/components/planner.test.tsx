@@ -24,6 +24,11 @@ function showPlan() {
   fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
 }
 
+/** Open a caregiver step's accordion section (checkout-style substeps). */
+function openSection(container: HTMLElement, prefix: string, key: string) {
+  fireEvent.click(container.querySelector(`#${prefix}-section-${key}`)!);
+}
+
 /** Fill the wizard to the LAST step (both incomes set), without submitting. */
 function fillToResults(
   container: HTMLElement,
@@ -33,10 +38,12 @@ function fillToResults(
     target: { value: "2025-01-15" },
   });
   next(); // → step 2: the caregiver going first (A by default)
+  openSection(container, "a", "economy");
   fireEvent.change(container.querySelector("#a-income")!, {
     target: { value: opts.incomeA ?? "45000" },
   });
   next(); // → step 3: the other caregiver
+  openSection(container, "b", "economy");
   fireEvent.change(container.querySelector("#b-income")!, {
     target: { value: opts.incomeB ?? "30000" },
   });
@@ -87,10 +94,12 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#a-name")!, {
       target: { value: "Kim" },
     });
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
@@ -104,6 +113,7 @@ describe("<Planner /> wizard", () => {
       target: { value: "2025-01-15" },
     });
     next(); // → step 2: the one going on leave first
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "40000" },
     });
@@ -131,6 +141,7 @@ describe("<Planner /> wizard", () => {
       target: { value: "2025-01-15" },
     });
     next(); // → step 2 (caregiver A)
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
@@ -138,6 +149,7 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#a-240")!); // A no longer qualifies
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
@@ -156,8 +168,10 @@ describe("<Planner /> wizard", () => {
     // Opt out for both caregivers → it disappears.
     fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
     next(); // → step 2
+    openSection(container, "a", "economy");
     fireEvent.click(container.querySelector("#a-no-supplement")!);
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.click(container.querySelector("#b-no-supplement")!);
     showPlan();
     expect(screen.queryByText(/Föräldralön \(arbetsgivaren\)/)).toBeNull();
@@ -192,14 +206,17 @@ describe("<Planner /> wizard", () => {
       target: { value: "2025-01-15" },
     });
     next(); // → step 2
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
+    openSection(container, "a", "goals");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
     fireEvent.change(container.querySelector("#a-goal-date")!, {
       target: { value: futureIso(60) },
     });
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
@@ -214,13 +231,16 @@ describe("<Planner /> wizard", () => {
       target: { value: "2025-01-15" },
     });
     next(); // → step 2
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
+    openSection(container, "b", "goals");
     fireEvent.click(container.querySelector("#b-goal-budget")!);
     showPlan();
     expect(screen.getAllByText(/Inom budget/).length).toBeGreaterThan(0);
@@ -230,6 +250,7 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
     // Second caregiver (B) saves 30 days for later.
+    openSection(container, "b", "goals");
     fireEvent.change(container.querySelector("#b-save-days")!, {
       target: { value: "30" },
     });
@@ -340,10 +361,12 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#include-lagsta")!);
     next(); // → step 2
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
@@ -362,10 +385,12 @@ describe("<Planner /> wizard", () => {
     });
     fireEvent.click(container.querySelector("#twins")!);
     next(); // → step 2
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
@@ -382,17 +407,21 @@ describe("<Planner /> wizard", () => {
     });
     // First child: the carried-over field is not asked.
     next();
+    openSection(container, "a", "goals");
     expect(container.querySelector("#a-extra")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
     fireEvent.click(container.querySelector("#child-number-2")!);
     next(); // → step 2 — now it is.
+    openSection(container, "a", "economy");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
+    openSection(container, "a", "goals");
     fireEvent.change(container.querySelector("#a-extra")!, {
       target: { value: "40" },
     });
     next(); // → step 3
+    openSection(container, "b", "economy");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });

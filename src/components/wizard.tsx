@@ -34,7 +34,7 @@ import {
 } from "@/lib/calc";
 import type { GoalMode } from "@/lib/goal-seek";
 import { MONEY, isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
-import { formatSek } from "@/lib/format";
+import { formatDate, formatSek } from "@/lib/format";
 import { isValidIsoDate, parseIsoDate } from "@/lib/dates";
 import type { ShareableState } from "@/lib/share";
 import { cn } from "@/lib/utils";
@@ -61,10 +61,13 @@ export function Wizard({
 }) {
   const [step, setStep] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Which accordion section is open within a caregiver step (checkout-style).
+  const [section, setSection] = useState(0);
 
   const goTo = (s: number) => {
     setStep(s);
     setAdvancedOpen(false);
+    setSection(0);
   };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
@@ -166,14 +169,87 @@ export function Wizard({
     </div>
   );
 
-  /** The typical caregiver questions: name, salary, benefits opt-out. */
-  const caregiverBasics = (id: ParentId) => {
+  /** One checkout-style accordion section: number, title, summary, content. */
+  const sectionShell = (opts: {
+    prefix: string;
+    sectionKey: string;
+    index: number;
+    title: string;
+    summary: string;
+    last?: boolean;
+    children: React.ReactNode;
+  }) => {
+    const open = section === opts.index;
+    return (
+      <div
+        key={opts.sectionKey}
+        className={cn("rounded-lg border", open && "border-primary/50")}
+      >
+        <button
+          type="button"
+          id={`${opts.prefix}-section-${opts.sectionKey}`}
+          onClick={() => setSection(opts.index)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-2.5 p-3 text-left"
+        >
+          <span
+            className={cn(
+              "flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+              open
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            {opts.index + 1}
+          </span>
+          <span className="shrink-0 text-sm font-medium">{opts.title}</span>
+          {!open && (
+            <span className="text-muted-foreground ml-auto min-w-0 truncate text-xs">
+              {opts.summary}
+            </span>
+          )}
+        </button>
+        {open && (
+          <div className="space-y-3 border-t p-3">
+            {opts.children}
+            {!opts.last && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSection(opts.index + 1)}
+                >
+                  Fortsätt <IconArrowRight />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /**
+   * A caregiver's questions as accordion sections (like an ecommerce
+   * checkout): name → salary & benefits → goals & saved days.
+   */
+  const caregiverAccordion = (id: ParentId) => {
     const prefix = id.toLowerCase();
     const value = plan.parents[id];
     const income = value.grossMonthlyIncome;
     const aboveCap = value.incomeAboveCap ?? false;
     const rate = sjukpenningnivaDailyAmount(income);
     const supplement = id === "A" ? supplementA : supplementB;
+    const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
+    const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
+    const budget = (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
+    const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? 0;
+    const extraDays = id === "A" ? extraDaysA : extraDaysB;
+    const displayName =
+      value.name?.trim() || (soloMode ? "Du" : `Vårdnadshavare ${id}`);
+    const goalName =
+      value.name?.trim() || (soloMode ? "du" : `Vårdnadshavare ${id}`);
     const amountHint =
       income > 0
         ? isAboveSgiCap(income)
@@ -184,127 +260,175 @@ export function Wizard({
       MONEY.maxSjukpenningPerDay,
     )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
 
-    return (
-      <div className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
-          <Input
-            id={`${prefix}-name`}
-            value={value.name ?? ""}
-            placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
-            onChange={(e) => setParent(id, { ...value, name: e.target.value })}
-          />
-        </div>
-        <IncomeField
-          id={`${prefix}-income`}
-          label="Bruttolön per månad (kr)"
-          value={income}
-          aboveCap={aboveCap}
-          onValueChange={(n) =>
-            setParent(id, { ...value, grossMonthlyIncome: n })
-          }
-          onAboveCapChange={(b) =>
-            setParent(id, { ...value, incomeAboveCap: b })
-          }
-          amountHint={amountHint}
-          capHint={capHint}
-        />
+    const economySummary = [
+      aboveCap
+        ? "Över taket"
+        : income > 0
+          ? `${formatSek(income)}/mån`
+          : "Ange lön",
+      supplement.enabled
+        ? `föräldralön ${supplement.pct} % i ${supplement.months} mån`
+        : "ingen föräldralön",
+    ].join(" · ");
+    const goalSummary = [
+      mode === "untilDate"
+        ? dateStr && isValidIsoDate(dateStr)
+          ? `Hemma till ${formatDate(parseIsoDate(dateStr))}`
+          : "Hemma till ett datum"
+        : mode === "budget"
+          ? "Inom budget"
+          : "Justera själv",
+      ...(saveDays > 0 ? [`sparar ${saveDays} dagar`] : []),
+    ].join(" · ");
 
-        {/* Employer top-up: most collective agreements have one, so it's on by
-            default — the details (percent, months) live under Avancerat. */}
-        <CheckRow
-          id={`${prefix}-no-supplement`}
-          checked={!supplement.enabled}
-          onChange={(b) => setSupplement(id, { ...supplement, enabled: !b })}
-        >
-          <span className="font-normal">
-            Ingen föräldralön från arbetsgivaren (inget kollektivavtal)
-          </span>
-        </CheckRow>
-        {supplement.enabled && (
-          <p className="text-muted-foreground -mt-1 text-xs">
-            Räknar med föräldralön som fyller upp till {supplement.pct} % av
-            lönen i {supplement.months} månader — justera under Avancerade
-            inställningar.
-          </p>
-        )}
+    return (
+      <div className="space-y-2">
+        {sectionShell({
+          prefix,
+          sectionKey: "name",
+          index: 0,
+          title: "Namn",
+          summary: displayName,
+          children: (
+            <div className="space-y-1.5">
+              <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
+              <Input
+                id={`${prefix}-name`}
+                value={value.name ?? ""}
+                placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
+                onChange={(e) =>
+                  setParent(id, { ...value, name: e.target.value })
+                }
+              />
+            </div>
+          ),
+        })}
+
+        {sectionShell({
+          prefix,
+          sectionKey: "economy",
+          index: 1,
+          title: "Lön & förmåner",
+          summary: economySummary,
+          children: (
+            <>
+              <IncomeField
+                id={`${prefix}-income`}
+                label="Bruttolön per månad (kr)"
+                value={income}
+                aboveCap={aboveCap}
+                onValueChange={(n) =>
+                  setParent(id, { ...value, grossMonthlyIncome: n })
+                }
+                onAboveCapChange={(b) =>
+                  setParent(id, { ...value, incomeAboveCap: b })
+                }
+                amountHint={amountHint}
+                capHint={capHint}
+              />
+              {/* Employer top-up: most collective agreements have one, so it's
+                  on by default — details (percent, months) under Avancerat. */}
+              <CheckRow
+                id={`${prefix}-no-supplement`}
+                checked={!supplement.enabled}
+                onChange={(b) =>
+                  setSupplement(id, { ...supplement, enabled: !b })
+                }
+              >
+                <span className="font-normal">
+                  Ingen föräldralön från arbetsgivaren (inget kollektivavtal)
+                </span>
+              </CheckRow>
+              {supplement.enabled && (
+                <p className="text-muted-foreground -mt-1 text-xs">
+                  Räknar med föräldralön som fyller upp till {supplement.pct} %
+                  av lönen i {supplement.months} månader — justera under
+                  Avancerade inställningar.
+                </p>
+              )}
+            </>
+          ),
+        })}
+
+        {sectionShell({
+          prefix,
+          sectionKey: "goals",
+          index: 2,
+          title: "Mål & sparade dagar",
+          summary: goalSummary,
+          last: true,
+          children: (
+            <>
+              <CaregiverGoalControl
+                idPrefix={prefix}
+                name={goalName}
+                mode={mode}
+                dateStr={dateStr}
+                budget={budget}
+                birth={birth}
+                onMode={(m: GoalMode) =>
+                  setForm((f) =>
+                    id === "A"
+                      ? { ...f, goalModeA: m }
+                      : { ...f, goalModeB: m },
+                  )
+                }
+                onDate={(iso) =>
+                  setForm((f) =>
+                    id === "A"
+                      ? { ...f, goalDateA: iso }
+                      : { ...f, goalDateB: iso },
+                  )
+                }
+                onBudget={(kr) =>
+                  setForm((f) =>
+                    id === "A"
+                      ? { ...f, goalBudgetA: Math.max(0, Math.round(kr)) }
+                      : { ...f, goalBudgetB: Math.max(0, Math.round(kr)) },
+                  )
+                }
+              />
+
+              <NumberField
+                id={`${prefix}-save-days`}
+                label="Dagar att spara till senare"
+                value={saveDays}
+                min={0}
+                stepper
+                slider
+                sliderMax={200}
+                onChange={(n) =>
+                  setForm((f) =>
+                    id === "A"
+                      ? { ...f, saveDaysA: n }
+                      : { ...f, saveDaysB: n },
+                  )
+                }
+                hint="Till klämdagar, lov och inskolning. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen."
+              />
+
+              {childNumber >= 2 && (
+                <NumberField
+                  id={`${prefix}-extra`}
+                  label="Sparade dagar kvar från tidigare barn"
+                  value={extraDays}
+                  stepper
+                  slider
+                  sliderMax={200}
+                  onChange={(n) =>
+                    setForm((f) =>
+                      id === "A"
+                        ? { ...f, extraDaysA: n }
+                        : { ...f, extraDaysB: n },
+                    )
+                  }
+                  hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
+                />
+              )}
+            </>
+          ),
+        })}
       </div>
-    );
-  };
-
-  /** Per-caregiver goal + savings, the heart of steps 2 and 3. */
-  const caregiverPlanFields = (id: ParentId) => {
-    const prefix = id.toLowerCase();
-    const name =
-      plan.parents[id].name?.trim() ||
-      (soloMode ? "du" : `Vårdnadshavare ${id}`);
-    const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
-    const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
-    const budget = (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
-    const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? 0;
-    const extraDays = id === "A" ? extraDaysA : extraDaysB;
-    return (
-      <>
-        <Separator />
-        <CaregiverGoalControl
-          idPrefix={prefix}
-          name={name}
-          mode={mode}
-          dateStr={dateStr}
-          budget={budget}
-          birth={birth}
-          onMode={(m: GoalMode) =>
-            setForm((f) =>
-              id === "A" ? { ...f, goalModeA: m } : { ...f, goalModeB: m },
-            )
-          }
-          onDate={(iso) =>
-            setForm((f) =>
-              id === "A" ? { ...f, goalDateA: iso } : { ...f, goalDateB: iso },
-            )
-          }
-          onBudget={(kr) =>
-            setForm((f) =>
-              id === "A"
-                ? { ...f, goalBudgetA: Math.max(0, Math.round(kr)) }
-                : { ...f, goalBudgetB: Math.max(0, Math.round(kr)) },
-            )
-          }
-        />
-
-        <NumberField
-          id={`${prefix}-save-days`}
-          label="Dagar att spara till senare"
-          value={saveDays}
-          min={0}
-          stepper
-          slider
-          sliderMax={200}
-          onChange={(n) =>
-            setForm((f) =>
-              id === "A" ? { ...f, saveDaysA: n } : { ...f, saveDaysB: n },
-            )
-          }
-          hint="Till klämdagar, lov och inskolning. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen."
-        />
-
-        {childNumber >= 2 && (
-          <NumberField
-            id={`${prefix}-extra`}
-            label="Sparade dagar kvar från tidigare barn"
-            value={extraDays}
-            stepper
-            slider
-            sliderMax={200}
-            onChange={(n) =>
-              setForm((f) =>
-                id === "A" ? { ...f, extraDaysA: n } : { ...f, extraDaysB: n },
-              )
-            }
-            hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
-          />
-        )}
-      </>
     );
   };
 
@@ -739,8 +863,7 @@ export function Wizard({
                 : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
             </p>
 
-            {caregiverBasics(firstId)}
-            {caregiverPlanFields(firstId)}
+            {caregiverAccordion(firstId)}
 
             <Separator />
             {advanced(caregiverAdvanced(firstId))}
@@ -778,8 +901,7 @@ export function Wizard({
                   är klar.
                 </p>
 
-                {caregiverBasics(secondId)}
-                {caregiverPlanFields(secondId)}
+                {caregiverAccordion(secondId)}
               </>
             )}
 
