@@ -94,7 +94,10 @@ export function Wizard({
       setAdvancedOpen(false);
       setSection(0);
     });
+    // Forward nav auto-scrolls via the focused field; on back, start the
+    // step from the top instead of inheriting the old scroll depth.
     if (focus) focusFieldIn(formRef.current);
+    else window.scrollTo(0, 0);
   };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
@@ -220,7 +223,7 @@ export function Wizard({
         id="advanced-options"
         onClick={() => setAdvancedOpen((o) => !o)}
         aria-expanded={advancedOpen}
-        className="text-muted-foreground hover:text-foreground flex min-h-11 items-center gap-1.5 text-sm font-medium sm:min-h-0"
+        className="text-muted-foreground hover:text-foreground active:text-foreground flex min-h-11 items-center gap-1.5 text-sm font-medium sm:min-h-0"
       >
         <IconAdjustments className="size-4" />
         Avancerade inställningar
@@ -256,7 +259,7 @@ export function Wizard({
           id={`${opts.prefix}-section-${opts.sectionKey}`}
           onClick={() => openSectionAndFocus(opts.prefix, opts.index)}
           aria-expanded={open}
-          className="flex min-h-12 w-full items-center gap-2.5 p-3 text-left sm:min-h-0"
+          className="active:bg-secondary/50 flex min-h-12 w-full items-center gap-2.5 p-3 text-left sm:min-h-0"
         >
           <span
             className={cn(
@@ -765,7 +768,7 @@ export function Wizard({
                 {CHILD_NUMBERS.map((c) => (
                   <label
                     key={c.value}
-                    className={`flex min-h-12 cursor-pointer items-center gap-2.5 rounded-lg border p-3 text-base sm:min-h-0 sm:gap-2 sm:p-2.5 sm:text-sm ${
+                    className={`active:bg-secondary/60 flex min-h-12 cursor-pointer items-center gap-2.5 rounded-lg border p-3 text-base sm:min-h-0 sm:gap-2 sm:p-2.5 sm:text-sm ${
                       childNumber === c.value
                         ? "border-primary bg-secondary/40"
                         : ""

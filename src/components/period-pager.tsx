@@ -122,7 +122,7 @@ export function PeriodPager({
             aria-label={`Period ${i + 1}: ${per.caregiver}`}
             onClick={() => setIdx(i)}
             className={cn(
-              "h-3.5 flex-1 rounded-full transition-opacity sm:h-2.5",
+              "h-3.5 flex-1 rounded-full transition-opacity active:opacity-80 sm:h-2.5",
               CG_BAR[Math.max(0, cgOrder.indexOf(per.caregiver)) % CG_BAR.length],
               i === current ? "opacity-100" : "opacity-35 hover:opacity-60",
             )}
@@ -180,7 +180,7 @@ export function PeriodPager({
             <button
               type="button"
               onClick={() => editing.onClearEnd(id)}
-              className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+              className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
             >
               Släpp slutdatumet (automatisk längd)
             </button>
@@ -189,7 +189,7 @@ export function PeriodPager({
             <button
               type="button"
               onClick={() => editing.onStartDate(id, null)}
-              className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+              className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
             >
               Återställ startdatumet
             </button>

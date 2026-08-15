@@ -15,7 +15,7 @@ export function CheckRow({
   return (
     <label
       htmlFor={id}
-      className="flex min-h-11 cursor-pointer items-center gap-2.5 text-base font-medium select-none sm:min-h-0 sm:gap-2 sm:text-sm"
+      className="flex min-h-11 cursor-pointer items-center gap-2.5 text-base font-medium select-none active:opacity-70 sm:min-h-0 sm:gap-2 sm:text-sm"
     >
       <input
         id={id}

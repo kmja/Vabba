@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 const DESCRIPTION =
-  "Planeringshjälp för föräldrapenning och vab (vård av barn). Räkna ut dagar och fördelning lokalt i webbläsaren. Inte officiell rådgivning.";
+  "Planeringshjälp för föräldrapenning och vab (vård av barn). Räkna ut dagar och fördelning lokalt i webbläsaren.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://vabba.pages.dev"),
@@ -52,6 +52,11 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
   ],
+  // cover: lets env(safe-area-inset-*) pad the pinned wizard nav on iOS.
+  viewportFit: "cover",
+  // resizes-content: the Android keyboard shrinks the viewport instead of
+  // covering the pinned bottom bar.
+  interactiveWidget: "resizes-content",
 };
 
 // Set the colour theme before paint so there's no flash. Reads a saved choice,
@@ -78,11 +83,8 @@ export default function RootLayout({
         <footer className="border-t">
           <div className="text-muted-foreground mx-auto w-full max-w-5xl px-4 py-6 text-xs sm:px-6">
             <p className="max-w-3xl">
-              Planeringsverktyg, inte officiell rådgivning och inte ett beslut
-              från Försäkringskassan. Beloppen är uppskattningar före skatt och
-              kan vara inaktuella. Kontrollera alltid aktuella regler och belopp
-              hos Försäkringskassan. Alla beräkningar sker lokalt i din
-              webbläsare och inga uppgifter lämnar din enhet.
+              Alla beräkningar sker lokalt i din webbläsare och inga uppgifter
+              lämnar din enhet.
             </p>
           </div>
         </footer>

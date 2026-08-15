@@ -73,7 +73,7 @@ export function CaregiverGoalControl({
         {MODES.map((m) => (
           <label
             key={m.value}
-            className={`flex cursor-pointer gap-2.5 rounded-lg border p-3 ${
+            className={`active:bg-secondary/60 flex cursor-pointer gap-2.5 rounded-lg border p-3 ${
               mode === m.value ? "border-primary bg-secondary/40" : ""
             }`}
           >
@@ -112,7 +112,7 @@ export function CaregiverGoalControl({
                   key={p.label}
                   type="button"
                   onClick={() => onDate(toIsoDate(p.date))}
-                  className="text-muted-foreground hover:text-foreground min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
+                  className="text-muted-foreground hover:text-foreground active:bg-secondary/60 min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
                 >
                   {p.label} · {formatDate(p.date)}
                 </button>

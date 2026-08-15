@@ -746,7 +746,10 @@ export function Planner() {
         birthDaysName={birthDaysName}
         savedLagstaDays={includeLagsta ? 0 : (remaining?.remaining.lagsta ?? 0)}
         warnings={warnings}
-        onEdit={() => setForm((f) => ({ ...f, submitted: false }))}
+        onEdit={() => {
+          window.scrollTo(0, 0);
+          setForm((f) => ({ ...f, submitted: false }));
+        }}
         onReset={() => setForm(DEFAULT_STATE)}
         onShare={share}
         copied={copied}
@@ -759,7 +762,10 @@ export function Planner() {
       form={form}
       setForm={setForm}
       valid={valid}
-      onSubmit={() => setForm((f) => ({ ...f, submitted: true }))}
+      onSubmit={() => {
+        window.scrollTo(0, 0);
+        setForm((f) => ({ ...f, submitted: true }));
+      }}
       onReset={() => setForm(DEFAULT_STATE)}
     />
   );
