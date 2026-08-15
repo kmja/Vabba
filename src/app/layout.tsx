@@ -80,14 +80,6 @@ export default function RootLayout({
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
           {children}
         </main>
-        <footer className="border-t">
-          <div className="text-muted-foreground mx-auto w-full max-w-5xl px-4 py-6 text-xs sm:px-6">
-            <p className="max-w-3xl">
-              Alla beräkningar sker lokalt i din webbläsare och inga uppgifter
-              lämnar din enhet.
-            </p>
-          </div>
-        </footer>
       </body>
     </html>
   );
