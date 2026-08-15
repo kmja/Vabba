@@ -17,13 +17,32 @@ afterEach(() => {
  * Wizard: 3 steps (Barnet → Hemma först → Den andra), each a flow of
  * FlowQuestion accordions — answering one collapses it and opens the next.
  */
+/**
+ * The footer's Nästa is flow-aware: it advances through the step's remaining
+ * questions first, then changes step. This helper clicks until the step
+ * indicator changes. (Exact name — the calendar has a "Nästa månad" button.)
+ */
 function next() {
-  // Exact name — the inline calendar has a "Nästa månad" button too.
-  fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+  const stepLabel = () => screen.getByText(/Steg \d av \d/).textContent;
+  const before = stepLabel();
+  for (let i = 0; i < 10; i++) {
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    if (stepLabel() !== before) return;
+  }
+  throw new Error("Nästa never advanced the step");
 }
 
+/** Walk the last step's remaining questions until "Visa plan" appears. */
 function showPlan() {
-  fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+  for (let i = 0; i < 10; i++) {
+    const visa = screen.queryByRole("button", { name: /Visa plan/ });
+    if (visa) {
+      fireEvent.click(visa);
+      return;
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+  }
+  throw new Error("Visa plan never appeared");
 }
 
 /** Open a specific flow question (its header is always clickable). */
@@ -221,10 +240,21 @@ describe("<Planner /> wizard", () => {
     expect(document.activeElement?.id).toBe("a-save-days");
   });
 
-  it("blocks step 1 until a birth date is entered", () => {
-    render(<Planner />);
-    const nextBtn = screen.getByRole("button", { name: "Nästa" });
-    expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
+  it("walks the questions with Nästa and blocks the step until a date is set", () => {
+    const { container } = render(<Planner />);
+    const nextBtn = () =>
+      screen.getByRole("button", { name: "Nästa" }) as HTMLButtonElement;
+    // While questions remain, Nästa advances through them (not the step).
+    expect(nextBtn().disabled).toBe(false);
+    fireEvent.click(nextBtn()); // date → order (no date picked)
+    expect(
+      container.querySelector("#q-order")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    fireEvent.click(nextBtn()); // order → count
+    fireEvent.click(nextBtn()); // count → flow done
+    // Flow walked but no birth date → the step itself is blocked.
+    expect(nextBtn().disabled).toBe(true);
+    expect(container.querySelector("#a-income")).toBeNull();
   });
 
   it("can reopen the inputs from the results page", () => {

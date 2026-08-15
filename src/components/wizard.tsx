@@ -1214,19 +1214,28 @@ export function Wizard({
             )}
           </Button>
 
-          {current < stepCount ? (
-            <Button
-              type="button"
-              disabled={!canAdvance}
-              onClick={() => goTo(current + 1, true)}
-            >
-              Nästa <IconArrowRight />
-            </Button>
-          ) : (
-            <Button type="button" disabled={!valid} onClick={onSubmit}>
-              Visa plan <IconArrowRight />
-            </Button>
-          )}
+          {/* Flow-aware: while a question is open, Nästa advances THROUGH the
+              step's questions (same as Enter); only when the flow is walked
+              does it change step — and become "Visa plan" on the last one. */}
+          {(() => {
+            const inFlow = activeQ !== "" && flowOf(current).includes(activeQ);
+            if (current === stepCount && !inFlow) {
+              return (
+                <Button type="button" disabled={!valid} onClick={onSubmit}>
+                  Visa plan <IconArrowRight />
+                </Button>
+              );
+            }
+            return (
+              <Button
+                type="button"
+                disabled={!inFlow && !canAdvance}
+                onClick={primaryAction}
+              >
+                Nästa <IconArrowRight />
+              </Button>
+            );
+          })()}
         </div>
       </form>
     </Card>
