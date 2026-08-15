@@ -73,6 +73,21 @@ so it deploys as plain static assets — no server runtime or Next adapter neede
 - Build output directory: `out`
 - No environment variables required.
 
+**Optional — "Continue with Google" name prefill:** the wizard can show a
+Google sign-in button that prefills the first caregiver's name from the
+Google account (client-side only; the token is decoded in the browser and
+nothing is stored or sent anywhere). To enable it:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth 2.0 Client ID** (type: *Web application*).
+2. Add the production domain and `http://localhost:3000` under **Authorized
+   JavaScript origins** (no redirect URI needed).
+3. Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` to the client ID — locally in
+   `.env.local`, and in Cloudflare Pages under Settings → Environment
+   variables (it's inlined at build time).
+
+Without the variable the button is hidden and the app behaves as before.
+
 **Via Git integration (recommended):** in the Cloudflare dashboard, Workers &
 Pages → Create → Pages → Connect to Git, then set the build command and output
 directory above. Every push deploys.

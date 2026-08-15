@@ -26,6 +26,7 @@ import { IncomeField } from "@/components/income-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
 import { CaregiverGoalControl } from "@/components/goal-picker";
+import { GoogleNameButton } from "@/components/google-name";
 import {
   type ParentId,
   type ParentInput,
@@ -290,17 +291,32 @@ export function Wizard({
           title: "Namn",
           summary: displayName,
           children: (
-            <div className="space-y-1.5">
-              <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
-              <Input
-                id={`${prefix}-name`}
-                value={value.name ?? ""}
-                placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
-                onChange={(e) =>
-                  setParent(id, { ...value, name: e.target.value })
-                }
-              />
-            </div>
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
+                <Input
+                  id={`${prefix}-name`}
+                  value={value.name ?? ""}
+                  placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
+                  onChange={(e) =>
+                    setParent(id, { ...value, name: e.target.value })
+                  }
+                />
+              </div>
+              {/* The person filling this in is usually the first caregiver —
+                  offer their Google name as the default (prefills only when
+                  the field is empty). */}
+              {id === firstId && (
+                <GoogleNameButton
+                  onName={(n) =>
+                    setParent(id, {
+                      ...value,
+                      name: value.name?.trim() ? value.name : n,
+                    })
+                  }
+                />
+              )}
+            </>
           ),
         })}
 
