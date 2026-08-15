@@ -124,3 +124,19 @@
     scroll-margin-block: 6rem;
   }
 }
+
+/* Step content slides in as the wizard advances. */
+@keyframes flow-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.animate-flow-in {
+  animation: flow-in 0.3s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-flow-in {
+    animation: none;
+  }
+}

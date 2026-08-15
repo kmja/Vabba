@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type ReactNode,
   type SetStateAction,
 } from "react";
 import { flushSync } from "react-dom";
@@ -11,6 +12,7 @@ import {
   IconAdjustments,
   IconArrowLeft,
   IconArrowRight,
+  IconBabyCarriage,
   IconChevronDown,
   IconRefresh,
 } from "@tabler/icons-react";
@@ -25,7 +27,8 @@ import { NumberField } from "@/components/number-field";
 import { IncomeField } from "@/components/income-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
-import { CaregiverGoalControl } from "@/components/goal-picker";
+import { FlowQuestion } from "@/components/flow-question";
+import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
 import {
   type ParentId,
@@ -36,7 +39,13 @@ import {
 import type { GoalMode } from "@/lib/goal-seek";
 import { MONEY, isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { formatDate, formatSek } from "@/lib/format";
-import { isValidIsoDate, parseIsoDate } from "@/lib/dates";
+import {
+  addMonths,
+  addYears,
+  isValidIsoDate,
+  parseIsoDate,
+  toIsoDate,
+} from "@/lib/dates";
 import type { ShareableState } from "@/lib/share";
 import { cn } from "@/lib/utils";
 
@@ -44,8 +53,93 @@ const CHILD_NUMBERS = [
   { value: 1, label: "Första" },
   { value: 2, label: "Andra" },
   { value: 3, label: "Tredje" },
-  { value: 4, label: "Fjärde eller senare" },
+  { value: 4, label: "Fjärde+" },
 ];
+
+const BIRTH_COUNTS = [
+  { value: 1, label: "Ett barn" },
+  { value: 2, label: "Tvillingar" },
+  { value: 3, label: "Trillingar" },
+  { value: 4, label: "Fyra barn" },
+];
+
+const GOAL_MODES: { value: GoalMode; label: string; desc: string }[] = [
+  {
+    value: "manual",
+    label: "Justera själv",
+    desc: "Full takt som utgångsläge — finjustera med reglagen på resultatsidan.",
+  },
+  {
+    value: "untilDate",
+    label: "Hemma till ett datum",
+    desc: "Räkna baklänges från t.ex. förskolestarten — dagar som blir över sparas.",
+  },
+  {
+    value: "budget",
+    label: "Så länge budgeten tillåter",
+    desc: "Längsta möjliga ledighet där hushållet ändå klarar sin månadsbudget.",
+  },
+];
+
+/** The first of August after the child's 1st birthday — typical förskolestart. */
+function forskolestart(birth: Date): Date {
+  const oneYear = addYears(birth, 1);
+  const aug = new Date(Date.UTC(oneYear.getUTCFullYear(), 7, 1));
+  return aug.getTime() >= oneYear.getTime()
+    ? aug
+    : new Date(Date.UTC(oneYear.getUTCFullYear() + 1, 7, 1));
+}
+
+/** A row of baby-carriage icons — the pictogram for "n children". */
+function BabyIcons({ count }: { count: number }) {
+  return (
+    <span className="text-primary flex items-center justify-center gap-0.5">
+      {Array.from({ length: count }, (_, i) => (
+        <IconBabyCarriage key={i} className="size-6" />
+      ))}
+    </span>
+  );
+}
+
+/** A big, animated selection target used by the choice questions. */
+function OptionCard({
+  id,
+  selected,
+  onSelect,
+  icon,
+  label,
+  desc,
+}: {
+  id: string;
+  selected: boolean;
+  onSelect: () => void;
+  icon?: ReactNode;
+  label: string;
+  desc?: string;
+}) {
+  return (
+    <button
+      type="button"
+      id={id}
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        "flex min-h-14 w-full flex-col items-center justify-center gap-1.5 rounded-xl border p-3 text-center transition-[transform,border-color,background-color] duration-200 active:scale-95",
+        selected
+          ? "border-primary bg-secondary/50 shadow-sm"
+          : "hover:bg-secondary/30",
+      )}
+    >
+      {icon}
+      <span className="text-base font-medium sm:text-sm">{label}</span>
+      {desc && (
+        <span className="text-muted-foreground text-xs leading-snug">
+          {desc}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export function Wizard({
   form,
@@ -62,37 +156,41 @@ export function Wizard({
 }) {
   const [step, setStep] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  // Which accordion section is open within a caregiver step (checkout-style).
-  const [section, setSection] = useState(0);
+  // The question currently in focus (its FlowQuestion id); "" = none.
+  const [activeQ, setActiveQ] = useState("q-date");
 
   const formRef = useRef<HTMLFormElement>(null);
 
   const FIELD_SELECTOR =
     'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]), select';
 
-  /** Focus the first field in `root` — the keyboard follows the flow. */
+  /** Focusable fields, excluding those inside collapsed (inert) panels. */
+  const visibleFields = (root: ParentNode | null): HTMLElement[] =>
+    Array.from(root?.querySelectorAll<HTMLElement>(FIELD_SELECTOR) ?? []).filter(
+      (el) => !el.closest("[inert]"),
+    );
+
+  /** Focus the first visible field in `root` — the keyboard follows along. */
   const focusFieldIn = (root: ParentNode | null) => {
-    root?.querySelector<HTMLElement>(FIELD_SELECTOR)?.focus();
+    visibleFields(root)[0]?.focus();
   };
 
-  const SECTION_KEYS = ["name", "economy", "goals"] as const;
-
   /**
-   * Open an accordion section AND focus its first field in the same user
-   * gesture (flushSync) — required for the mobile keyboard to stay open.
+   * Open a question AND focus its first field in the same user gesture
+   * (flushSync) — required for the mobile keyboard to stay open.
    */
-  const openSectionAndFocus = (prefix: string, index: number) => {
-    flushSync(() => setSection(index));
-    focusFieldIn(
-      document.getElementById(`${prefix}-section-${SECTION_KEYS[index]}-panel`),
-    );
+  const openQ = (qid: string) => {
+    flushSync(() => setActiveQ(qid));
+    const panel = document.getElementById(`${qid}-panel`);
+    focusFieldIn(panel);
+    panel?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   };
 
   const goTo = (s: number, focus = false) => {
     flushSync(() => {
       setStep(s);
       setAdvancedOpen(false);
-      setSection(0);
+      setActiveQ(firstQuestionOf(s));
     });
     // Forward nav auto-scrolls via the focused field; on back, start the
     // step from the top instead of inheriting the old scroll depth.
@@ -126,7 +224,6 @@ export function Wizard({
   const birthDaysEnabled = form.birthDaysEnabled ?? false;
   const birthDaysCaregiver = form.birthDaysCaregiver ?? "B";
   const birthDaysCount = form.birthDaysCount ?? 10;
-  const twins = plan.childrenInBirth >= 2;
   const birth =
     valid && isValidIsoDate(plan.birthDate)
       ? parseIsoDate(plan.birthDate)
@@ -156,14 +253,44 @@ export function Wizard({
   const firstId: ParentId = soloMode ? "A" : firstCaregiver;
   const secondId: ParentId = firstId === "A" ? "B" : "A";
 
+  /** The ordered question ids of a caregiver's flow. */
+  const cgFlow = (id: ParentId): string[] => {
+    const p = id.toLowerCase();
+    return [
+      `${p}-q-name`,
+      `${p}-q-income`,
+      `${p}-q-supplement`,
+      `${p}-q-goal`,
+      `${p}-q-save`,
+      ...(childNumber >= 2 ? [`${p}-q-extra`] : []),
+    ];
+  };
+
+  const flowOf = (s: number): string[] => {
+    if (s === 1) return ["q-date", "q-order", "q-count"];
+    if (s === 2) return cgFlow(firstId);
+    return soloMode ? [] : cgFlow(secondId);
+  };
+
+  const firstQuestionOf = (s: number): string => flowOf(s)[0] ?? "";
+
+  /** Collapse the answered question and bring the next one into focus. */
+  const advanceQ = (qid: string) => {
+    const flow = flowOf(current);
+    const next = flow[flow.indexOf(qid) + 1];
+    if (next) {
+      openQ(next);
+    } else {
+      flushSync(() => setActiveQ(""));
+    }
+  };
+
   // The step's implicit next action (for the mobile keyboard's Enter):
-  // advance the open accordion section, then the step, then show the plan.
+  // advance the open question, then the step, then show the plan.
   const primaryAction = () => {
-    const inAccordion =
-      current >= 2 && !(current === 3 && soloMode) && section < 2;
-    if (inAccordion) {
-      const prefix = (current === 2 ? firstId : secondId).toLowerCase();
-      openSectionAndFocus(prefix, section + 1);
+    const flow = flowOf(current);
+    if (activeQ && flow.includes(activeQ)) {
+      advanceQ(activeQ);
       return;
     }
     if (current < stepCount) {
@@ -187,9 +314,7 @@ export function Wizard({
       return;
     }
     e.preventDefault();
-    const fields = Array.from(
-      formRef.current?.querySelectorAll<HTMLElement>(FIELD_SELECTOR) ?? [],
-    );
+    const fields = visibleFields(formRef.current);
     const next = fields[fields.indexOf(el) + 1];
     if (next) next.focus();
     else primaryAction();
@@ -215,8 +340,17 @@ export function Wizard({
           },
     );
 
+  /** A "Fortsätt" row inside input questions (choices advance on their own). */
+  const continueRow = (qid: string) => (
+    <div className="flex justify-end">
+      <Button type="button" size="sm" onClick={() => advanceQ(qid)}>
+        Fortsätt <IconArrowRight />
+      </Button>
+    </div>
+  );
+
   /** Collapsed "Avancerade inställningar" section at the bottom of a step. */
-  const advanced = (children: React.ReactNode) => (
+  const advanced = (children: ReactNode) => (
     <div className="space-y-4">
       <button
         type="button"
@@ -238,77 +372,107 @@ export function Wizard({
     </div>
   );
 
-  /** One checkout-style accordion section: number, title, summary, content. */
-  const sectionShell = (opts: {
-    prefix: string;
-    sectionKey: string;
-    index: number;
-    title: string;
-    summary: string;
-    last?: boolean;
-    children: React.ReactNode;
-  }) => {
-    const open = section === opts.index;
-    return (
-      <div
-        key={opts.sectionKey}
-        className={cn("rounded-lg border", open && "border-primary/50")}
-      >
-        <button
-          type="button"
-          id={`${opts.prefix}-section-${opts.sectionKey}`}
-          onClick={() => openSectionAndFocus(opts.prefix, opts.index)}
-          aria-expanded={open}
-          className="active:bg-secondary/50 flex min-h-12 w-full items-center gap-2.5 p-3 text-left sm:min-h-0"
-        >
-          <span
-            className={cn(
-              "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold sm:size-5 sm:text-[11px]",
-              open
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
-            {opts.index + 1}
-          </span>
-          <span className="shrink-0 text-base font-medium sm:text-sm">{opts.title}</span>
-          {!open && (
-            <span className="text-muted-foreground ml-auto min-w-0 truncate text-xs">
-              {opts.summary}
-            </span>
-          )}
-        </button>
-        {open && (
-          <div
-            id={`${opts.prefix}-section-${opts.sectionKey}-panel`}
-            className="space-y-3 border-t p-3"
-          >
-            {opts.children}
-            {!opts.last && (
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    openSectionAndFocus(opts.prefix, opts.index + 1)
-                  }
-                >
-                  Fortsätt <IconArrowRight />
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
+  // ---------------------------------------------------------------------------
+  // Step 1: the baby, one question at a time
+  // ---------------------------------------------------------------------------
 
-  /**
-   * A caregiver's questions as accordion sections (like an ecommerce
-   * checkout): name → salary & benefits → goals & saved days.
-   */
-  const caregiverAccordion = (id: ParentId) => {
+  const babyFlow = (
+    <div className="space-y-2">
+      <FlowQuestion
+        id="q-date"
+        label="Födelsedatum (eller beräknat)"
+        value={birth ? formatDate(birth) : null}
+        open={activeQ === "q-date"}
+        answered={birth != null}
+        onOpen={() => openQ("q-date")}
+      >
+        <InlineCalendar
+          value={plan.birthDate}
+          inputId="birth-date"
+          onPick={(iso) => {
+            setPlan((p) => ({ ...p, birthDate: iso }));
+            advanceQ("q-date");
+          }}
+        />
+      </FlowQuestion>
+
+      <FlowQuestion
+        id="q-order"
+        label="Vilket barn i ordningen?"
+        value={
+          CHILD_NUMBERS.find((c) => c.value === childNumber)?.label ?? "Första"
+        }
+        open={activeQ === "q-order"}
+        answered
+        onOpen={() => openQ("q-order")}
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {CHILD_NUMBERS.map((c) => (
+            <OptionCard
+              key={c.value}
+              id={`child-number-${c.value}`}
+              selected={childNumber === c.value}
+              icon={<BabyIcons count={c.value} />}
+              label={c.label}
+              onSelect={() => {
+                setForm((f) => ({
+                  ...f,
+                  childNumber: c.value,
+                  hasExtraDays: c.value >= 2,
+                }));
+                advanceQ("q-order");
+              }}
+            />
+          ))}
+        </div>
+        {childNumber >= 2 && (
+          <p className="text-muted-foreground text-xs">
+            Varje barn har sin egen pott på 480 dagar. Dagar som finns kvar från
+            tidigare barn anger du hos respektive vårdnadshavare.
+          </p>
+        )}
+      </FlowQuestion>
+
+      <FlowQuestion
+        id="q-count"
+        label="Hur många barn i födseln?"
+        value={
+          BIRTH_COUNTS.find((c) => c.value === plan.childrenInBirth)?.label ??
+          "Ett barn"
+        }
+        open={activeQ === "q-count"}
+        answered
+        onOpen={() => openQ("q-count")}
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {BIRTH_COUNTS.map((c) => (
+            <OptionCard
+              key={c.value}
+              id={`birth-count-${c.value}`}
+              selected={plan.childrenInBirth === c.value}
+              icon={<BabyIcons count={c.value} />}
+              label={c.label}
+              onSelect={() => {
+                setPlan((p) => ({ ...p, childrenInBirth: c.value }));
+                advanceQ("q-count");
+              }}
+            />
+          ))}
+        </div>
+        {plan.childrenInBirth >= 2 && (
+          <p className="text-muted-foreground text-xs">
+            Flerbarnsfödsel ger extra dagar utöver de 480.
+          </p>
+        )}
+      </FlowQuestion>
+    </div>
+  );
+
+  // ---------------------------------------------------------------------------
+  // Steps 2 & 3: one caregiver, one question at a time
+  // ---------------------------------------------------------------------------
+
+  const caregiverFlow = (id: ParentId) => {
     const prefix = id.toLowerCase();
     const value = plan.parents[id];
     const income = value.grossMonthlyIncome;
@@ -333,190 +497,284 @@ export function Wizard({
     const capHint = `Räknar med högsta beloppet, ${formatSek(
       MONEY.maxSjukpenningPerDay,
     )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
+    const setGoal = (patch: {
+      mode?: GoalMode;
+      dateStr?: string;
+      budget?: number;
+    }) =>
+      setForm((f) =>
+        id === "A"
+          ? {
+              ...f,
+              ...(patch.mode !== undefined ? { goalModeA: patch.mode } : {}),
+              ...(patch.dateStr !== undefined
+                ? { goalDateA: patch.dateStr }
+                : {}),
+              ...(patch.budget !== undefined
+                ? { goalBudgetA: patch.budget }
+                : {}),
+            }
+          : {
+              ...f,
+              ...(patch.mode !== undefined ? { goalModeB: patch.mode } : {}),
+              ...(patch.dateStr !== undefined
+                ? { goalDateB: patch.dateStr }
+                : {}),
+              ...(patch.budget !== undefined
+                ? { goalBudgetB: patch.budget }
+                : {}),
+            },
+      );
 
-    const economySummary = [
-      aboveCap
-        ? "Över taket"
-        : income > 0
-          ? `${formatSek(income)}/mån`
-          : "Ange lön",
-      supplement.enabled
-        ? `föräldralön ${supplement.pct} % i ${supplement.months} mån`
-        : "ingen föräldralön",
-    ].join(" · ");
-    const goalSummary = [
+    const presets = birth
+      ? [
+          { label: "Förskolestart", date: forskolestart(birth) },
+          { label: "1,5 år", date: addMonths(birth, 18) },
+          { label: "2 år", date: addYears(birth, 2) },
+        ]
+      : [];
+
+    const goalValue =
       mode === "untilDate"
         ? dateStr && isValidIsoDate(dateStr)
           ? `Hemma till ${formatDate(parseIsoDate(dateStr))}`
           : "Hemma till ett datum"
         : mode === "budget"
-          ? "Inom budget"
-          : "Justera själv",
-      ...(saveDays > 0 ? [`sparar ${saveDays} dagar`] : []),
-    ].join(" · ");
+          ? `Budget ≥ ${formatSek(budget)}/mån`
+          : "Justera själv";
 
     return (
       <div className="space-y-2">
-        {sectionShell({
-          prefix,
-          sectionKey: "name",
-          index: 0,
-          title: "Namn",
-          summary: displayName,
-          children: (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
-                <Input
-                  id={`${prefix}-name`}
-                  value={value.name ?? ""}
-                  placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
-                  onChange={(e) =>
-                    setParent(id, { ...value, name: e.target.value })
-                  }
-                />
-              </div>
-              {/* The person filling this in is usually the first caregiver —
-                  offer their Google name as the default (prefills only when
-                  the field is empty). */}
-              {id === firstId && (
-                <GoogleNameButton
-                  onName={(n) =>
-                    setParent(id, {
-                      ...value,
-                      name: value.name?.trim() ? value.name : n,
-                    })
-                  }
-                />
-              )}
-            </>
-          ),
-        })}
+        <FlowQuestion
+          id={`${prefix}-q-name`}
+          label="Namn"
+          value={displayName}
+          open={activeQ === `${prefix}-q-name`}
+          answered
+          onOpen={() => openQ(`${prefix}-q-name`)}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
+            <Input
+              id={`${prefix}-name`}
+              autoComplete="given-name"
+              autoCapitalize="words"
+              value={value.name ?? ""}
+              placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
+              onChange={(e) => setParent(id, { ...value, name: e.target.value })}
+            />
+          </div>
+          {/* The person filling this in is usually the first caregiver —
+              offer their Google name as the default (prefills only when the
+              field is empty). */}
+          {id === firstId && (
+            <GoogleNameButton
+              onName={(n) =>
+                setParent(id, {
+                  ...value,
+                  name: value.name?.trim() ? value.name : n,
+                })
+              }
+            />
+          )}
+          {continueRow(`${prefix}-q-name`)}
+        </FlowQuestion>
 
-        {sectionShell({
-          prefix,
-          sectionKey: "economy",
-          index: 1,
-          title: "Lön & förmåner",
-          summary: economySummary,
-          children: (
-            <>
-              <IncomeField
-                id={`${prefix}-income`}
-                label="Bruttolön per månad (kr)"
-                value={income}
-                aboveCap={aboveCap}
-                onValueChange={(n) =>
-                  setParent(id, { ...value, grossMonthlyIncome: n })
-                }
-                onAboveCapChange={(b) =>
-                  setParent(id, { ...value, incomeAboveCap: b })
-                }
-                amountHint={amountHint}
-                capHint={capHint}
+        <FlowQuestion
+          id={`${prefix}-q-income`}
+          label="Månadslön"
+          value={
+            aboveCap
+              ? "Över taket"
+              : income > 0
+                ? `${formatSek(income)}/mån`
+                : null
+          }
+          open={activeQ === `${prefix}-q-income`}
+          answered={aboveCap || income > 0}
+          onOpen={() => openQ(`${prefix}-q-income`)}
+        >
+          <IncomeField
+            id={`${prefix}-income`}
+            label="Bruttolön per månad (kr)"
+            value={income}
+            aboveCap={aboveCap}
+            onValueChange={(n) =>
+              setParent(id, { ...value, grossMonthlyIncome: n })
+            }
+            onAboveCapChange={(b) =>
+              setParent(id, { ...value, incomeAboveCap: b })
+            }
+            amountHint={amountHint}
+            capHint={capHint}
+          />
+          {continueRow(`${prefix}-q-income`)}
+        </FlowQuestion>
+
+        <FlowQuestion
+          id={`${prefix}-q-supplement`}
+          label="Föräldralön"
+          value={
+            supplement.enabled
+              ? `Ja · ${supplement.pct} % i ${supplement.months} mån`
+              : "Ingen"
+          }
+          open={activeQ === `${prefix}-q-supplement`}
+          answered
+          onOpen={() => openQ(`${prefix}-q-supplement`)}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            <OptionCard
+              id={`${prefix}-supplement-yes`}
+              selected={supplement.enabled}
+              label="Ja, via kollektivavtal"
+              desc={`Vanligast — fyller upp till ca ${supplement.pct} % i ${supplement.months} mån. Justera under Avancerat.`}
+              onSelect={() => {
+                setSupplement(id, { ...supplement, enabled: true });
+                advanceQ(`${prefix}-q-supplement`);
+              }}
+            />
+            <OptionCard
+              id={`${prefix}-supplement-no`}
+              selected={!supplement.enabled}
+              label="Nej, ingen föräldralön"
+              desc="Inget kollektivavtal eller ingen förmån hos arbetsgivaren."
+              onSelect={() => {
+                setSupplement(id, { ...supplement, enabled: false });
+                advanceQ(`${prefix}-q-supplement`);
+              }}
+            />
+          </div>
+        </FlowQuestion>
+
+        <FlowQuestion
+          id={`${prefix}-q-goal`}
+          label={`Vad vill ${goalName} uppnå?`}
+          value={goalValue}
+          open={activeQ === `${prefix}-q-goal`}
+          answered
+          onOpen={() => openQ(`${prefix}-q-goal`)}
+        >
+          <div className="grid gap-2">
+            {GOAL_MODES.map((m) => (
+              <OptionCard
+                key={m.value}
+                id={`${prefix}-goal-${m.value}`}
+                selected={mode === m.value}
+                label={m.label}
+                desc={m.desc}
+                onSelect={() => {
+                  setGoal({ mode: m.value });
+                  // Manual needs nothing more; the other two open their input.
+                  if (m.value === "manual") advanceQ(`${prefix}-q-goal`);
+                }}
               />
-              {/* Employer top-up: most collective agreements have one, so it's
-                  on by default — details (percent, months) under Avancerat. */}
-              <CheckRow
-                id={`${prefix}-no-supplement`}
-                checked={!supplement.enabled}
-                onChange={(b) =>
-                  setSupplement(id, { ...supplement, enabled: !b })
-                }
-              >
-                <span className="font-normal">
-                  Ingen föräldralön från arbetsgivaren (inget kollektivavtal)
-                </span>
-              </CheckRow>
-              {supplement.enabled && (
-                <p className="text-muted-foreground -mt-1 text-xs">
-                  Räknar med föräldralön som fyller upp till {supplement.pct} %
-                  av lönen i {supplement.months} månader — justera under
-                  Avancerade inställningar.
-                </p>
+            ))}
+          </div>
+
+          {mode === "untilDate" && (
+            <div className="space-y-2 pt-1">
+              {presets.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {presets.map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        setGoal({ dateStr: toIsoDate(p.date) });
+                        advanceQ(`${prefix}-q-goal`);
+                      }}
+                      className="text-muted-foreground hover:text-foreground active:bg-secondary/60 min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
+                    >
+                      {p.label} · {formatDate(p.date)}
+                    </button>
+                  ))}
+                </div>
               )}
-            </>
-          ),
-        })}
-
-        {sectionShell({
-          prefix,
-          sectionKey: "goals",
-          index: 2,
-          title: "Mål & sparade dagar",
-          summary: goalSummary,
-          last: true,
-          children: (
-            <>
-              <CaregiverGoalControl
-                idPrefix={prefix}
-                name={goalName}
-                mode={mode}
-                dateStr={dateStr}
-                budget={budget}
-                birth={birth}
-                onMode={(m: GoalMode) =>
-                  setForm((f) =>
-                    id === "A"
-                      ? { ...f, goalModeA: m }
-                      : { ...f, goalModeB: m },
-                  )
-                }
-                onDate={(iso) =>
-                  setForm((f) =>
-                    id === "A"
-                      ? { ...f, goalDateA: iso }
-                      : { ...f, goalDateB: iso },
-                  )
-                }
-                onBudget={(kr) =>
-                  setForm((f) =>
-                    id === "A"
-                      ? { ...f, goalBudgetA: Math.max(0, Math.round(kr)) }
-                      : { ...f, goalBudgetB: Math.max(0, Math.round(kr)) },
-                  )
-                }
+              <InlineCalendar
+                value={dateStr}
+                inputId={`${prefix}-goal-date`}
+                yearsBack={0}
+                yearsForward={3}
+                onPick={(iso) => {
+                  setGoal({ dateStr: iso });
+                  advanceQ(`${prefix}-q-goal`);
+                }}
               />
+            </div>
+          )}
 
+          {mode === "budget" && (
+            <div className="space-y-3 pt-1">
               <NumberField
-                id={`${prefix}-save-days`}
-                label="Dagar att spara till senare"
-                value={saveDays}
-                min={0}
-                stepper
+                id={`${prefix}-goal-budget-floor`}
+                label="Hushållets lägsta inkomst efter skatt (kr/mån)"
+                value={budget}
+                step={1000}
                 slider
-                sliderMax={200}
-                onChange={(n) =>
-                  setForm((f) =>
-                    id === "A"
-                      ? { ...f, saveDaysA: n }
-                      : { ...f, saveDaysB: n },
-                  )
+                sliderMax={60000}
+                onChange={(kr) =>
+                  setGoal({ budget: Math.max(0, Math.round(kr)) })
                 }
-                hint="Till klämdagar, lov och inskolning. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen."
+                hint="Perioden tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
               />
+              {continueRow(`${prefix}-q-goal`)}
+            </div>
+          )}
+        </FlowQuestion>
 
-              {childNumber >= 2 && (
-                <NumberField
-                  id={`${prefix}-extra`}
-                  label="Sparade dagar kvar från tidigare barn"
-                  value={extraDays}
-                  stepper
-                  slider
-                  sliderMax={200}
-                  onChange={(n) =>
-                    setForm((f) =>
-                      id === "A"
-                        ? { ...f, extraDaysA: n }
-                        : { ...f, extraDaysB: n },
-                    )
-                  }
-                  hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
-                />
-              )}
-            </>
-          ),
-        })}
+        <FlowQuestion
+          id={`${prefix}-q-save`}
+          label="Spara dagar?"
+          value={saveDays > 0 ? `${saveDays} dagar` : "Inga"}
+          open={activeQ === `${prefix}-q-save`}
+          answered
+          onOpen={() => openQ(`${prefix}-q-save`)}
+        >
+          <NumberField
+            id={`${prefix}-save-days`}
+            label="Dagar att spara till senare"
+            value={saveDays}
+            min={0}
+            stepper
+            slider
+            sliderMax={200}
+            onChange={(n) =>
+              setForm((f) =>
+                id === "A" ? { ...f, saveDaysA: n } : { ...f, saveDaysB: n },
+              )
+            }
+            hint="Till klämdagar, lov och inskolning. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen."
+          />
+          {continueRow(`${prefix}-q-save`)}
+        </FlowQuestion>
+
+        {childNumber >= 2 && (
+          <FlowQuestion
+            id={`${prefix}-q-extra`}
+            label="Dagar från tidigare barn"
+            value={extraDays > 0 ? `${extraDays} dagar` : "Inga"}
+            open={activeQ === `${prefix}-q-extra`}
+            answered
+            onOpen={() => openQ(`${prefix}-q-extra`)}
+          >
+            <NumberField
+              id={`${prefix}-extra`}
+              label="Sparade dagar kvar från tidigare barn"
+              value={extraDays}
+              stepper
+              slider
+              sliderMax={200}
+              onChange={(n) =>
+                setForm((f) =>
+                  id === "A" ? { ...f, extraDaysA: n } : { ...f, extraDaysB: n },
+                )
+              }
+              hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
+            />
+            {continueRow(`${prefix}-q-extra`)}
+          </FlowQuestion>
+        )}
       </div>
     );
   };
@@ -729,285 +987,202 @@ export function Wizard({
             {stepTitles.map((t, i) => (
               <div
                 key={t}
-                className={`h-1.5 flex-1 rounded-full ${
-                  i < current ? "bg-primary" : "bg-muted"
-                }`}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full transition-colors duration-300",
+                  i < current ? "bg-primary" : "bg-muted",
+                )}
               />
             ))}
           </div>
         </div>
 
-        <div className="space-y-5 px-4 py-5 sm:px-6">
-        {current === 1 && (
-          <>
-            <p className="text-muted-foreground text-xs">
-              Allt räknas ut och sparas lokalt i din webbläsare — inget
-              skickas.
-            </p>
-            <div className="space-y-1.5">
-              <Label htmlFor="birth-date">Födelsedatum (eller beräknat)</Label>
-              <Input
-                id="birth-date"
-                type="date"
-                value={plan.birthDate}
-                onChange={(e) =>
-                  setPlan((p) => ({ ...p, birthDate: e.target.value }))
-                }
-                className="max-w-48"
-              />
-            </div>
-            {!valid && (
-              <p className="text-destructive text-xs">
-                Ange ett giltigt födelse- eller beräknat datum.
+        <div key={current} className="animate-flow-in space-y-5 px-4 py-5 sm:px-6">
+          {current === 1 && (
+            <>
+              <p className="text-muted-foreground text-xs">
+                Allt räknas ut och sparas lokalt i din webbläsare — inget
+                skickas.
               </p>
-            )}
-
-            <div className="space-y-2">
-              <Label>Vilket barn i ordningen?</Label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {CHILD_NUMBERS.map((c) => (
-                  <label
-                    key={c.value}
-                    className={`active:bg-secondary/60 flex min-h-12 cursor-pointer items-center gap-2.5 rounded-lg border p-3 text-base sm:min-h-0 sm:gap-2 sm:p-2.5 sm:text-sm ${
-                      childNumber === c.value
-                        ? "border-primary bg-secondary/40"
-                        : ""
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      id={`child-number-${c.value}`}
-                      name="child-number"
-                      checked={childNumber === c.value}
-                      onChange={() =>
-                        setForm((f) => ({
-                          ...f,
-                          childNumber: c.value,
-                          hasExtraDays: c.value >= 2,
-                        }))
-                      }
-                      className="accent-primary size-5 shrink-0 sm:size-4"
-                    />
-                    {c.label}
-                  </label>
-                ))}
-              </div>
-              {childNumber >= 2 && (
-                <p className="text-muted-foreground text-xs">
-                  Varje barn har sin egen pott på 480 dagar. Dagar som finns
-                  kvar från tidigare barn anger du hos respektive
-                  vårdnadshavare i nästa steg.
+              {babyFlow}
+              {!valid && (
+                <p className="text-destructive text-xs">
+                  Ange ett giltigt födelse- eller beräknat datum.
                 </p>
               )}
-            </div>
 
-            <div className="space-y-2">
-              <CheckRow
-                id="twins"
-                checked={twins}
-                onChange={(b) =>
-                  setPlan((p) => ({ ...p, childrenInBirth: b ? 2 : 1 }))
-                }
-              >
-                Flerbarnsfödsel (tvillingar eller fler)
-              </CheckRow>
-              {twins && (
-                <div className="space-y-1.5">
-                  <Select
-                    id="children"
-                    value={plan.childrenInBirth}
-                    onChange={(e) =>
-                      setPlan((p) => ({
-                        ...p,
-                        childrenInBirth: Number(e.target.value),
-                      }))
-                    }
-                  >
-                    <option value={2}>2 (tvillingar)</option>
-                    <option value={3}>3 (trillingar)</option>
-                    <option value={4}>4 barn</option>
-                  </Select>
-                  <p className="text-muted-foreground text-xs">
-                    Flerbarnsfödsel ger extra dagar utöver de 480.
-                  </p>
-                </div>
-              )}
-            </div>
+              <Separator />
+              {advanced(
+                <>
+                  <div className="space-y-3">
+                    <CheckRow
+                      id="has-used"
+                      checked={hasUsedDays}
+                      onChange={(b) =>
+                        setForm((f) => ({ ...f, hasUsedDays: b }))
+                      }
+                    >
+                      {soloMode
+                        ? "Jag har redan tagit ut dagar för det här barnet"
+                        : "Vi har redan tagit ut dagar för det här barnet"}
+                    </CheckRow>
 
-            <Separator />
-            {advanced(
-              <>
-                <div className="space-y-3">
-                  <CheckRow
-                    id="has-used"
-                    checked={hasUsedDays}
-                    onChange={(b) =>
-                      setForm((f) => ({ ...f, hasUsedDays: b }))
-                    }
-                  >
-                    {soloMode
-                      ? "Jag har redan tagit ut dagar för det här barnet"
-                      : "Vi har redan tagit ut dagar för det här barnet"}
-                  </CheckRow>
+                    {hasUsedDays && (
+                      <div className="space-y-3">
+                        <CheckRow
+                          id="detailed-used"
+                          checked={detailedUsed}
+                          onChange={(b) =>
+                            setForm((f) => ({ ...f, detailedUsed: b }))
+                          }
+                        >
+                          <span className="text-muted-foreground font-normal">
+                            Ange nivåer separat (sjukpenning/lägsta)
+                          </span>
+                        </CheckRow>
 
-                  {hasUsedDays && (
-                    <div className="space-y-3">
-                      <CheckRow
-                        id="detailed-used"
-                        checked={detailedUsed}
-                        onChange={(b) =>
-                          setForm((f) => ({ ...f, detailedUsed: b }))
-                        }
-                      >
-                        <span className="text-muted-foreground font-normal">
-                          Ange nivåer separat (sjukpenning/lägsta)
-                        </span>
-                      </CheckRow>
-
-                      {visibleIds.map((id) => {
-                        const p = plan.parents[id];
-                        const who =
-                          p.name?.trim() ||
-                          (soloMode ? "dig" : `Vårdnadshavare ${id}`);
-                        const suffix =
-                          visibleIds.length > 1 ? ` – ${who}` : "";
-                        return detailedUsed ? (
-                          <div key={id} className="grid grid-cols-2 gap-3">
+                        {visibleIds.map((id) => {
+                          const p = plan.parents[id];
+                          const who =
+                            p.name?.trim() ||
+                            (soloMode ? "dig" : `Vårdnadshavare ${id}`);
+                          const suffix =
+                            visibleIds.length > 1 ? ` – ${who}` : "";
+                          return detailedUsed ? (
+                            <div key={id} className="grid grid-cols-2 gap-3">
+                              <NumberField
+                                id={`${id.toLowerCase()}-used-sjuk`}
+                                label={`Sjukpenningdagar${suffix}`}
+                                value={p.daysUsed.sjukpenning}
+                                stepper
+                                slider
+                                sliderMax={390}
+                                onChange={(n) =>
+                                  setParentDays(id, {
+                                    sjukpenning: n,
+                                    lagsta: p.daysUsed.lagsta,
+                                  })
+                                }
+                              />
+                              <NumberField
+                                id={`${id.toLowerCase()}-used-lagsta`}
+                                label={`Lägstanivådagar${suffix}`}
+                                value={p.daysUsed.lagsta}
+                                stepper
+                                slider
+                                sliderMax={90}
+                                onChange={(n) =>
+                                  setParentDays(id, {
+                                    sjukpenning: p.daysUsed.sjukpenning,
+                                    lagsta: n,
+                                  })
+                                }
+                              />
+                            </div>
+                          ) : (
                             <NumberField
-                              id={`${id.toLowerCase()}-used-sjuk`}
-                              label={`Sjukpenningdagar${suffix}`}
-                              value={p.daysUsed.sjukpenning}
+                              key={id}
+                              id={`${id.toLowerCase()}-used`}
+                              label={`Uttagna dagar${suffix}`}
+                              value={
+                                p.daysUsed.sjukpenning + p.daysUsed.lagsta
+                              }
                               stepper
                               slider
-                              sliderMax={390}
+                              sliderMax={480}
                               onChange={(n) =>
                                 setParentDays(id, {
                                   sjukpenning: n,
-                                  lagsta: p.daysUsed.lagsta,
+                                  lagsta: 0,
                                 })
                               }
                             />
-                            <NumberField
-                              id={`${id.toLowerCase()}-used-lagsta`}
-                              label={`Lägstanivådagar${suffix}`}
-                              value={p.daysUsed.lagsta}
-                              stepper
-                              slider
-                              sliderMax={90}
-                              onChange={(n) =>
-                                setParentDays(id, {
-                                  sjukpenning: p.daysUsed.sjukpenning,
-                                  lagsta: n,
-                                })
-                              }
-                            />
-                          </div>
-                        ) : (
-                          <NumberField
-                            key={id}
-                            id={`${id.toLowerCase()}-used`}
-                            label={`Uttagna dagar${suffix}`}
-                            value={
-                              p.daysUsed.sjukpenning + p.daysUsed.lagsta
-                            }
-                            stepper
-                            slider
-                            sliderMax={480}
-                            onChange={(n) =>
-                              setParentDays(id, {
-                                sjukpenning: n,
-                                lagsta: 0,
-                              })
-                            }
-                          />
-                        );
-                      })}
-                      <FkSourceHint what="Uttagna dagar" />
-                    </div>
-                  )}
-                </div>
+                          );
+                        })}
+                        <FkSourceHint what="Uttagna dagar" />
+                      </div>
+                    )}
+                  </div>
 
-                <div className="space-y-2">
-                  <CheckRow
-                    id="include-lagsta"
-                    checked={includeLagsta}
-                    onChange={(b) =>
-                      setForm((f) => ({ ...f, includeLagsta: b }))
-                    }
-                  >
-                    Ta ut lägstanivådagarna (90 dagar à 180 kr)
-                  </CheckRow>
-                  <p className="text-muted-foreground text-xs">
-                    {includeLagsta
-                      ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
-                      : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
-                  </p>
-                </div>
-              </>,
-            )}
-          </>
-        )}
+                  <div className="space-y-2">
+                    <CheckRow
+                      id="include-lagsta"
+                      checked={includeLagsta}
+                      onChange={(b) =>
+                        setForm((f) => ({ ...f, includeLagsta: b }))
+                      }
+                    >
+                      Ta ut lägstanivådagarna (90 dagar à 180 kr)
+                    </CheckRow>
+                    <p className="text-muted-foreground text-xs">
+                      {includeLagsta
+                        ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
+                        : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
+                    </p>
+                  </div>
+                </>,
+              )}
+            </>
+          )}
 
-        {current === 2 && (
-          <>
-            <p className="text-muted-foreground text-sm">
-              {soloMode
-                ? "Dina uppgifter — du har alla dagarna."
-                : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
-            </p>
-
-            {caregiverAccordion(firstId)}
-
-            <Separator />
-            {advanced(caregiverAdvanced(firstId))}
-          </>
-        )}
-
-        {current === 3 && (
-          <>
-            <CheckRow
-              id="solo-mode"
-              checked={soloMode}
-              onChange={(b) =>
-                setForm((f) => ({
-                  ...f,
-                  soloMode: b,
-                  ...(b ? { firstCaregiver: "A" as const } : {}),
-                }))
-              }
-            >
-              Jag planerar ensam — det finns ingen andra vårdnadshavare
-            </CheckRow>
-
-            {soloMode ? (
+          {current === 2 && (
+            <>
               <p className="text-muted-foreground text-sm">
-                Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
+                {soloMode
+                  ? "Dina uppgifter — du har alla dagarna."
+                  : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
               </p>
-            ) : (
-              <>
+
+              {caregiverFlow(firstId)}
+
+              <Separator />
+              {advanced(caregiverAdvanced(firstId))}
+            </>
+          )}
+
+          {current === 3 && (
+            <>
+              <CheckRow
+                id="solo-mode"
+                checked={soloMode}
+                onChange={(b) =>
+                  setForm((f) => ({
+                    ...f,
+                    soloMode: b,
+                    ...(b ? { firstCaregiver: "A" as const } : {}),
+                  }))
+                }
+              >
+                Jag planerar ensam — det finns ingen andra vårdnadshavare
+              </CheckRow>
+
+              {soloMode ? (
                 <p className="text-muted-foreground text-sm">
-                  {plan.parents[secondId].name?.trim() ||
-                    `Vårdnadshavare ${secondId}`}{" "}
-                  tar över när{" "}
-                  {plan.parents[firstId].name?.trim() ||
-                    `Vårdnadshavare ${firstId}`}{" "}
-                  är klar.
+                  Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
                 </p>
+              ) : (
+                <>
+                  <p className="text-muted-foreground text-sm">
+                    {plan.parents[secondId].name?.trim() ||
+                      `Vårdnadshavare ${secondId}`}{" "}
+                    tar över när{" "}
+                    {plan.parents[firstId].name?.trim() ||
+                      `Vårdnadshavare ${firstId}`}{" "}
+                    är klar.
+                  </p>
 
-                {caregiverAccordion(secondId)}
-              </>
-            )}
+                  {caregiverFlow(secondId)}
+                </>
+              )}
 
-            <Separator />
-            {advanced(
-              <>
-                {!soloMode && caregiverAdvanced(secondId)}
-                {extrasAdvanced}
-              </>,
-            )}
-          </>
-        )}
-
+              <Separator />
+              {advanced(
+                <>
+                  {!soloMode && caregiverAdvanced(secondId)}
+                  {extrasAdvanced}
+                </>,
+              )}
+            </>
+          )}
         </div>
 
         {/* Nav — pinned to the bottom of the screen, above the keyboard. */}

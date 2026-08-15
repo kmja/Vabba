@@ -1,0 +1,195 @@
+import { useEffect, useState } from "react";
+import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { isValidIsoDate, parseIsoDate, toIsoDate } from "@/lib/dates";
+import { cn } from "@/lib/utils";
+
+const SV_MONTHS = [
+  "januari",
+  "februari",
+  "mars",
+  "april",
+  "maj",
+  "juni",
+  "juli",
+  "augusti",
+  "september",
+  "oktober",
+  "november",
+  "december",
+];
+const SV_DAYS = ["M", "T", "O", "T", "F", "L", "S"];
+
+function startOfMonth(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+
+/** Monday-first weekday index (0–6) of a date. */
+function mondayIndex(d: Date): number {
+  return (d.getUTCDay() + 6) % 7;
+}
+
+/**
+ * An always-expanded month calendar with big day targets, for picking dates
+ * inline in the wizard flow (no native picker popup). Includes a typed-date
+ * fallback input for keyboard users and autofill.
+ */
+export function InlineCalendar({
+  value,
+  onPick,
+  inputId,
+  yearsBack = 12,
+  yearsForward = 1,
+}: {
+  /** ISO yyyy-mm-dd (or empty). */
+  value: string;
+  onPick: (iso: string) => void;
+  /** Id for the typed-date fallback input (keeps old test/autofill hooks). */
+  inputId: string;
+  yearsBack?: number;
+  yearsForward?: number;
+}) {
+  const selected = isValidIsoDate(value) ? parseIsoDate(value) : null;
+  // The visible month is client-state; "today" is read after mount to keep
+  // the prerendered HTML deterministic.
+  const [view, setView] = useState<Date | null>(
+    selected ? startOfMonth(selected) : null,
+  );
+  const [today, setToday] = useState<Date | null>(null);
+  useEffect(() => {
+    const now = new Date();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only init of "today"
+    setToday(now);
+    setView((v) => v ?? startOfMonth(now));
+  }, []);
+
+  const base = today ?? new Date(2026, 0, 1);
+  const years: number[] = [];
+  for (
+    let y = base.getFullYear() - yearsBack;
+    y <= base.getFullYear() + yearsForward;
+    y++
+  ) {
+    years.push(y);
+  }
+
+  const month = view ?? startOfMonth(base);
+  const first = startOfMonth(month);
+  const daysInMonth = new Date(
+    Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  const lead = mondayIndex(first);
+  const cells: (Date | null)[] = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from(
+      { length: daysInMonth },
+      (_, i) =>
+        new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), i + 1)),
+    ),
+  ];
+
+  const shiftMonth = (delta: number) =>
+    setView(
+      new Date(
+        Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + delta, 1),
+      ),
+    );
+
+  const isSameDay = (a: Date, b: Date | null) =>
+    b != null && toIsoDate(a) === toIsoDate(b);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          aria-label="Föregående månad"
+          onClick={() => shiftMonth(-1)}
+          className="active:bg-secondary/60 hover:bg-secondary/40 flex size-11 items-center justify-center rounded-md border sm:size-9"
+        >
+          <IconChevronLeft className="size-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-base font-medium sm:text-sm">
+            {SV_MONTHS[first.getUTCMonth()]}
+          </span>
+          <Select
+            aria-label="År"
+            value={first.getUTCFullYear()}
+            onChange={(e) =>
+              setView(
+                new Date(
+                  Date.UTC(Number(e.target.value), first.getUTCMonth(), 1),
+                ),
+              )
+            }
+            className="w-24"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <button
+          type="button"
+          aria-label="Nästa månad"
+          onClick={() => shiftMonth(1)}
+          className="active:bg-secondary/60 hover:bg-secondary/40 flex size-11 items-center justify-center rounded-md border sm:size-9"
+        >
+          <IconChevronRight className="size-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {SV_DAYS.map((d, i) => (
+          <div
+            key={`${d}-${i}`}
+            className="text-muted-foreground py-1 text-center text-xs font-medium"
+          >
+            {d}
+          </div>
+        ))}
+        {cells.map((day, i) =>
+          day ? (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onPick(toIsoDate(day))}
+              className={cn(
+                "flex h-11 items-center justify-center rounded-md text-base tabular-nums transition-colors duration-150 active:scale-95 sm:h-9 sm:text-sm",
+                isSameDay(day, selected)
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : cn(
+                      "hover:bg-secondary/60 active:bg-secondary",
+                      isSameDay(day, today) && "border-primary/50 border",
+                    ),
+              )}
+            >
+              {day.getUTCDate()}
+            </button>
+          ) : (
+            <div key={i} />
+          ),
+        )}
+      </div>
+
+      {/* Typed fallback (and the autofill/test hook for the same value). */}
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground shrink-0 text-xs">
+          eller skriv:
+        </span>
+        <Input
+          id={inputId}
+          type="date"
+          value={value}
+          onChange={(e) => e.target.value && onPick(e.target.value)}
+          className="max-w-44"
+        />
+      </div>
+    </div>
+  );
+}
