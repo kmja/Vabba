@@ -24,7 +24,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
-import { IncomeField } from "@/components/income-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
 import { FlowQuestion } from "@/components/flow-question";
@@ -37,7 +36,7 @@ import {
   type TierCount,
 } from "@/lib/calc";
 import type { GoalMode } from "@/lib/goal-seek";
-import { MONEY, isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
+import { isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { formatDate, formatSek } from "@/lib/format";
 import {
   addMonths,
@@ -174,9 +173,27 @@ export function Wizard({
       (el) => !el.closest("[inert]"),
     );
 
+  /**
+   * Keep a focused field visible: center it now AND again shortly after,
+   * when the on-screen keyboard has resized the viewport (the first scroll
+   * happens before the resize, which would leave the field hidden).
+   */
+  const revealField = (el: HTMLElement) => {
+    el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    window.setTimeout(() => {
+      if (document.activeElement === el) {
+        el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      }
+    }, 350);
+  };
+
   /** Focus the first visible field in `root` — the keyboard follows along. */
-  const focusFieldIn = (root: ParentNode | null) => {
-    visibleFields(root)[0]?.focus();
+  const focusFieldIn = (root: ParentNode | null): boolean => {
+    const field = visibleFields(root)[0];
+    if (!field) return false;
+    field.focus();
+    revealField(field);
+    return true;
   };
 
   /**
@@ -186,8 +203,10 @@ export function Wizard({
   const openQ = (qid: string) => {
     flushSync(() => setActiveQ(qid));
     const panel = document.getElementById(`${qid}-panel`);
-    focusFieldIn(panel);
-    panel?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    // Choice questions have no field — bring the panel itself into view.
+    if (!focusFieldIn(panel)) {
+      panel?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    }
   };
 
   const goTo = (s: number, focus = false) => {
@@ -511,9 +530,6 @@ export function Wizard({
           ? `Över taket – ${formatSek(rate)}/dag (högsta belopp)`
           : `Ger ca ${formatSek(rate)}/dag på sjukpenningnivå`
         : "Vet du bara nettolönen? Brutto ≈ netto × 1,5.";
-    const capHint = `Räknar med högsta beloppet, ${formatSek(
-      MONEY.maxSjukpenningPerDay,
-    )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
     const setGoal = (patch: {
       mode?: GoalMode;
       dateStr?: string;
@@ -601,29 +617,27 @@ export function Wizard({
           id={`${prefix}-q-income`}
           label="Månadslön"
           value={
-            aboveCap
-              ? "Över taket"
-              : income > 0
-                ? `${formatSek(income)}/mån`
+            income > 0
+              ? `${formatSek(income)}/mån`
+              : aboveCap
+                ? "Över taket"
                 : null
           }
           open={activeQ === `${prefix}-q-income`}
           answered={aboveCap || income > 0}
           onOpen={() => openQ(`${prefix}-q-income`)}
         >
-          <IncomeField
+          {/* A plain numeric input — salaries above the SGI cap are simply
+              capped in the maths (the hint says so). */}
+          <NumberField
             id={`${prefix}-income`}
             label="Bruttolön per månad (kr)"
             value={income}
-            aboveCap={aboveCap}
-            onValueChange={(n) =>
+            step={1000}
+            onChange={(n) =>
               setParent(id, { ...value, grossMonthlyIncome: n })
             }
-            onAboveCapChange={(b) =>
-              setParent(id, { ...value, incomeAboveCap: b })
-            }
-            amountHint={amountHint}
-            capHint={capHint}
+            hint={amountHint}
           />
           {continueRow(`${prefix}-q-income`)}
         </FlowQuestion>
@@ -991,6 +1005,11 @@ export function Wizard({
         ref={formRef}
         onSubmit={(e) => e.preventDefault()}
         onKeyDown={onFormKeyDown}
+        onFocus={(e) => {
+          // Any focused field is kept clear of the keyboard and pinned bars.
+          const t = e.target as HTMLElement;
+          if (t.matches?.(FIELD_SELECTOR)) revealField(t);
+        }}
       >
         {/* Compact progress header — stays pinned while the step scrolls. */}
         <div className="bg-card/95 sticky top-0 z-30 space-y-2 border-b px-4 py-3 backdrop-blur sm:rounded-t-xl sm:px-6">
