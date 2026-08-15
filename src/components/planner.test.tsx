@@ -99,6 +99,24 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/Vårdnadshavare B är hemma/)).toBeTruthy();
   });
 
+  it("supports planning alone via the who-is-home-first select", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next(); // → step 2
+    fireEvent.change(container.querySelector("#first-caregiver")!, {
+      target: { value: "solo" },
+    });
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "40000" },
+    });
+    // Solo mode has two steps — "Visa plan" sits right here.
+    showPlan();
+    expect(screen.getByText("Justera planen")).toBeTruthy();
+    expect(screen.getByText(/1 av 1/)).toBeTruthy();
+  });
+
   it("adds the 10 birth-days for the other parent", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → last step

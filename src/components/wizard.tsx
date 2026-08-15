@@ -186,7 +186,7 @@ export function Wizard({
           <Input
             id={`${prefix}-name`}
             value={value.name ?? ""}
-            placeholder={`Vårdnadshavare ${id}`}
+            placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
             onChange={(e) => setParent(id, { ...value, name: e.target.value })}
           />
         </div>
@@ -512,9 +512,11 @@ export function Wizard({
           ))}
         </div>
         <CardTitle className="pt-2">{stepTitles[current - 1]}</CardTitle>
-        <CardDescription>
-          Allt räknas ut och sparas lokalt i din webbläsare — inget skickas.
-        </CardDescription>
+        {current === 1 && (
+          <CardDescription>
+            Allt räknas ut och sparas lokalt i din webbläsare — inget skickas.
+          </CardDescription>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-5">
@@ -608,23 +610,6 @@ export function Wizard({
                   </p>
                 </div>
               )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="caregivers">Antal vårdnadshavare</Label>
-              <Select
-                id="caregivers"
-                value={soloMode ? 1 : 2}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    soloMode: Number(e.target.value) === 1,
-                  }))
-                }
-              >
-                <option value={2}>Två vårdnadshavare</option>
-                <option value={1}>En (jag planerar själv)</option>
-              </Select>
             </div>
 
             <Separator />
@@ -743,31 +728,36 @@ export function Wizard({
 
         {current === 2 && (
           <>
-            {!soloMode && (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="first-caregiver">Vem är hemma först?</Label>
-                  <Select
-                    id="first-caregiver"
-                    value={firstCaregiver}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        firstCaregiver: e.target.value as "A" | "B",
-                      }))
-                    }
-                  >
-                    <option value="A">{nameA}</option>
-                    <option value="B">{nameB}</option>
-                  </Select>
-                  <p className="text-muted-foreground text-xs">
-                    Ofta börjar den som fött barnet. Resten av steget handlar om
-                    den här personen.
-                  </p>
-                </div>
-                <Separator />
-              </>
-            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="first-caregiver">Vem är hemma först?</Label>
+              <Select
+                id="first-caregiver"
+                value={soloMode ? "solo" : firstCaregiver}
+                onChange={(e) =>
+                  setForm((f) =>
+                    e.target.value === "solo"
+                      ? { ...f, soloMode: true, firstCaregiver: "A" }
+                      : {
+                          ...f,
+                          soloMode: false,
+                          firstCaregiver: e.target.value as "A" | "B",
+                        },
+                  )
+                }
+              >
+                <option value="A">{nameA}</option>
+                <option value="B">{nameB}</option>
+                <option value="solo">
+                  Jag planerar ensam (en vårdnadshavare)
+                </option>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                {soloMode
+                  ? "Resten av steget handlar om dig."
+                  : "Ofta börjar den som fött barnet. Resten av steget handlar om den här personen."}
+              </p>
+            </div>
+            <Separator />
 
             {caregiverBasics(firstId)}
             {caregiverPlanFields(firstId)}
