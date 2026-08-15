@@ -15,6 +15,7 @@ import {
   IconCoffee,
   IconCookie,
   IconFeather,
+  IconFlag,
   IconFlower,
   IconFoodsteps,
   IconIceCream,
@@ -403,6 +404,11 @@ function PeriodCard({
             inkl. {formatDays(row.extraDays)} sparade från tidigare barn
           </div>
         ) : null}
+        {row.savedDays ? (
+          <div className="mt-0.5 text-[11px]">
+            sparar {formatDays(row.savedDays)} till senare (klämdagar, lov …)
+          </div>
+        ) : null}
       </div>
 
       {/* Fine print: gross amounts, per-day rate, pace — shown on demand */}
@@ -429,12 +435,15 @@ export function Timeline({
   asOf,
   projection,
   rows = [],
+  goal,
 }: {
   deadlines: PlanDeadlines;
   asOf: Date;
   projection?: LeaveProjection;
   /** Per-caregiver leave detail, shown in the middle of the timeline. */
   rows?: MonthlyRow[];
+  /** The "hemma till" target date; marked when the plan falls short of it. */
+  goal?: { date: Date; met: boolean };
 }) {
   const birth = deadlines.birth;
   const ageMonths = monthsBetween(birth, asOf);
@@ -512,6 +521,18 @@ export function Timeline({
       });
     }
   });
+
+  // The target date of a "hemma till" goal — only marked separately when the
+  // plan does NOT reach it (when met, the leave's own end lands right on it).
+  if (goal && !goal.met) {
+    projected.push({
+      date: goal.date,
+      icon: IconFlag,
+      title: "Målet: hemma till",
+      desc: "Dagarna tar slut innan dess — se varningen ovan.",
+      variant: "projected",
+    });
+  }
 
   const showToday = ageMonths >= 0 && ageMonths <= span;
   const today: Milestone = {

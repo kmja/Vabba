@@ -32,6 +32,8 @@ export interface MonthlyRow {
   partnerWorking?: string;
   /** Part-time salary this caregiver earns on non-FP days (if working). */
   partTimeSalary?: number;
+  /** Days deliberately left unused (saved for later) under a date goal. */
+  savedDays?: number;
 }
 
 export function formatMonths(months: number): string {

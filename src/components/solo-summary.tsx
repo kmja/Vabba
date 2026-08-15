@@ -9,6 +9,7 @@ import {
   type PhaseControls,
   type PartTime,
 } from "@/components/leave-levers";
+import { GoalPicker, type GoalControls } from "@/components/goal-picker";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,8 @@ export function SoloSummary({
   bonusFullMonthly,
   salary,
   partTime,
+  goal,
+  birth,
 }: {
   payout: ParentPayout;
   total: number;
@@ -41,8 +44,11 @@ export function SoloSummary({
   bonusFullMonthly: number;
   salary: number;
   partTime: PartTime;
+  goal: GoalControls;
+  birth: Date;
 }) {
   const [open, setOpen] = useState(false);
+  const goalActive = goal.mode !== "manual";
   return (
     <section
       className={cn(
@@ -65,21 +71,41 @@ export function SoloSummary({
         </button>
       </div>
 
-      {/* Collapsed: the leave-length slider; drag and watch the timeline shift. */}
+      {/* Collapsed: the leave-length slider; drag and watch the timeline
+          shift. With a goal active, its solved result instead. */}
       {!open && (
         <div className="px-4 sm:px-6">
-          <LeaveLengthSlider
-            name={name}
-            days={total}
-            dailyRate={payout.dailyRate}
-            pace={daysPerWeek}
-            onSetTarget={onSetTarget}
-          />
+          {goalActive ? (
+            goal.summary && (
+              <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
+            )
+          ) : (
+            <LeaveLengthSlider
+              name={name}
+              days={total}
+              dailyRate={payout.dailyRate}
+              pace={daysPerWeek}
+              onSetTarget={onSetTarget}
+            />
+          )}
         </div>
       )}
 
       {open && (
         <div className="space-y-4 px-4 sm:px-6">
+          <GoalPicker
+            mode={goal.mode}
+            dateStr={goal.dateStr}
+            budget={goal.budget}
+            birth={birth}
+            onMode={goal.onMode}
+            onDate={goal.onDate}
+            onBudget={goal.onBudget}
+          />
+          {goalActive && goal.summary && (
+            <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
+          )}
+
           <p className="text-muted-foreground text-sm">
             Som ensam vårdnadshavare har du rätt till alla dagarna.
           </p>
@@ -127,18 +153,20 @@ export function SoloSummary({
             </p>
           </div>
 
-          <LeaveLevers
-            name={name}
-            days={total}
-            dailyRate={payout.dailyRate}
-            pace={daysPerWeek}
-            bonusFullMonthly={bonusFullMonthly}
-            salary={salary}
-            partnerSalary={0}
-            partTime={partTime}
-            onSetTarget={onSetTarget}
-            phase={phase}
-          />
+          {!goalActive && (
+            <LeaveLevers
+              name={name}
+              days={total}
+              dailyRate={payout.dailyRate}
+              pace={daysPerWeek}
+              bonusFullMonthly={bonusFullMonthly}
+              salary={salary}
+              partnerSalary={0}
+              partTime={partTime}
+              onSetTarget={onSetTarget}
+              phase={phase}
+            />
+          )}
 
           <p className="text-muted-foreground text-xs">
             Förslaget fördelar alla återstående dagar — du kan förstås ta ut

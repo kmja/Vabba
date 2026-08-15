@@ -21,9 +21,26 @@ import {
 } from "@/lib/optimizer";
 import { lagstanivaDailyAmount, MONEY, SGI_PROTECTION } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
-import { addYears, differenceInDays } from "@/lib/dates";
-import { approxMonthlyGross, paceForMonthlyTarget } from "@/lib/format";
+import {
+  addYears,
+  differenceInDays,
+  isValidIsoDate,
+  parseIsoDate,
+} from "@/lib/dates";
+import {
+  approxMonthlyGross,
+  formatDate,
+  formatSek,
+  paceForMonthlyTarget,
+} from "@/lib/format";
 import { buildLeaveIntervals, type LeaveBlock } from "@/lib/projection";
+import {
+  solveBudget,
+  solveUntilDate,
+  type GoalBlockSpec,
+  type GoalResult,
+  type GoalSpec,
+} from "@/lib/goal-seek";
 import { computeSupplement } from "@/lib/supplement";
 import { computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -49,6 +66,9 @@ const DEFAULT_STATE: ShareableState = {
   phase2B: 5,
   worksPartTimeA: false,
   worksPartTimeB: false,
+  goalMode: "manual",
+  goalDate: "",
+  goalBudget: 25000,
   customSplitA: 0.5,
   includeLagsta: false,
   firstCaregiver: "A",
@@ -197,6 +217,19 @@ export function Planner() {
   const worksPartTimeA = form.worksPartTimeA ?? false;
   const worksPartTimeB = form.worksPartTimeB ?? false;
 
+  // Goal-seek: solve the paces backwards from a target date or a budget floor
+  // instead of adjusting them by hand.
+  const goalMode = form.goalMode ?? "manual";
+  const goalDateStr = form.goalDate ?? "";
+  const goalBudget = form.goalBudget ?? 25000;
+  const goalTarget = useMemo(
+    () =>
+      goalMode === "untilDate" && isValidIsoDate(goalDateStr)
+        ? parseIsoDate(goalDateStr)
+        : null,
+    [goalMode, goalDateStr],
+  );
+
   // The split the results slider shows: the chosen custom share, or the share
   // the current objective happens to produce (so dragging continues naturally).
   const displaySplitA = useMemo(() => {
@@ -334,16 +367,75 @@ export function Planner() {
     ? Math.round(supplementB.total / (form.supplementMonthsB ?? 6))
     : 0;
 
+  // The undated day blocks each caregiver will draw, in leave order — shared
+  // by the manual projection and the goal-seek solver.
+  const rawBlocks = useMemo<GoalBlockSpec[]>(() => {
+    if (!remaining || remaining.remaining.total <= 0) return [];
+    const lagstaRate = lagstanivaDailyAmount();
+    if (soloMode && solo) {
+      return [
+        { caregiver: soloName, tier: "income", days: solo.payout.sjukpenningDays + extraA, rate: rateA },
+        { caregiver: soloName, tier: "lagsta", days: solo.payout.lagstaDays, rate: lagstaRate },
+      ];
+    }
+    if (twoParent) {
+      const rec = twoParent.recommended;
+      const blocksFor = (id: "A" | "B"): GoalBlockSpec[] => {
+        const alloc = rec.allocation[id];
+        const name = id === "A" ? nameA : nameB;
+        const rate = id === "A" ? rateA : rateB;
+        const extra = id === "A" ? extraA : extraB;
+        return [
+          { caregiver: name, tier: "income", days: alloc.sjukpenning + extra, rate },
+          { caregiver: name, tier: "lagsta", days: alloc.lagsta, rate: lagstaRate },
+        ];
+      };
+      const order: ("A" | "B")[] =
+        firstCaregiver === "B" ? ["B", "A"] : ["A", "B"];
+      return [...blocksFor(order[0]), ...blocksFor(order[1])];
+    }
+    return [];
+  }, [remaining, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, rateA, rateB, firstCaregiver]);
+
+  // Solve the paces from the goal (target date / budget floor), when active.
+  const goalSolve = useMemo<GoalResult | null>(() => {
+    if (goalMode === "manual" || !asOf || !deadlines || rawBlocks.length === 0) {
+      return null;
+    }
+    const start = deadlines.birth > asOf ? deadlines.birth : asOf;
+    const spec: GoalSpec = {
+      birth: deadlines.birth,
+      start,
+      blocks: rawBlocks,
+      caregivers: soloMode
+        ? [{ name: soloName, worksPartTime: worksPartTimeA, salary: salaryA, partnerSalary: 0 }]
+        : [
+            { name: nameA, worksPartTime: worksPartTimeA, salary: salaryA, partnerSalary: householdBaseA },
+            { name: nameB, worksPartTime: worksPartTimeB, salary: salaryB, partnerSalary: householdBaseB },
+          ],
+    };
+    if (goalMode === "untilDate") {
+      if (!goalTarget || goalTarget.getTime() <= start.getTime()) return null;
+      return solveUntilDate(spec, goalTarget);
+    }
+    return solveBudget(spec, goalBudget);
+  }, [goalMode, goalTarget, goalBudget, asOf, deadlines, rawBlocks, soloMode, soloName, nameA, nameB, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB]);
+
   // How the leave plays out in calendar time. Caregivers are home in turn
   // (first → second), each drawing income-based days before lägstanivå, at a
-  // pace that may switch at the 1-year mark.
+  // pace that may switch at the 1-year mark. With a goal active, the solver's
+  // intervals are used directly (they may be truncated at the target date).
   const projection: LeaveProjection | null = useMemo(() => {
-    if (!asOf || !deadlines || !oneYear || !remaining || remaining.remaining.total <= 0) {
+    if (goalSolve) {
+      return goalSolve.intervals.length > 0
+        ? { segments: goalSolve.intervals }
+        : null;
+    }
+    if (!asOf || !deadlines || !oneYear || rawBlocks.length === 0) {
       return null;
     }
     const start = deadlines.birth > asOf ? deadlines.birth : asOf;
     const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
-    const lagstaRate = lagstanivaDailyAmount();
 
     // Build the pace schedule for a caregiver, enforcing the SGI minimum of
     // 5 days/week for leave taken after the child turns 1. Part-time workers
@@ -370,54 +462,32 @@ export function Planner() {
       }
       return [{ until: null, pace: p }];
     };
-
-    const blocks: LeaveBlock[] = [];
-    if (soloMode && solo) {
-      const schedule = scheduleFor("A");
-      blocks.push(
-        { caregiver: soloName, tier: "income", days: solo.payout.sjukpenningDays + extraA, rate: rateA, schedule },
-        { caregiver: soloName, tier: "lagsta", days: solo.payout.lagstaDays, rate: lagstaRate, schedule },
-      );
-    } else if (twoParent) {
-      const rec = twoParent.recommended;
-      const blocksFor = (id: "A" | "B"): LeaveBlock[] => {
-        const alloc = rec.allocation[id];
-        const extra = id === "A" ? extraA : extraB;
-        const rate = id === "A" ? rateA : rateB;
-        const name = id === "A" ? nameA : nameB;
-        const schedule = scheduleFor(id);
-        return [
-          { caregiver: name, tier: "income", days: alloc.sjukpenning + extra, rate, schedule },
-          { caregiver: name, tier: "lagsta", days: alloc.lagsta, rate: lagstaRate, schedule },
-        ];
-      };
-      const order: ("A" | "B")[] =
-        firstCaregiver === "B" ? ["B", "A"] : ["A", "B"];
-      blocks.push(...blocksFor(order[0]), ...blocksFor(order[1]));
+    const scheduleByName = new Map<string, ReturnType<typeof scheduleFor>>();
+    if (soloMode) {
+      scheduleByName.set(soloName, scheduleFor("A"));
     } else {
-      return null;
+      scheduleByName.set(nameA, scheduleFor("A"));
+      scheduleByName.set(nameB, scheduleFor("B"));
     }
 
+    const blocks: LeaveBlock[] = rawBlocks.map((b) => ({
+      ...b,
+      schedule: scheduleByName.get(b.caregiver) ?? [{ until: null, pace: 7 }],
+    }));
     const segments = buildLeaveIntervals(start, blocks);
     return segments.length > 0 ? { segments } : null;
   }, [
+    goalSolve,
     asOf,
     deadlines,
     oneYear,
-    remaining,
+    rawBlocks,
     soloMode,
-    solo,
-    twoParent,
     soloName,
     nameA,
     nameB,
     paceA,
     paceB,
-    rateA,
-    rateB,
-    extraA,
-    extraB,
-    firstCaregiver,
     switchA,
     switchB,
     phase1A,
@@ -433,7 +503,8 @@ export function Planner() {
   const sgiEnforced: PlanWarning[] = useMemo(() => {
     const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
     const out: PlanWarning[] = [];
-    if (!oneYear || !projection) return out;
+    // Goal modes report their own SGI lift (from the solved paces).
+    if (goalMode !== "manual" || !oneYear || !projection) return out;
     const check = (name: string, pace: number, works: boolean, sw: boolean) => {
       if (works || sw || pace >= sgiMin) return;
       const extended = projection.segments.some(
@@ -455,6 +526,7 @@ export function Planner() {
     }
     return out;
   }, [
+    goalMode,
     oneYear,
     projection,
     soloMode,
@@ -469,7 +541,63 @@ export function Planner() {
     switchB,
   ]);
 
-  const warnings = [...baseWarnings, ...sgiEnforced];
+  // Goal-mode warnings: an unreachable target date, a budget floor that can't
+  // be met, the SGI pace lift, and the 96-day cap on saved days.
+  const goalWarnings: PlanWarning[] = useMemo(() => {
+    if (!goalSolve || !deadlines) return [];
+    const out: PlanWarning[] = [];
+    const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
+    if (goalMode === "untilDate" && goalTarget && !goalSolve.targetMet) {
+      out.push({
+        level: "warning",
+        code: "goalDateShort",
+        message: `Dagarna räcker inte till ${formatDate(goalTarget)} ens i lägsta takt — det fattas ungefär ${goalSolve.shortfallDays} dagar. Flytta måldatumet, inkludera lägstanivådagarna eller jobba deltid under ledigheten.`,
+      });
+    }
+    if (
+      goalMode === "budget" &&
+      !goalSolve.targetMet &&
+      goalSolve.minHouseholdNet != null
+    ) {
+      out.push({
+        level: "warning",
+        code: "goalBudgetShort",
+        message: `Under en del av ledigheten når hushållet som mest ≈ ${formatSek(goalSolve.minHouseholdNet)}/mån efter skatt — under ert golv på ${formatSek(goalBudget)}/mån.`,
+      });
+    }
+    for (const name of goalSolve.sgiLifted) {
+      out.push({
+        level: "warning",
+        code: "sgiPaceEnforced",
+        message: `${name}s takt höjs till ${sgiMin} dagar/vecka efter barnets 1-årsdag för att SGI:n ska skyddas.`,
+      });
+    }
+    if (goalSolve.savedTotal > 96) {
+      out.push({
+        level: "warning",
+        code: "savedDaysCap",
+        message: `Ni sparar ungefär ${Math.round(goalSolve.savedTotal)} dagar till senare. Vid 4-årsdagen (${formatDate(deadlines.sjukpenningDeadline)}) får högst 96 dagar finnas kvar — planera in resten före dess, t.ex. till klämdagar och lov.`,
+      });
+    }
+    return out;
+  }, [goalSolve, goalMode, goalTarget, goalBudget, deadlines]);
+
+  const warnings = [...baseWarnings, ...sgiEnforced, ...goalWarnings];
+
+  // One-line result of the active goal, shown in the "Justera" section.
+  const goalSummary = useMemo(() => {
+    if (!goalSolve || !goalSolve.endsAt) return null;
+    const bits = [`Ledig till ${formatDate(goalSolve.endsAt)}`];
+    if (goalSolve.savedTotal >= 1) {
+      bits.push(`${Math.round(goalSolve.savedTotal)} dagar sparas till senare`);
+    }
+    if (goalSolve.minHouseholdNet != null) {
+      bits.push(
+        `hushållet som lägst ≈ ${formatSek(goalSolve.minHouseholdNet)}/mån efter skatt`,
+      );
+    }
+    return bits.join(" · ");
+  }, [goalSolve]);
 
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     const segs = projection?.segments ?? [];
@@ -481,6 +609,30 @@ export function Planner() {
         differenceInDays(mine[0].startsAt, mine[mine.length - 1].endsAt) / 30.4
       );
     };
+    // With a goal active the solver owns the paces (and possibly truncation).
+    const goalInfo = (name: string, rate: number) => {
+      const p = goalSolve!.paces[name] ?? { phase1: 7, phase2: 7 };
+      const pastYear1 =
+        oneYear != null &&
+        goalSolve!.intervals.some(
+          (s) =>
+            s.caregiver === name && s.endsAt.getTime() > oneYear.getTime(),
+        );
+      return {
+        startPace: p.phase1,
+        secondPhase:
+          pastYear1 && Math.abs(p.phase2 - p.phase1) > 0.05
+            ? {
+                daysPerWeek: p.phase2,
+                monthly: approxMonthlyGross(rate, p.phase2),
+              }
+            : undefined,
+      };
+    };
+    const goalLabel =
+      goalMode === "untilDate" && goalTarget
+        ? `Hemma till ${formatDate(goalTarget)}`
+        : "Längsta ledighet inom budget";
     const phaseInfo = (id: "A" | "B", rate: number, cgName: string) => {
       const worksPartTime = id === "A" ? worksPartTimeA : worksPartTimeB;
       if (id === "A" ? switchA : switchB) {
@@ -515,18 +667,25 @@ export function Planner() {
       works ? Math.round((salary * (7 - Math.max(0, Math.min(7, pace)))) / 7) : 0;
 
     if (soloMode && solo) {
-      const ph = phaseInfo("A", solo.payout.dailyRate, soloName);
+      const ph = goalSolve
+        ? goalInfo(soloName, solo.payout.dailyRate)
+        : phaseInfo("A", solo.payout.dailyRate, soloName);
       return [
         {
           name: soloName,
           dailyRate: solo.payout.dailyRate,
           grundnivaFirstDays: solo.payout.grundnivaDays,
-          days: solo.allocatedTotal + extraA,
+          days: goalSolve
+            ? Math.round(goalSolve.usedDays[soloName] ?? 0)
+            : solo.allocatedTotal + extraA,
           daysPerWeek: ph.startPace,
           leaveMonths: monthsFor(soloName),
           secondPhase: ph.secondPhase,
           extraDays: extraA,
-          goalLabel: goalA,
+          goalLabel: goalSolve ? goalLabel : goalA,
+          savedDays: goalSolve
+            ? Math.round(goalSolve.savedByCaregiver[soloName] ?? 0)
+            : undefined,
           aboveCap: aboveCapA,
           supplement: supplementA ?? undefined,
           householdBase: householdBaseA,
@@ -536,19 +695,28 @@ export function Planner() {
     }
     if (twoParent) {
       const rec = twoParent.recommended;
-      const phA = phaseInfo("A", rec.payout.A.dailyRate, nameA);
-      const phB = phaseInfo("B", rec.payout.B.dailyRate, nameB);
+      const phA = goalSolve
+        ? goalInfo(nameA, rec.payout.A.dailyRate)
+        : phaseInfo("A", rec.payout.A.dailyRate, nameA);
+      const phB = goalSolve
+        ? goalInfo(nameB, rec.payout.B.dailyRate)
+        : phaseInfo("B", rec.payout.B.dailyRate, nameB);
       return [
         {
           name: nameA,
           dailyRate: rec.payout.A.dailyRate,
           grundnivaFirstDays: rec.payout.A.grundnivaDays,
-          days: rec.allocatedTotals.A + extraA,
+          days: goalSolve
+            ? Math.round(goalSolve.usedDays[nameA] ?? 0)
+            : rec.allocatedTotals.A + extraA,
           daysPerWeek: phA.startPace,
           leaveMonths: monthsFor(nameA),
           secondPhase: phA.secondPhase,
           extraDays: extraA,
-          goalLabel: goalA,
+          goalLabel: goalSolve ? goalLabel : goalA,
+          savedDays: goalSolve
+            ? Math.round(goalSolve.savedByCaregiver[nameA] ?? 0)
+            : undefined,
           aboveCap: aboveCapA,
           supplement: supplementA ?? undefined,
           householdBase: householdBaseA,
@@ -559,12 +727,17 @@ export function Planner() {
           name: nameB,
           dailyRate: rec.payout.B.dailyRate,
           grundnivaFirstDays: rec.payout.B.grundnivaDays,
-          days: rec.allocatedTotals.B + extraB,
+          days: goalSolve
+            ? Math.round(goalSolve.usedDays[nameB] ?? 0)
+            : rec.allocatedTotals.B + extraB,
           daysPerWeek: phB.startPace,
           leaveMonths: monthsFor(nameB),
           secondPhase: phB.secondPhase,
           extraDays: extraB,
-          goalLabel: goalB,
+          goalLabel: goalSolve ? goalLabel : goalB,
+          savedDays: goalSolve
+            ? Math.round(goalSolve.savedByCaregiver[nameB] ?? 0)
+            : undefined,
           aboveCap: aboveCapB,
           supplement: supplementB ?? undefined,
           householdBase: householdBaseB,
@@ -574,7 +747,7 @@ export function Planner() {
       ];
     }
     return [];
-  }, [projection, oneYear, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB]);
+  }, [projection, goalSolve, goalMode, goalTarget, oneYear, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, paceA, paceB, goalA, goalB, aboveCapA, aboveCapB, supplementA, supplementB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB]);
 
   const vabResult = useMemo(
     () =>
@@ -646,6 +819,21 @@ export function Planner() {
         salaryB={salaryB}
         partTimeA={partTimeA}
         partTimeB={partTimeB}
+        goal={{
+          mode: goalMode,
+          dateStr: goalDateStr,
+          budget: goalBudget,
+          summary: goalSummary,
+          onMode: (m) => setForm((f) => ({ ...f, goalMode: m })),
+          onDate: (iso) => setForm((f) => ({ ...f, goalDate: iso })),
+          onBudget: (kr) =>
+            setForm((f) => ({ ...f, goalBudget: Math.max(0, Math.round(kr)) })),
+        }}
+        goalMarker={
+          goalMode === "untilDate" && goalTarget
+            ? { date: goalTarget, met: goalSolve?.targetMet ?? true }
+            : undefined
+        }
         monthlyRows={monthlyRows}
         projection={projection ?? undefined}
         vabResult={vabResult}

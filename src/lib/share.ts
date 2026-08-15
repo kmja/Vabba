@@ -1,5 +1,6 @@
 import type { PlanInput } from "@/lib/calc";
 import type { Objective } from "@/lib/optimizer";
+import type { GoalMode } from "@/lib/goal-seek";
 
 /**
  * The full planner state we can put in a shareable URL, so one partner can fill
@@ -47,6 +48,16 @@ export interface ShareableState {
   worksPartTimeB?: boolean;
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
+  /**
+   * Goal-seek mode on the results page: adjust paces manually, solve them to
+   * be home until a target date, or solve for the longest leave that keeps the
+   * household above a net monthly budget floor.
+   */
+  goalMode?: GoalMode;
+  /** ISO date (yyyy-mm-dd) for the "hemma till ett datum" goal. */
+  goalDate?: string;
+  /** Net kr/month floor for the "längsta ledighet inom budget" goal. */
+  goalBudget?: number;
   /**
    * Whether to spend the 90 flat lägstanivå days (180 kr) in the plan. When
    * false they're saved and the leave ends as the income-based days run out.

@@ -298,6 +298,42 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/deltidslön/).length).toBeGreaterThan(0);
   });
 
+  it("plans backwards from a target date and saves the leftover days", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Hemma till ett datum/ }));
+    // Target ~4 months out: far fewer calendar days than allocated benefit
+    // days, so the plan truncates and the rest are saved for later.
+    const target = new Date();
+    target.setDate(target.getDate() + 120);
+    fireEvent.change(container.querySelector("#goal-date")!, {
+      target: { value: target.toISOString().slice(0, 10) },
+    });
+    expect(screen.getAllByText(/till senare/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ledig till/).length).toBeGreaterThan(0);
+  });
+
+  it("solves the longest leave that clears a household budget floor", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    next(); // → step 4
+    fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Så länge budgeten tillåter/ }),
+    );
+    expect(container.querySelector("#goal-budget")).not.toBeNull();
+    // The solved plan is summarised (end date + lowest household net).
+    expect(screen.getAllByText(/Ledig till/).length).toBeGreaterThan(0);
+    // The manual per-person levers step aside while the solver owns the paces.
+    expect(
+      screen.queryByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
+    ).toBeNull();
+  });
+
   it("saves the lägstanivå days by default", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → step 3

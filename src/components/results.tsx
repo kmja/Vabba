@@ -7,6 +7,7 @@ import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import type { PhaseControls, PartTime } from "@/components/leave-levers";
+import type { GoalControls } from "@/components/goal-picker";
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
@@ -48,6 +49,8 @@ export function Results({
   salaryB,
   partTimeA,
   partTimeB,
+  goal,
+  goalMarker,
   monthlyRows,
   projection,
   vabResult,
@@ -85,6 +88,9 @@ export function Results({
   salaryB: number;
   partTimeA: PartTime;
   partTimeB: PartTime;
+  goal: GoalControls;
+  /** Target-date marker for the timeline (when the "hemma till" goal is set). */
+  goalMarker?: { date: Date; met: boolean };
   monthlyRows: MonthlyRow[];
   projection?: LeaveProjection;
   vabResult: VabResult | null;
@@ -131,6 +137,8 @@ export function Results({
             bonusFullMonthly={bonusFullA}
             salary={salaryA}
             partTime={partTimeA}
+            goal={goal}
+            birth={deadlines.birth}
           />
         ) : twoParent ? (
           <SplitSuggestion
@@ -153,6 +161,8 @@ export function Results({
             salaryB={salaryB}
             partTimeA={partTimeA}
             partTimeB={partTimeB}
+            goal={goal}
+            birth={deadlines.birth}
           />
         ) : null}
 
@@ -163,6 +173,7 @@ export function Results({
           asOf={asOf}
           projection={projection ?? undefined}
           rows={monthlyRows}
+          goal={goalMarker}
         />
       </div>
 

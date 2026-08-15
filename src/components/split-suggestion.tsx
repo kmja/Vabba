@@ -7,6 +7,7 @@ import {
   type PhaseControls,
   type PartTime,
 } from "@/components/leave-levers";
+import { GoalPicker, type GoalControls } from "@/components/goal-picker";
 import {
   OBJECTIVE_DESCRIPTION,
   type Objective,
@@ -41,6 +42,8 @@ export function SplitSuggestion({
   salaryB,
   partTimeA,
   partTimeB,
+  goal,
+  birth,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -63,12 +66,15 @@ export function SplitSuggestion({
   salaryB: number;
   partTimeA: PartTime;
   partTimeB: PartTime;
+  goal: GoalControls;
+  birth: Date;
 }) {
   const [open, setOpen] = useState(false);
   const rec = result.recommended;
   const aDays = rec.allocatedTotals.A;
   const bDays = rec.allocatedTotals.B;
   const pctA = Math.round((splitA ?? 0.5) * 100);
+  const goalActive = goal.mode !== "manual";
 
   const maxAlt = result.alternatives.find((a) => a.objective === "maxPayout");
   const diffVsMax = maxAlt ? rec.payout.total - maxAlt.payout.total : 0;
@@ -97,29 +103,48 @@ export function SplitSuggestion({
         </div>
 
         {/* Collapsed: each caregiver's leave-length slider — drag and watch the
-            timeline below shift. */}
-        {!open && (
-          <div className="space-y-2">
-            <LeaveLengthSlider
-              name={parentName(plan, "A")}
-              days={aDays}
-              dailyRate={rec.payout.A.dailyRate}
-              pace={paceA}
-              onSetTarget={onSetTargetA}
-            />
-            <LeaveLengthSlider
-              name={parentName(plan, "B")}
-              days={bDays}
-              dailyRate={rec.payout.B.dailyRate}
-              pace={paceB}
-              onSetTarget={onSetTargetB}
-            />
-          </div>
-        )}
+            timeline below shift. With a goal active, its solved result instead. */}
+        {!open &&
+          (goalActive ? (
+            goal.summary && (
+              <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
+            )
+          ) : (
+            <div className="space-y-2">
+              <LeaveLengthSlider
+                name={parentName(plan, "A")}
+                days={aDays}
+                dailyRate={rec.payout.A.dailyRate}
+                pace={paceA}
+                onSetTarget={onSetTargetA}
+              />
+              <LeaveLengthSlider
+                name={parentName(plan, "B")}
+                days={bDays}
+                dailyRate={rec.payout.B.dailyRate}
+                pace={paceB}
+                onSetTarget={onSetTargetB}
+              />
+            </div>
+          ))}
       </div>
 
       {open && (
         <div className="space-y-4 px-4 sm:px-6">
+          {/* Goal: solve the paces from a date or budget instead of by hand. */}
+          <GoalPicker
+            mode={goal.mode}
+            dateStr={goal.dateStr}
+            budget={goal.budget}
+            birth={birth}
+            onMode={goal.onMode}
+            onDate={goal.onDate}
+            onBudget={goal.onBudget}
+          />
+          {goalActive && goal.summary && (
+            <p className="text-sm font-medium tabular-nums">{goal.summary}</p>
+          )}
+
           {/* Day split between the caregivers */}
           {onSplitChange && splitA !== undefined && (
             <div className="space-y-1">
@@ -153,36 +178,39 @@ export function SplitSuggestion({
             {OBJECTIVE_DESCRIPTION[objective]}
           </p>
 
-          {/* Per-person pay ↔ duration levers */}
-          <div className="space-y-3">
-            <div className="text-muted-foreground text-xs">
-              Finjustera takten per vårdnadshavare:
+          {/* Per-person pay ↔ duration levers (hidden while a goal drives
+              the paces — the solver and the levers would fight). */}
+          {!goalActive && (
+            <div className="space-y-3">
+              <div className="text-muted-foreground text-xs">
+                Finjustera takten per vårdnadshavare:
+              </div>
+              <LeaveLevers
+                name={parentName(plan, "A")}
+                days={aDays}
+                dailyRate={rec.payout.A.dailyRate}
+                pace={paceA}
+                bonusFullMonthly={bonusFullA}
+                salary={salaryA}
+                partnerSalary={householdBaseA}
+                partTime={partTimeA}
+                onSetTarget={onSetTargetA}
+                phase={phaseA}
+              />
+              <LeaveLevers
+                name={parentName(plan, "B")}
+                days={bDays}
+                dailyRate={rec.payout.B.dailyRate}
+                pace={paceB}
+                bonusFullMonthly={bonusFullB}
+                salary={salaryB}
+                partnerSalary={householdBaseB}
+                partTime={partTimeB}
+                onSetTarget={onSetTargetB}
+                phase={phaseB}
+              />
             </div>
-            <LeaveLevers
-              name={parentName(plan, "A")}
-              days={aDays}
-              dailyRate={rec.payout.A.dailyRate}
-              pace={paceA}
-              bonusFullMonthly={bonusFullA}
-              salary={salaryA}
-              partnerSalary={householdBaseA}
-              partTime={partTimeA}
-              onSetTarget={onSetTargetA}
-              phase={phaseA}
-            />
-            <LeaveLevers
-              name={parentName(plan, "B")}
-              days={bDays}
-              dailyRate={rec.payout.B.dailyRate}
-              pace={paceB}
-              bonusFullMonthly={bonusFullB}
-              salary={salaryB}
-              partnerSalary={householdBaseB}
-              partTime={partTimeB}
-              onSetTarget={onSetTargetB}
-              phase={phaseB}
-            />
-          </div>
+          )}
 
           {/* Total payout */}
           <div className="bg-secondary/40 rounded-lg border p-4 text-center">
