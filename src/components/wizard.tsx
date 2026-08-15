@@ -291,8 +291,14 @@ export function Wizard({
     const next = flow[flow.indexOf(qid) + 1];
     if (next) {
       openQ(next);
-    } else {
-      flushSync(() => setActiveQ(""));
+      return;
+    }
+    flushSync(() => setActiveQ(""));
+    // Answering the step's LAST question flows straight into the next step.
+    // The final step keeps "Visa plan" as an explicit action (and step 1
+    // stays put until the birth date is valid).
+    if (current < stepCount && canAdvance) {
+      goTo(current + 1, true);
     }
   };
 

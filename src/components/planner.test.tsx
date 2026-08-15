@@ -225,11 +225,10 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     const birth = container.querySelector("#birth-date")!;
     fireEvent.change(birth, { target: { value: "2025-01-15" } });
-    // The date pick auto-advanced; answer the two choice questions by tap.
+    // The date pick auto-advanced; answer the two choice questions by tap —
+    // the LAST answer flows straight into step 2 with the name field focused.
     fireEvent.click(container.querySelector("#child-number-1")!);
     fireEvent.click(container.querySelector("#birth-count-1")!);
-    // Flow done — Enter now advances the step, focusing the name field.
-    fireEvent.keyDown(birth, { key: "Enter" });
     expect(container.querySelector("#a-q-name")).not.toBeNull();
     expect(document.activeElement?.id).toBe("a-name");
     // Enter in the name field opens the next question, focused.
@@ -458,10 +457,11 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
-    // Twins now live in the birth-count question (icon targets).
+    // Twins now live in the birth-count question (icon targets). It's the
+    // step's last question, so answering it flows straight into step 2.
     fireEvent.click(container.querySelector("#q-count")!);
     fireEvent.click(container.querySelector("#birth-count-2")!);
-    next(); // → step 2
+    expect(container.querySelector("#a-q-name")).not.toBeNull();
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
