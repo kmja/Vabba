@@ -177,6 +177,18 @@ describe("<Planner /> wizard", () => {
     expect(screen.queryByText(/Föräldralön \(arbetsgivaren\)/)).toBeNull();
   });
 
+  it("advances with the Enter key like a checkout", () => {
+    const { container } = render(<Planner />);
+    const birth = container.querySelector("#birth-date")!;
+    fireEvent.change(birth, { target: { value: "2025-01-15" } });
+    // Enter on the last field of the step runs the step's primary action.
+    fireEvent.keyDown(birth, { key: "Enter" });
+    expect(container.querySelector("#a-section-name")).not.toBeNull();
+    // Enter in the name field advances to the next accordion section.
+    fireEvent.keyDown(container.querySelector("#a-name")!, { key: "Enter" });
+    expect(container.querySelector("#a-income")).not.toBeNull();
+  });
+
   it("blocks step 1 until a birth date is entered", () => {
     render(<Planner />);
     const nextBtn = screen.getByRole("button", { name: /Nästa/ });

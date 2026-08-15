@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   IconAdjustments,
   IconArrowLeft,
@@ -9,13 +14,7 @@ import {
   IconRefresh,
 } from "@tabler/icons-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,6 +69,8 @@ export function Wizard({
     setAdvancedOpen(false);
     setSection(0);
   };
+
+  const formRef = useRef<HTMLFormElement>(null);
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
   const childNumber =
@@ -126,6 +127,46 @@ export function Wizard({
   // Which caregiver each step edits: step 2 = the one home first.
   const firstId: ParentId = soloMode ? "A" : firstCaregiver;
   const secondId: ParentId = firstId === "A" ? "B" : "A";
+
+  // The step's implicit next action (for the mobile keyboard's Enter):
+  // advance the open accordion section, then the step, then show the plan.
+  const primaryAction = () => {
+    const inAccordion =
+      current >= 2 && !(current === 3 && soloMode) && section < 2;
+    if (inAccordion) {
+      setSection(section + 1);
+      return;
+    }
+    if (current < stepCount) {
+      if (canAdvance) goTo(current + 1);
+      return;
+    }
+    if (valid) onSubmit();
+  };
+
+  // Enter walks through the fields like a checkout: focus the next visible
+  // field first; when there is none, run the primary action.
+  const onFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== "Enter") return;
+    const el = e.target as HTMLElement;
+    if (
+      el instanceof HTMLButtonElement ||
+      el instanceof HTMLSelectElement ||
+      (el instanceof HTMLInputElement &&
+        ["checkbox", "radio", "range"].includes(el.type))
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const fields = Array.from(
+      formRef.current?.querySelectorAll<HTMLElement>(
+        'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select',
+      ) ?? [],
+    );
+    const next = fields[fields.indexOf(el) + 1];
+    if (next) next.focus();
+    else primaryAction();
+  };
 
   const setSupplement = (
     id: ParentId,
@@ -638,35 +679,39 @@ export function Wizard({
   );
 
   return (
-    <Card className="mx-auto max-w-2xl">
-      <CardHeader>
-        <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-          <span>
-            Steg {current} av {stepCount}
-          </span>
-          <span>{stepTitles[current - 1]}</span>
+    <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0">
+      <form
+        ref={formRef}
+        onSubmit={(e) => e.preventDefault()}
+        onKeyDown={onFormKeyDown}
+      >
+        {/* Compact progress header — stays pinned while the step scrolls. */}
+        <div className="bg-card/95 sticky top-0 z-30 space-y-2 border-b px-4 py-3 backdrop-blur sm:rounded-t-xl sm:px-6">
+          <div className="flex items-center justify-between text-xs font-medium">
+            <span className="text-muted-foreground">
+              Steg {current} av {stepCount}
+            </span>
+            <span>{stepTitles[current - 1]}</span>
+          </div>
+          <div className="flex gap-1.5">
+            {stepTitles.map((t, i) => (
+              <div
+                key={t}
+                className={`h-1.5 flex-1 rounded-full ${
+                  i < current ? "bg-primary" : "bg-muted"
+                }`}
+              />
+            ))}
+          </div>
         </div>
-        <div className="flex gap-1.5">
-          {stepTitles.map((t, i) => (
-            <div
-              key={t}
-              className={`h-1.5 flex-1 rounded-full ${
-                i < current ? "bg-primary" : "bg-muted"
-              }`}
-            />
-          ))}
-        </div>
-        <CardTitle className="pt-2">{stepTitles[current - 1]}</CardTitle>
-        {current === 1 && (
-          <CardDescription>
-            Allt räknas ut och sparas lokalt i din webbläsare — inget skickas.
-          </CardDescription>
-        )}
-      </CardHeader>
 
-      <CardContent className="space-y-5">
+        <div className="space-y-5 px-4 py-5 sm:px-6">
         {current === 1 && (
           <>
+            <p className="text-muted-foreground text-xs">
+              Allt räknas ut och sparas lokalt i din webbläsare — inget
+              skickas.
+            </p>
             <div className="space-y-1.5">
               <Label htmlFor="birth-date">Födelsedatum (eller beräknat)</Label>
               <Input
@@ -931,13 +976,13 @@ export function Wizard({
           </>
         )}
 
-        <Separator />
+        </div>
 
-        <div className="flex items-center justify-between gap-2">
+        {/* Nav — pinned to the bottom of the screen, above the keyboard. */}
+        <div className="bg-card/95 sticky bottom-0 z-30 flex items-center justify-between gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6">
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             onClick={current === 1 ? onReset : () => goTo(current - 1)}
           >
             {current === 1 ? (
@@ -954,24 +999,18 @@ export function Wizard({
           {current < stepCount ? (
             <Button
               type="button"
-              size="sm"
               disabled={!canAdvance}
               onClick={() => goTo(current + 1)}
             >
               Nästa <IconArrowRight />
             </Button>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={!valid}
-              onClick={onSubmit}
-            >
+            <Button type="button" disabled={!valid} onClick={onSubmit}>
               Visa plan <IconArrowRight />
             </Button>
           )}
         </div>
-      </CardContent>
+      </form>
     </Card>
   );
 }
