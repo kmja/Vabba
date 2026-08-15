@@ -220,7 +220,7 @@ export function Wizard({
         id="advanced-options"
         onClick={() => setAdvancedOpen((o) => !o)}
         aria-expanded={advancedOpen}
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm font-medium"
+        className="text-muted-foreground hover:text-foreground flex min-h-11 items-center gap-1.5 text-sm font-medium sm:min-h-0"
       >
         <IconAdjustments className="size-4" />
         Avancerade inställningar
@@ -256,11 +256,11 @@ export function Wizard({
           id={`${opts.prefix}-section-${opts.sectionKey}`}
           onClick={() => openSectionAndFocus(opts.prefix, opts.index)}
           aria-expanded={open}
-          className="flex w-full items-center gap-2.5 p-3 text-left"
+          className="flex min-h-12 w-full items-center gap-2.5 p-3 text-left sm:min-h-0"
         >
           <span
             className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+              "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold sm:size-5 sm:text-[11px]",
               open
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground",
@@ -268,7 +268,7 @@ export function Wizard({
           >
             {opts.index + 1}
           </span>
-          <span className="shrink-0 text-sm font-medium">{opts.title}</span>
+          <span className="shrink-0 text-base font-medium sm:text-sm">{opts.title}</span>
           {!open && (
             <span className="text-muted-foreground ml-auto min-w-0 truncate text-xs">
               {opts.summary}
@@ -765,7 +765,7 @@ export function Wizard({
                 {CHILD_NUMBERS.map((c) => (
                   <label
                     key={c.value}
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2.5 text-sm ${
+                    className={`flex min-h-12 cursor-pointer items-center gap-2.5 rounded-lg border p-3 text-base sm:min-h-0 sm:gap-2 sm:p-2.5 sm:text-sm ${
                       childNumber === c.value
                         ? "border-primary bg-secondary/40"
                         : ""
@@ -783,7 +783,7 @@ export function Wizard({
                           hasExtraDays: c.value >= 2,
                         }))
                       }
-                      className="accent-primary size-4 shrink-0"
+                      className="accent-primary size-5 shrink-0 sm:size-4"
                     />
                     {c.label}
                   </label>

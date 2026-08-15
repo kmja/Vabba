@@ -83,10 +83,10 @@ export function CaregiverGoalControl({
               name={`${idPrefix}-goal`}
               checked={mode === m.value}
               onChange={() => onMode(m.value)}
-              className="accent-primary mt-0.5 size-4 shrink-0"
+              className="accent-primary mt-0.5 size-5 shrink-0 sm:size-4"
             />
             <span>
-              <span className="block text-sm font-medium">{m.label}</span>
+              <span className="block text-base font-medium sm:text-sm">{m.label}</span>
               <span className="text-muted-foreground block text-xs">
                 {m.desc}
               </span>
@@ -112,7 +112,7 @@ export function CaregiverGoalControl({
                   key={p.label}
                   type="button"
                   onClick={() => onDate(toIsoDate(p.date))}
-                  className="text-muted-foreground hover:text-foreground rounded-full border px-3 py-1 text-xs"
+                  className="text-muted-foreground hover:text-foreground min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
                 >
                   {p.label} · {formatDate(p.date)}
                 </button>

@@ -122,7 +122,7 @@ export function PeriodPager({
             aria-label={`Period ${i + 1}: ${per.caregiver}`}
             onClick={() => setIdx(i)}
             className={cn(
-              "h-2.5 flex-1 rounded-full transition-opacity",
+              "h-3.5 flex-1 rounded-full transition-opacity sm:h-2.5",
               CG_BAR[Math.max(0, cgOrder.indexOf(per.caregiver)) % CG_BAR.length],
               i === current ? "opacity-100" : "opacity-35 hover:opacity-60",
             )}

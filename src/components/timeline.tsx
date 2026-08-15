@@ -242,7 +242,7 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
         <span>{m.title}</span>
         <time
           dateTime={m.date.toISOString().slice(0, 10)}
-          className="ml-auto text-[10px] tabular-nums opacity-80"
+          className="ml-auto text-[11px] tabular-nums opacity-80"
         >
           {formatDate(m.date)}
         </time>
@@ -332,7 +332,7 @@ export function PeriodCard({
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="text-sm font-medium">{row.name}</span>
             {row.goalLabel && (
-              <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-[11px] font-medium">
+              <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
                 {row.goalLabel}
               </span>
             )}
@@ -354,7 +354,7 @@ export function PeriodCard({
           <span className="text-muted-foreground text-xs">
             {hasHousehold ? "Hushåll" : "Per månad"} · efter skatt
           </span>
-          <span className="text-xl font-bold tabular-nums">
+          <span className="text-2xl font-bold tabular-nums sm:text-xl">
             ≈ {formatSek(netAfterTax(household))}
             <span className="text-muted-foreground text-xs font-normal">/mån</span>
           </span>
@@ -368,7 +368,7 @@ export function PeriodCard({
 
         {/* Household breakdown — always rendered so tests can find the text */}
         {hasHousehold && (
-          <div className="text-muted-foreground mt-0.5 text-[11px] tabular-nums">
+          <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
             {row.name} ≈ {formatSek(own)}
             {row.partTimeSalary
               ? ` + deltidslön ≈ ${formatSek(row.partTimeSalary)}`
@@ -381,31 +381,31 @@ export function PeriodCard({
 
         {/* Conditional notes — always visible */}
         {row.secondPhase && (
-          <div className="mt-0.5 text-[11px] tabular-nums">
+          <div className="mt-0.5 text-xs tabular-nums">
             Efter 1 år: ≈ {formatSek(row.secondPhase.monthly)}/mån vid{" "}
             {formatPace(row.secondPhase.daysPerWeek)} dagar/vecka
           </div>
         )}
         {row.supplement && (
-          <div className="mt-0.5 text-[11px]">
+          <div className="mt-0.5 text-xs">
             + Föräldralön (arbetsgivaren) ≈ {formatSek(row.supplement.monthly)}/mån i
             ca {row.supplement.months} mån
             {row.aboveCap ? " · täcker även lön över taket" : ""}
           </div>
         )}
         {row.grundnivaFirstDays ? (
-          <div className="mt-0.5 text-[11px]">
+          <div className="mt-0.5 text-xs">
             Första {formatDays(row.grundnivaFirstDays)} på grundnivå (
             {formatSek(MONEY.grundnivaPerDay)}/dag)
           </div>
         ) : null}
         {row.extraDays ? (
-          <div className="text-muted-foreground mt-0.5 text-[11px]">
+          <div className="text-muted-foreground mt-0.5 text-xs">
             inkl. {formatDays(row.extraDays)} sparade från tidigare barn
           </div>
         ) : null}
         {row.savedDays ? (
-          <div className="mt-0.5 text-[11px]">
+          <div className="mt-0.5 text-xs">
             sparar {formatDays(row.savedDays)} till senare (klämdagar, lov …)
           </div>
         ) : null}
@@ -413,7 +413,7 @@ export function PeriodCard({
 
       {/* Fine print: gross amounts, per-day rate, pace — shown on demand */}
       {open && (
-        <div className="text-muted-foreground space-y-0.5 border-t px-3 pb-3 pt-2 text-[11px]">
+        <div className="text-muted-foreground space-y-0.5 border-t px-3 pb-3 pt-2 text-xs">
           {hasHousehold && (
             <div className="tabular-nums">
               Hushåll brutto ≈ {formatSek(household)}/mån
@@ -771,7 +771,7 @@ export function Timeline({
                     <MilestoneLabel m={it.m} asOf={asOf} />
                   )}
                   {compressed[i] && (
-                    <div className="text-muted-foreground my-auto self-center pt-2 text-[10px] tabular-nums">
+                    <div className="text-muted-foreground my-auto self-center pt-2 text-[11px] tabular-nums">
                       {gapLabel(gapDays[i])}
                     </div>
                   )}
@@ -794,7 +794,7 @@ export function Timeline({
 
         {/* Legend for the rails */}
         {cgOrder.length > 0 && (
-          <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 px-4 text-[11px] sm:px-6">
+          <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 px-4 text-xs sm:px-6">
             {cgOrder.map((name, idx) => (
               <span key={name} className="flex items-center gap-1.5">
                 <span
