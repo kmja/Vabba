@@ -6,6 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   IconAdjustments,
   IconArrowLeft,
@@ -64,13 +65,37 @@ export function Wizard({
   // Which accordion section is open within a caregiver step (checkout-style).
   const [section, setSection] = useState(0);
 
-  const goTo = (s: number) => {
-    setStep(s);
-    setAdvancedOpen(false);
-    setSection(0);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const FIELD_SELECTOR =
+    'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]), select';
+
+  /** Focus the first field in `root` — the keyboard follows the flow. */
+  const focusFieldIn = (root: ParentNode | null) => {
+    root?.querySelector<HTMLElement>(FIELD_SELECTOR)?.focus();
   };
 
-  const formRef = useRef<HTMLFormElement>(null);
+  const SECTION_KEYS = ["name", "economy", "goals"] as const;
+
+  /**
+   * Open an accordion section AND focus its first field in the same user
+   * gesture (flushSync) — required for the mobile keyboard to stay open.
+   */
+  const openSectionAndFocus = (prefix: string, index: number) => {
+    flushSync(() => setSection(index));
+    focusFieldIn(
+      document.getElementById(`${prefix}-section-${SECTION_KEYS[index]}-panel`),
+    );
+  };
+
+  const goTo = (s: number, focus = false) => {
+    flushSync(() => {
+      setStep(s);
+      setAdvancedOpen(false);
+      setSection(0);
+    });
+    if (focus) focusFieldIn(formRef.current);
+  };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
   const childNumber =
@@ -134,11 +159,12 @@ export function Wizard({
     const inAccordion =
       current >= 2 && !(current === 3 && soloMode) && section < 2;
     if (inAccordion) {
-      setSection(section + 1);
+      const prefix = (current === 2 ? firstId : secondId).toLowerCase();
+      openSectionAndFocus(prefix, section + 1);
       return;
     }
     if (current < stepCount) {
-      if (canAdvance) goTo(current + 1);
+      if (canAdvance) goTo(current + 1, true);
       return;
     }
     if (valid) onSubmit();
@@ -159,9 +185,7 @@ export function Wizard({
     }
     e.preventDefault();
     const fields = Array.from(
-      formRef.current?.querySelectorAll<HTMLElement>(
-        'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select',
-      ) ?? [],
+      formRef.current?.querySelectorAll<HTMLElement>(FIELD_SELECTOR) ?? [],
     );
     const next = fields[fields.indexOf(el) + 1];
     if (next) next.focus();
@@ -230,7 +254,7 @@ export function Wizard({
         <button
           type="button"
           id={`${opts.prefix}-section-${opts.sectionKey}`}
-          onClick={() => setSection(opts.index)}
+          onClick={() => openSectionAndFocus(opts.prefix, opts.index)}
           aria-expanded={open}
           className="flex w-full items-center gap-2.5 p-3 text-left"
         >
@@ -252,7 +276,10 @@ export function Wizard({
           )}
         </button>
         {open && (
-          <div className="space-y-3 border-t p-3">
+          <div
+            id={`${opts.prefix}-section-${opts.sectionKey}-panel`}
+            className="space-y-3 border-t p-3"
+          >
             {opts.children}
             {!opts.last && (
               <div className="flex justify-end">
@@ -260,7 +287,9 @@ export function Wizard({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setSection(opts.index + 1)}
+                  onClick={() =>
+                    openSectionAndFocus(opts.prefix, opts.index + 1)
+                  }
                 >
                   Fortsätt <IconArrowRight />
                 </Button>
@@ -1000,7 +1029,7 @@ export function Wizard({
             <Button
               type="button"
               disabled={!canAdvance}
-              onClick={() => goTo(current + 1)}
+              onClick={() => goTo(current + 1, true)}
             >
               Nästa <IconArrowRight />
             </Button>

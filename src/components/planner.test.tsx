@@ -177,16 +177,22 @@ describe("<Planner /> wizard", () => {
     expect(screen.queryByText(/Föräldralön \(arbetsgivaren\)/)).toBeNull();
   });
 
-  it("advances with the Enter key like a checkout", () => {
+  it("advances with the Enter key and moves focus to the next field", () => {
     const { container } = render(<Planner />);
     const birth = container.querySelector("#birth-date")!;
     fireEvent.change(birth, { target: { value: "2025-01-15" } });
-    // Enter on the last field of the step runs the step's primary action.
+    // Enter on the last field of the step runs the step's primary action —
+    // and the first field of the next step is focused (keyboard stays open).
     fireEvent.keyDown(birth, { key: "Enter" });
     expect(container.querySelector("#a-section-name")).not.toBeNull();
-    // Enter in the name field advances to the next accordion section.
+    expect(document.activeElement?.id).toBe("a-name");
+    // Enter in the name field opens the next accordion section, focused.
     fireEvent.keyDown(container.querySelector("#a-name")!, { key: "Enter" });
     expect(container.querySelector("#a-income")).not.toBeNull();
+    expect(document.activeElement?.id).toBe("a-income");
+    // Tapping a section header also lands focus in its first field.
+    fireEvent.click(container.querySelector("#a-section-goals")!);
+    expect(document.activeElement?.id).toBe("a-save-days");
   });
 
   it("blocks step 1 until a birth date is entered", () => {
