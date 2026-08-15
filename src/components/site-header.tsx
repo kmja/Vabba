@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { IconCalendar } from "@tabler/icons-react";
 
+import { ResetButton } from "@/components/reset-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { version } from "../../package.json";
 
@@ -15,7 +16,10 @@ export function SiteHeader() {
             v{version}
           </span>
         </Link>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <ResetButton />
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );
