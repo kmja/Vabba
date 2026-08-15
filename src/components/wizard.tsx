@@ -382,15 +382,6 @@ export function Wizard({
           },
     );
 
-  /** A "Fortsätt" row inside input questions (choices advance on their own). */
-  const continueRow = (qid: string) => (
-    <div className="flex justify-end">
-      <Button type="button" size="sm" onClick={() => advanceQ(qid)}>
-        Fortsätt <IconArrowRight />
-      </Button>
-    </div>
-  );
-
   /** Collapsed "Avancerade inställningar" section at the bottom of a step. */
   const advanced = (children: ReactNode) => (
     <div className="space-y-4">
@@ -616,7 +607,6 @@ export function Wizard({
               }
             />
           )}
-          {continueRow(`${prefix}-q-name`)}
         </FlowQuestion>
 
         <FlowQuestion
@@ -645,7 +635,6 @@ export function Wizard({
             }
             hint={amountHint}
           />
-          {continueRow(`${prefix}-q-income`)}
         </FlowQuestion>
 
         <FlowQuestion
@@ -755,8 +744,7 @@ export function Wizard({
                 }
                 hint="Perioden tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
               />
-              {continueRow(`${prefix}-q-goal`)}
-            </div>
+                </div>
           )}
         </FlowQuestion>
 
@@ -783,7 +771,6 @@ export function Wizard({
             }
             hint="Till klämdagar, lov och inskolning. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen."
           />
-          {continueRow(`${prefix}-q-save`)}
         </FlowQuestion>
 
         {childNumber >= 2 && (
@@ -809,8 +796,7 @@ export function Wizard({
               }
               hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
             />
-            {continueRow(`${prefix}-q-extra`)}
-          </FlowQuestion>
+            </FlowQuestion>
         )}
       </div>
     );
