@@ -102,7 +102,7 @@ describe("<Planner /> wizard", () => {
   it("adds the 10 birth-days for the other parent", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → last step
-    fireEvent.click(container.querySelector("#more-options")!);
+    fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#birth-days-enabled")!);
     showPlan();
     expect(screen.getByText("10 dagar vid barns födelse")).toBeTruthy();
@@ -117,6 +117,8 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
+    // The 240-day rule lives under the advanced settings (default: qualifies).
+    fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#a-240")!); // A no longer qualifies
     next(); // → step 3
     fireEvent.change(container.querySelector("#b-income")!, {
@@ -161,7 +163,7 @@ describe("<Planner /> wizard", () => {
   it("includes vab on the results page when enabled", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "40000" });
-    fireEvent.click(container.querySelector("#more-options")!);
+    fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#vab-enabled")!);
     showPlan();
     expect(screen.getByText("Vab – vård av sjukt barn")).toBeTruthy();
@@ -317,6 +319,8 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
+    // The lägstanivå toggle lives under step 1's advanced settings.
+    fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#include-lagsta")!);
     next(); // → step 2
     fireEvent.change(container.querySelector("#a-income")!, {

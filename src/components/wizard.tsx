@@ -2,6 +2,7 @@
 
 import { useState, type Dispatch, type SetStateAction } from "react";
 import {
+  IconAdjustments,
   IconArrowLeft,
   IconArrowRight,
   IconChevronDown,
@@ -45,139 +46,6 @@ const CHILD_NUMBERS = [
   { value: 4, label: "Fjärde eller senare" },
 ];
 
-function CaregiverFields({
-  idPrefix,
-  fallbackName,
-  value,
-  onChange,
-  supplement,
-  onSupplementChange,
-}: {
-  idPrefix: string;
-  fallbackName: string;
-  value: ParentInput;
-  onChange: (next: ParentInput) => void;
-  supplement: { enabled: boolean; months: number; pct: number };
-  onSupplementChange: (next: {
-    enabled: boolean;
-    months: number;
-    pct: number;
-  }) => void;
-}) {
-  const income = value.grossMonthlyIncome;
-  const aboveCap = value.incomeAboveCap ?? false;
-  const rate = sjukpenningnivaDailyAmount(income);
-  const amountHint =
-    income > 0
-      ? isAboveSgiCap(income)
-        ? `Över taket – ${formatSek(rate)}/dag (högsta belopp)`
-        : `Ger ca ${formatSek(rate)}/dag på sjukpenningnivå`
-      : "Vet du bara nettolönen? Brutto ≈ netto × 1,5.";
-  const capHint = `Räknar med högsta beloppet, ${formatSek(
-    MONEY.maxSjukpenningPerDay,
-  )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
-
-  return (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label htmlFor={`${idPrefix}-name`}>Namn (valfritt)</Label>
-        <Input
-          id={`${idPrefix}-name`}
-          value={value.name ?? ""}
-          placeholder={fallbackName}
-          onChange={(e) => onChange({ ...value, name: e.target.value })}
-        />
-      </div>
-      <IncomeField
-        id={`${idPrefix}-income`}
-        label="Bruttolön per månad (kr)"
-        value={income}
-        aboveCap={aboveCap}
-        onValueChange={(n) => onChange({ ...value, grossMonthlyIncome: n })}
-        onAboveCapChange={(b) => onChange({ ...value, incomeAboveCap: b })}
-        amountHint={amountHint}
-        capHint={capHint}
-      />
-
-      <CheckRow
-        id={`${idPrefix}-240`}
-        checked={value.meets240DayRule !== false}
-        onChange={(b) => onChange({ ...value, meets240DayRule: b })}
-      >
-        <span className="font-normal">
-          Har haft inkomst (SGI) i minst 240 dagar före födseln
-        </span>
-      </CheckRow>
-      {value.meets240DayRule === false && (
-        <p className="text-muted-foreground -mt-1 text-xs">
-          De första 180 dagarna betalas då på grundnivå (250 kr/dag) i stället
-          för på sjukpenningnivå.
-        </p>
-      )}
-
-      {/* Employer top-up — most collective agreements have one, so it's on by
-          default with an opt-out for those without. */}
-      <div className="space-y-2">
-        <CheckRow
-          id={`${idPrefix}-no-supplement`}
-          checked={!supplement.enabled}
-          onChange={(b) => onSupplementChange({ ...supplement, enabled: !b })}
-        >
-          <span className="font-normal">
-            Ingen föräldralön från arbetsgivaren (inget kollektivavtal)
-          </span>
-        </CheckRow>
-        {supplement.enabled && (
-          <div className="space-y-3">
-            {aboveCap && (
-              <NumberField
-                id={`${idPrefix}-supp-salary`}
-                label="Faktisk månadslön (brutto)"
-                value={income}
-                step={1000}
-                slider
-                sliderMax={100000}
-                onChange={(n) => onChange({ ...value, grossMonthlyIncome: n })}
-                hint="Behövs för att räkna föräldralön på lönedelar över taket."
-              />
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField
-                id={`${idPrefix}-supp-months`}
-                label="Antal månader"
-                value={supplement.months}
-                min={0}
-                max={24}
-                stepper
-                slider
-                onChange={(n) =>
-                  onSupplementChange({ ...supplement, months: n })
-                }
-              />
-              <NumberField
-                id={`${idPrefix}-supp-pct`}
-                label="Fyller upp till (% av lön)"
-                value={supplement.pct}
-                min={0}
-                max={100}
-                step={5}
-                stepper
-                slider
-                onChange={(n) => onSupplementChange({ ...supplement, pct: n })}
-              />
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Många kollektivavtal fyller upp till ca 90 % av lönen i ungefär 6
-              månader — och kompenserar då även lönedelar över taket. Kolla ditt
-              avtal för exakta villkor.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export function Wizard({
   form,
   setForm,
@@ -192,7 +60,12 @@ export function Wizard({
   onReset: () => void;
 }) {
   const [step, setStep] = useState(1);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const goTo = (s: number) => {
+    setStep(s);
+    setAdvancedOpen(false);
+  };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
   const childNumber =
@@ -221,9 +94,10 @@ export function Wizard({
   const birthDaysCaregiver = form.birthDaysCaregiver ?? "B";
   const birthDaysCount = form.birthDaysCount ?? 10;
   const twins = plan.childrenInBirth >= 2;
-  const birth = valid && isValidIsoDate(plan.birthDate)
-    ? parseIsoDate(plan.birthDate)
-    : null;
+  const birth =
+    valid && isValidIsoDate(plan.birthDate)
+      ? parseIsoDate(plan.birthDate)
+      : null;
 
   const setPlan = (updater: (p: PlanInput) => PlanInput) =>
     setForm((f) => ({ ...f, plan: updater(f.plan) }));
@@ -244,7 +118,116 @@ export function Wizard({
   const firstId: ParentId = soloMode ? "A" : firstCaregiver;
   const secondId: ParentId = firstId === "A" ? "B" : "A";
 
-  /** Per-caregiver goal + savings block, shared by steps 2 and 3. */
+  const setSupplement = (
+    id: ParentId,
+    s: { enabled: boolean; months: number; pct: number },
+  ) =>
+    setForm((f) =>
+      id === "A"
+        ? {
+            ...f,
+            supplementA: s.enabled,
+            supplementMonthsA: s.months,
+            supplementPctA: s.pct,
+          }
+        : {
+            ...f,
+            supplementB: s.enabled,
+            supplementMonthsB: s.months,
+            supplementPctB: s.pct,
+          },
+    );
+
+  /** Collapsed "Avancerade inställningar" section at the bottom of a step. */
+  const advanced = (children: React.ReactNode) => (
+    <div className="space-y-4">
+      <button
+        type="button"
+        id="advanced-options"
+        onClick={() => setAdvancedOpen((o) => !o)}
+        aria-expanded={advancedOpen}
+        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm font-medium"
+      >
+        <IconAdjustments className="size-4" />
+        Avancerade inställningar
+        <IconChevronDown
+          className={cn(
+            "size-4 transition-transform",
+            advancedOpen && "rotate-180",
+          )}
+        />
+      </button>
+      {advancedOpen && <div className="space-y-4">{children}</div>}
+    </div>
+  );
+
+  /** The typical caregiver questions: name, salary, benefits opt-out. */
+  const caregiverBasics = (id: ParentId) => {
+    const prefix = id.toLowerCase();
+    const value = plan.parents[id];
+    const income = value.grossMonthlyIncome;
+    const aboveCap = value.incomeAboveCap ?? false;
+    const rate = sjukpenningnivaDailyAmount(income);
+    const supplement = id === "A" ? supplementA : supplementB;
+    const amountHint =
+      income > 0
+        ? isAboveSgiCap(income)
+          ? `Över taket – ${formatSek(rate)}/dag (högsta belopp)`
+          : `Ger ca ${formatSek(rate)}/dag på sjukpenningnivå`
+        : "Vet du bara nettolönen? Brutto ≈ netto × 1,5.";
+    const capHint = `Räknar med högsta beloppet, ${formatSek(
+      MONEY.maxSjukpenningPerDay,
+    )}/dag (inkomst över ${formatSek(MONEY.sgiAnnualCap)}/år).`;
+
+    return (
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
+          <Input
+            id={`${prefix}-name`}
+            value={value.name ?? ""}
+            placeholder={`Vårdnadshavare ${id}`}
+            onChange={(e) => setParent(id, { ...value, name: e.target.value })}
+          />
+        </div>
+        <IncomeField
+          id={`${prefix}-income`}
+          label="Bruttolön per månad (kr)"
+          value={income}
+          aboveCap={aboveCap}
+          onValueChange={(n) =>
+            setParent(id, { ...value, grossMonthlyIncome: n })
+          }
+          onAboveCapChange={(b) =>
+            setParent(id, { ...value, incomeAboveCap: b })
+          }
+          amountHint={amountHint}
+          capHint={capHint}
+        />
+
+        {/* Employer top-up: most collective agreements have one, so it's on by
+            default — the details (percent, months) live under Avancerat. */}
+        <CheckRow
+          id={`${prefix}-no-supplement`}
+          checked={!supplement.enabled}
+          onChange={(b) => setSupplement(id, { ...supplement, enabled: !b })}
+        >
+          <span className="font-normal">
+            Ingen föräldralön från arbetsgivaren (inget kollektivavtal)
+          </span>
+        </CheckRow>
+        {supplement.enabled && (
+          <p className="text-muted-foreground -mt-1 text-xs">
+            Räknar med föräldralön som fyller upp till {supplement.pct} % av
+            lönen i {supplement.months} månader — justera under Avancerade
+            inställningar.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  /** Per-caregiver goal + savings, the heart of steps 2 and 3. */
   const caregiverPlanFields = (id: ParentId) => {
     const prefix = id.toLowerCase();
     const name =
@@ -252,8 +235,7 @@ export function Wizard({
       (soloMode ? "du" : `Vårdnadshavare ${id}`);
     const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
     const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
-    const budget =
-      (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
+    const budget = (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
     const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? 0;
     const extraDays = id === "A" ? extraDaysA : extraDaysB;
     return (
@@ -321,135 +303,191 @@ export function Wizard({
     );
   };
 
-  /** Optional extras (vab, 10-dagar, dubbeldagar), folded into the last step. */
-  const moreOptions = (
-    <div className="space-y-3">
-      <button
-        type="button"
-        id="more-options"
-        onClick={() => setMoreOpen((o) => !o)}
-        aria-expanded={moreOpen}
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm font-medium"
-      >
-        Fler val (valfritt)
-        <IconChevronDown
-          className={cn("size-4 transition-transform", moreOpen && "rotate-180")}
-        />
-      </button>
+  /** Advanced per-caregiver details: the 240-day rule + föräldralön terms. */
+  const caregiverAdvanced = (id: ParentId) => {
+    const prefix = id.toLowerCase();
+    const value = plan.parents[id];
+    const supplement = id === "A" ? supplementA : supplementB;
+    const aboveCap = value.incomeAboveCap ?? false;
+    return (
+      <div className="space-y-3">
+        <CheckRow
+          id={`${prefix}-240`}
+          checked={value.meets240DayRule !== false}
+          onChange={(b) => setParent(id, { ...value, meets240DayRule: b })}
+        >
+          <span className="font-normal">
+            Har haft inkomst (SGI) i minst 240 dagar före födseln
+          </span>
+        </CheckRow>
+        {value.meets240DayRule === false && (
+          <p className="text-muted-foreground -mt-1 text-xs">
+            De första 180 dagarna betalas då på grundnivå (250 kr/dag) i
+            stället för på sjukpenningnivå.
+          </p>
+        )}
 
-      {moreOpen && (
-        <div className="space-y-4">
-          {!soloMode && (
+        {supplement.enabled && (
+          <div className="space-y-3">
+            {aboveCap && (
+              <NumberField
+                id={`${prefix}-supp-salary`}
+                label="Faktisk månadslön (brutto)"
+                value={value.grossMonthlyIncome}
+                step={1000}
+                slider
+                sliderMax={100000}
+                onChange={(n) =>
+                  setParent(id, { ...value, grossMonthlyIncome: n })
+                }
+                hint="Behövs för att räkna föräldralön på lönedelar över taket."
+              />
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField
+                id={`${prefix}-supp-months`}
+                label="Föräldralön: månader"
+                value={supplement.months}
+                min={0}
+                max={24}
+                stepper
+                slider
+                onChange={(n) =>
+                  setSupplement(id, { ...supplement, months: n })
+                }
+              />
+              <NumberField
+                id={`${prefix}-supp-pct`}
+                label="Fyller upp till (% av lön)"
+                value={supplement.pct}
+                min={0}
+                max={100}
+                step={5}
+                stepper
+                slider
+                onChange={(n) => setSupplement(id, { ...supplement, pct: n })}
+              />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Många kollektivavtal fyller upp till ca 90 % av lönen i ungefär 6
+              månader — och kompenserar då även lönedelar över taket.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /** Optional extras (vab, 10-dagar, dubbeldagar) on the last step. */
+  const extrasAdvanced = (
+    <div className="space-y-4">
+      {!soloMode && (
+        <NumberField
+          id="double-days"
+          label="Dubbeldagar (båda hemma samtidigt)"
+          value={doubleDays}
+          min={0}
+          max={60}
+          stepper
+          slider
+          onChange={(n) => setForm((f) => ({ ...f, doubleDays: n }))}
+          hint="Varje dubbeldag kostar 2 dagar ur potten (max 60, före 15 mån)."
+        />
+      )}
+
+      <CheckRow
+        id="vab-enabled"
+        checked={vabEnabled}
+        onChange={(b) => setForm((f) => ({ ...f, vabEnabled: b }))}
+      >
+        Planera även vab (vård av sjukt barn)
+      </CheckRow>
+      {vabEnabled && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="vab-children">Antal barn (för vab)</Label>
+              <Select
+                id="vab-children"
+                value={vabChildren}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    vabChildren: Number(e.target.value),
+                  }))
+                }
+              >
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <option key={n} value={n}>
+                    {n} barn
+                  </option>
+                ))}
+              </Select>
+            </div>
             <NumberField
-              id="double-days"
-              label="Dubbeldagar (båda hemma samtidigt)"
-              value={doubleDays}
-              min={0}
-              max={60}
+              id="vab-used"
+              label="Vab-dagar uttagna i år"
+              value={vabDaysUsedThisYear}
               stepper
               slider
-              onChange={(n) => setForm((f) => ({ ...f, doubleDays: n }))}
-              hint="Varje dubbeldag kostar 2 dagar ur potten (max 60, före 15 mån)."
+              sliderMax={240}
+              onChange={(n) =>
+                setForm((f) => ({ ...f, vabDaysUsedThisYear: n }))
+              }
             />
-          )}
+          </div>
+          <FkSourceHint what="Uttagna vab-dagar" />
+        </>
+      )}
 
+      {!soloMode && (
+        <>
           <CheckRow
-            id="vab-enabled"
-            checked={vabEnabled}
-            onChange={(b) => setForm((f) => ({ ...f, vabEnabled: b }))}
+            id="birth-days-enabled"
+            checked={birthDaysEnabled}
+            onChange={(b) => setForm((f) => ({ ...f, birthDaysEnabled: b }))}
           >
-            Planera även vab (vård av sjukt barn)
+            10 dagar vid barns födelse (tillfällig föräldrapenning)
           </CheckRow>
-          {vabEnabled && (
+          {birthDaysEnabled && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="vab-children">Antal barn (för vab)</Label>
+                  <Label htmlFor="birth-days-who">Vem tar ut dagarna?</Label>
                   <Select
-                    id="vab-children"
-                    value={vabChildren}
+                    id="birth-days-who"
+                    value={birthDaysCaregiver}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        vabChildren: Number(e.target.value),
+                        birthDaysCaregiver: e.target.value as "A" | "B",
                       }))
                     }
                   >
-                    {[1, 2, 3, 4, 5, 6].map((n) => (
-                      <option key={n} value={n}>
-                        {n} barn
-                      </option>
-                    ))}
+                    <option value="A">{nameA}</option>
+                    <option value="B">{nameB}</option>
                   </Select>
                 </div>
                 <NumberField
-                  id="vab-used"
-                  label="Vab-dagar uttagna i år"
-                  value={vabDaysUsedThisYear}
+                  id="birth-days-count"
+                  label="Antal dagar (max 10)"
+                  value={birthDaysCount}
+                  min={0}
+                  max={10}
                   stepper
                   slider
-                  sliderMax={240}
                   onChange={(n) =>
-                    setForm((f) => ({ ...f, vabDaysUsedThisYear: n }))
+                    setForm((f) => ({ ...f, birthDaysCount: n }))
                   }
                 />
               </div>
-              <FkSourceHint what="Uttagna vab-dagar" />
+              <p className="text-muted-foreground text-xs">
+                Den andra vårdnadshavarens dagar i samband med födseln — utöver
+                de 480. Tas ut inom 60 dagar efter hemkomsten.
+              </p>
             </>
           )}
-
-          {!soloMode && (
-            <>
-              <CheckRow
-                id="birth-days-enabled"
-                checked={birthDaysEnabled}
-                onChange={(b) =>
-                  setForm((f) => ({ ...f, birthDaysEnabled: b }))
-                }
-              >
-                10 dagar vid barns födelse (tillfällig föräldrapenning)
-              </CheckRow>
-              {birthDaysEnabled && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="birth-days-who">Vem tar ut dagarna?</Label>
-                      <Select
-                        id="birth-days-who"
-                        value={birthDaysCaregiver}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            birthDaysCaregiver: e.target.value as "A" | "B",
-                          }))
-                        }
-                      >
-                        <option value="A">{nameA}</option>
-                        <option value="B">{nameB}</option>
-                      </Select>
-                    </div>
-                    <NumberField
-                      id="birth-days-count"
-                      label="Antal dagar (max 10)"
-                      value={birthDaysCount}
-                      min={0}
-                      max={10}
-                      stepper
-                      slider
-                      onChange={(n) =>
-                        setForm((f) => ({ ...f, birthDaysCount: n }))
-                      }
-                    />
-                  </div>
-                  <p className="text-muted-foreground text-xs">
-                    Den andra vårdnadshavarens dagar i samband med födseln —
-                    utöver de 480. Tas ut inom 60 dagar efter hemkomsten.
-                  </p>
-                </>
-              )}
-            </>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -590,103 +628,116 @@ export function Wizard({
             </div>
 
             <Separator />
-            <div className="space-y-3">
-              <CheckRow
-                id="has-used"
-                checked={hasUsedDays}
-                onChange={(b) => setForm((f) => ({ ...f, hasUsedDays: b }))}
-              >
-                {soloMode
-                  ? "Jag har redan tagit ut dagar för det här barnet"
-                  : "Vi har redan tagit ut dagar för det här barnet"}
-              </CheckRow>
-
-              {hasUsedDays && (
+            {advanced(
+              <>
                 <div className="space-y-3">
                   <CheckRow
-                    id="detailed-used"
-                    checked={detailedUsed}
+                    id="has-used"
+                    checked={hasUsedDays}
                     onChange={(b) =>
-                      setForm((f) => ({ ...f, detailedUsed: b }))
+                      setForm((f) => ({ ...f, hasUsedDays: b }))
                     }
                   >
-                    <span className="text-muted-foreground font-normal">
-                      Ange nivåer separat (sjukpenning/lägsta)
-                    </span>
+                    {soloMode
+                      ? "Jag har redan tagit ut dagar för det här barnet"
+                      : "Vi har redan tagit ut dagar för det här barnet"}
                   </CheckRow>
 
-                  {visibleIds.map((id) => {
-                    const p = plan.parents[id];
-                    const who =
-                      p.name?.trim() ||
-                      (soloMode ? "dig" : `Vårdnadshavare ${id}`);
-                    const suffix = visibleIds.length > 1 ? ` – ${who}` : "";
-                    return detailedUsed ? (
-                      <div key={id} className="grid grid-cols-2 gap-3">
-                        <NumberField
-                          id={`${id.toLowerCase()}-used-sjuk`}
-                          label={`Sjukpenningdagar${suffix}`}
-                          value={p.daysUsed.sjukpenning}
-                          stepper
-                          slider
-                          sliderMax={390}
-                          onChange={(n) =>
-                            setParentDays(id, {
-                              sjukpenning: n,
-                              lagsta: p.daysUsed.lagsta,
-                            })
-                          }
-                        />
-                        <NumberField
-                          id={`${id.toLowerCase()}-used-lagsta`}
-                          label={`Lägstanivådagar${suffix}`}
-                          value={p.daysUsed.lagsta}
-                          stepper
-                          slider
-                          sliderMax={90}
-                          onChange={(n) =>
-                            setParentDays(id, {
-                              sjukpenning: p.daysUsed.sjukpenning,
-                              lagsta: n,
-                            })
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <NumberField
-                        key={id}
-                        id={`${id.toLowerCase()}-used`}
-                        label={`Uttagna dagar${suffix}`}
-                        value={p.daysUsed.sjukpenning + p.daysUsed.lagsta}
-                        stepper
-                        slider
-                        sliderMax={480}
-                        onChange={(n) =>
-                          setParentDays(id, { sjukpenning: n, lagsta: 0 })
+                  {hasUsedDays && (
+                    <div className="space-y-3">
+                      <CheckRow
+                        id="detailed-used"
+                        checked={detailedUsed}
+                        onChange={(b) =>
+                          setForm((f) => ({ ...f, detailedUsed: b }))
                         }
-                      />
-                    );
-                  })}
-                  <FkSourceHint what="Uttagna dagar" />
-                </div>
-              )}
-            </div>
+                      >
+                        <span className="text-muted-foreground font-normal">
+                          Ange nivåer separat (sjukpenning/lägsta)
+                        </span>
+                      </CheckRow>
 
-            <Separator />
-            <div className="space-y-2">
-              <CheckRow
-                id="include-lagsta"
-                checked={includeLagsta}
-                onChange={(b) => setForm((f) => ({ ...f, includeLagsta: b }))}
-              >
-                Ta ut lägstanivådagarna (90 dagar à 180 kr)
-              </CheckRow>
-              <p className="text-muted-foreground text-xs">
-                {includeLagsta
-                  ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
-                  : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
-              </p>
-            </div>
+                      {visibleIds.map((id) => {
+                        const p = plan.parents[id];
+                        const who =
+                          p.name?.trim() ||
+                          (soloMode ? "dig" : `Vårdnadshavare ${id}`);
+                        const suffix =
+                          visibleIds.length > 1 ? ` – ${who}` : "";
+                        return detailedUsed ? (
+                          <div key={id} className="grid grid-cols-2 gap-3">
+                            <NumberField
+                              id={`${id.toLowerCase()}-used-sjuk`}
+                              label={`Sjukpenningdagar${suffix}`}
+                              value={p.daysUsed.sjukpenning}
+                              stepper
+                              slider
+                              sliderMax={390}
+                              onChange={(n) =>
+                                setParentDays(id, {
+                                  sjukpenning: n,
+                                  lagsta: p.daysUsed.lagsta,
+                                })
+                              }
+                            />
+                            <NumberField
+                              id={`${id.toLowerCase()}-used-lagsta`}
+                              label={`Lägstanivådagar${suffix}`}
+                              value={p.daysUsed.lagsta}
+                              stepper
+                              slider
+                              sliderMax={90}
+                              onChange={(n) =>
+                                setParentDays(id, {
+                                  sjukpenning: p.daysUsed.sjukpenning,
+                                  lagsta: n,
+                                })
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <NumberField
+                            key={id}
+                            id={`${id.toLowerCase()}-used`}
+                            label={`Uttagna dagar${suffix}`}
+                            value={
+                              p.daysUsed.sjukpenning + p.daysUsed.lagsta
+                            }
+                            stepper
+                            slider
+                            sliderMax={480}
+                            onChange={(n) =>
+                              setParentDays(id, {
+                                sjukpenning: n,
+                                lagsta: 0,
+                              })
+                            }
+                          />
+                        );
+                      })}
+                      <FkSourceHint what="Uttagna dagar" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <CheckRow
+                    id="include-lagsta"
+                    checked={includeLagsta}
+                    onChange={(b) =>
+                      setForm((f) => ({ ...f, includeLagsta: b }))
+                    }
+                  >
+                    Ta ut lägstanivådagarna (90 dagar à 180 kr)
+                  </CheckRow>
+                  <p className="text-muted-foreground text-xs">
+                    {includeLagsta
+                      ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
+                      : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
+                  </p>
+                </div>
+              </>,
+            )}
           </>
         )}
 
@@ -718,38 +769,15 @@ export function Wizard({
               </>
             )}
 
-            <CaregiverFields
-              idPrefix={firstId.toLowerCase()}
-              fallbackName={`Vårdnadshavare ${firstId}`}
-              value={plan.parents[firstId]}
-              onChange={(next) => setParent(firstId, next)}
-              supplement={firstId === "A" ? supplementA : supplementB}
-              onSupplementChange={(s) =>
-                setForm((f) =>
-                  firstId === "A"
-                    ? {
-                        ...f,
-                        supplementA: s.enabled,
-                        supplementMonthsA: s.months,
-                        supplementPctA: s.pct,
-                      }
-                    : {
-                        ...f,
-                        supplementB: s.enabled,
-                        supplementMonthsB: s.months,
-                        supplementPctB: s.pct,
-                      },
-                )
-              }
-            />
-
+            {caregiverBasics(firstId)}
             {caregiverPlanFields(firstId)}
 
-            {soloMode && (
+            <Separator />
+            {advanced(
               <>
-                <Separator />
-                {moreOptions}
-              </>
+                {caregiverAdvanced(firstId)}
+                {soloMode && extrasAdvanced}
+              </>,
             )}
           </>
         )}
@@ -765,35 +793,16 @@ export function Wizard({
               är klar.
             </p>
 
-            <CaregiverFields
-              idPrefix={secondId.toLowerCase()}
-              fallbackName={`Vårdnadshavare ${secondId}`}
-              value={plan.parents[secondId]}
-              onChange={(next) => setParent(secondId, next)}
-              supplement={secondId === "A" ? supplementA : supplementB}
-              onSupplementChange={(s) =>
-                setForm((f) =>
-                  secondId === "A"
-                    ? {
-                        ...f,
-                        supplementA: s.enabled,
-                        supplementMonthsA: s.months,
-                        supplementPctA: s.pct,
-                      }
-                    : {
-                        ...f,
-                        supplementB: s.enabled,
-                        supplementMonthsB: s.months,
-                        supplementPctB: s.pct,
-                      },
-                )
-              }
-            />
-
+            {caregiverBasics(secondId)}
             {caregiverPlanFields(secondId)}
 
             <Separator />
-            {moreOptions}
+            {advanced(
+              <>
+                {caregiverAdvanced(secondId)}
+                {extrasAdvanced}
+              </>,
+            )}
           </>
         )}
 
@@ -804,7 +813,7 @@ export function Wizard({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={current === 1 ? onReset : () => setStep(current - 1)}
+            onClick={current === 1 ? onReset : () => goTo(current - 1)}
           >
             {current === 1 ? (
               <>
@@ -822,7 +831,7 @@ export function Wizard({
               type="button"
               size="sm"
               disabled={!canAdvance}
-              onClick={() => setStep(current + 1)}
+              onClick={() => goTo(current + 1)}
             >
               Nästa <IconArrowRight />
             </Button>
