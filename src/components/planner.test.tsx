@@ -128,6 +128,24 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/Kim är hemma/)).toBeTruthy();
   });
 
+  it("keeps the family scene mounted across steps (animated stage)", () => {
+    const { container } = render(<Planner />);
+    const scene = () => container.querySelector("[data-family-scene]");
+    expect(scene()).not.toBeNull();
+    const el = scene();
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next(); // → step 2
+    // Same element instance — the camera/handover can animate between steps.
+    expect(scene()).toBe(el);
+    // The first caregiver's name tag appears in the scene from step 2 on.
+    fireEvent.change(container.querySelector("#a-name")!, {
+      target: { value: "Kim Andersson" },
+    });
+    expect(el?.textContent).toContain("Kim");
+  });
+
   it("swipes between months in the calendar", () => {
     const { container } = render(<Planner />);
     const grid = container.querySelector("[data-calendar-grid]")!;

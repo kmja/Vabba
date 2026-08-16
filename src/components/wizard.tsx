@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
+import { FamilyScene } from "@/components/family-scene";
 import { FlowQuestion } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
@@ -171,9 +172,9 @@ export function Wizard({
 
   /** Focusable fields, excluding those inside collapsed (inert) panels. */
   const visibleFields = (root: ParentNode | null): HTMLElement[] =>
-    Array.from(root?.querySelectorAll<HTMLElement>(FIELD_SELECTOR) ?? []).filter(
-      (el) => !el.closest("[inert]"),
-    );
+    Array.from(
+      root?.querySelectorAll<HTMLElement>(FIELD_SELECTOR) ?? [],
+    ).filter((el) => !el.closest("[inert]"));
 
   /**
    * Keep a focused field visible: center it now AND again shortly after,
@@ -281,6 +282,10 @@ export function Wizard({
   // Which caregiver each step edits: step 2 = the one home first.
   const firstId: ParentId = soloMode ? "A" : firstCaregiver;
   const secondId: ParentId = firstId === "A" ? "B" : "A";
+
+  // Short name for the scene's name tags (first name, or the letter badge).
+  const sceneName = (id: ParentId) =>
+    plan.parents[id].name?.trim().split(/\s+/)[0] || id;
 
   /** The ordered question ids of a caregiver's flow. */
   const cgFlow = (id: ParentId): string[] => {
@@ -591,7 +596,9 @@ export function Wizard({
               autoCapitalize="words"
               value={value.name ?? ""}
               placeholder={soloMode ? "Ditt namn" : `Vårdnadshavare ${id}`}
-              onChange={(e) => setParent(id, { ...value, name: e.target.value })}
+              onChange={(e) =>
+                setParent(id, { ...value, name: e.target.value })
+              }
             />
           </div>
           {/* The person filling this in is usually the first caregiver —
@@ -630,9 +637,7 @@ export function Wizard({
             label="Bruttolön per månad (kr)"
             value={income}
             step={1000}
-            onChange={(n) =>
-              setParent(id, { ...value, grossMonthlyIncome: n })
-            }
+            onChange={(n) => setParent(id, { ...value, grossMonthlyIncome: n })}
             hint={amountHint}
           />
         </FlowQuestion>
@@ -744,7 +749,7 @@ export function Wizard({
                 }
                 hint="Perioden tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
               />
-                </div>
+            </div>
           )}
         </FlowQuestion>
 
@@ -791,12 +796,14 @@ export function Wizard({
               sliderMax={200}
               onChange={(n) =>
                 setForm((f) =>
-                  id === "A" ? { ...f, extraDaysA: n } : { ...f, extraDaysB: n },
+                  id === "A"
+                    ? { ...f, extraDaysA: n }
+                    : { ...f, extraDaysB: n },
                 )
               }
               hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
             />
-            </FlowQuestion>
+          </FlowQuestion>
         )}
       </div>
     );
@@ -821,8 +828,8 @@ export function Wizard({
         </CheckRow>
         {value.meets240DayRule === false && (
           <p className="text-muted-foreground -mt-1 text-xs">
-            De första 180 dagarna betalas då på grundnivå (250 kr/dag) i
-            stället för på sjukpenningnivå.
+            De första 180 dagarna betalas då på grundnivå (250 kr/dag) i stället
+            för på sjukpenningnivå.
           </p>
         )}
 
@@ -1026,192 +1033,201 @@ export function Wizard({
         </div>
 
         <div
-          key={current}
           ref={contentRef}
-          className="animate-flow-in space-y-5 px-4 py-5 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6"
+          className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5"
         >
-          {current === 1 && (
-            <>
-              {babyFlow}
-              {!valid && (
-                <p className="text-destructive text-xs">
-                  Ange ett giltigt födelse- eller beräknat datum.
-                </p>
-              )}
+          {/* The family stage — persists across steps so the camera pans,
+              the zoom-out and the handover animate between them. */}
+          <FamilyScene
+            step={current}
+            soloMode={soloMode}
+            nameFirst={sceneName(firstId)}
+            nameSecond={soloMode ? "" : sceneName(secondId)}
+          />
+          <div key={current} className="animate-flow-in mt-4 space-y-5">
+            {current === 1 && (
+              <>
+                {babyFlow}
+                {!valid && (
+                  <p className="text-destructive text-xs">
+                    Ange ett giltigt födelse- eller beräknat datum.
+                  </p>
+                )}
 
-              <Separator />
-              {advanced(
-                <>
-                  <div className="space-y-3">
-                    <CheckRow
-                      id="has-used"
-                      checked={hasUsedDays}
-                      onChange={(b) =>
-                        setForm((f) => ({ ...f, hasUsedDays: b }))
-                      }
-                    >
-                      {soloMode
-                        ? "Jag har redan tagit ut dagar för det här barnet"
-                        : "Vi har redan tagit ut dagar för det här barnet"}
-                    </CheckRow>
+                <Separator />
+                {advanced(
+                  <>
+                    <div className="space-y-3">
+                      <CheckRow
+                        id="has-used"
+                        checked={hasUsedDays}
+                        onChange={(b) =>
+                          setForm((f) => ({ ...f, hasUsedDays: b }))
+                        }
+                      >
+                        {soloMode
+                          ? "Jag har redan tagit ut dagar för det här barnet"
+                          : "Vi har redan tagit ut dagar för det här barnet"}
+                      </CheckRow>
 
-                    {hasUsedDays && (
-                      <div className="space-y-3">
-                        <CheckRow
-                          id="detailed-used"
-                          checked={detailedUsed}
-                          onChange={(b) =>
-                            setForm((f) => ({ ...f, detailedUsed: b }))
-                          }
-                        >
-                          <span className="text-muted-foreground font-normal">
-                            Ange nivåer separat (sjukpenning/lägsta)
-                          </span>
-                        </CheckRow>
+                      {hasUsedDays && (
+                        <div className="space-y-3">
+                          <CheckRow
+                            id="detailed-used"
+                            checked={detailedUsed}
+                            onChange={(b) =>
+                              setForm((f) => ({ ...f, detailedUsed: b }))
+                            }
+                          >
+                            <span className="text-muted-foreground font-normal">
+                              Ange nivåer separat (sjukpenning/lägsta)
+                            </span>
+                          </CheckRow>
 
-                        {visibleIds.map((id) => {
-                          const p = plan.parents[id];
-                          const who =
-                            p.name?.trim() ||
-                            (soloMode ? "dig" : `Vårdnadshavare ${id}`);
-                          const suffix =
-                            visibleIds.length > 1 ? ` – ${who}` : "";
-                          return detailedUsed ? (
-                            <div key={id} className="grid grid-cols-2 gap-3">
+                          {visibleIds.map((id) => {
+                            const p = plan.parents[id];
+                            const who =
+                              p.name?.trim() ||
+                              (soloMode ? "dig" : `Vårdnadshavare ${id}`);
+                            const suffix =
+                              visibleIds.length > 1 ? ` – ${who}` : "";
+                            return detailedUsed ? (
+                              <div key={id} className="grid grid-cols-2 gap-3">
+                                <NumberField
+                                  id={`${id.toLowerCase()}-used-sjuk`}
+                                  label={`Sjukpenningdagar${suffix}`}
+                                  value={p.daysUsed.sjukpenning}
+                                  stepper
+                                  slider
+                                  sliderMax={390}
+                                  onChange={(n) =>
+                                    setParentDays(id, {
+                                      sjukpenning: n,
+                                      lagsta: p.daysUsed.lagsta,
+                                    })
+                                  }
+                                />
+                                <NumberField
+                                  id={`${id.toLowerCase()}-used-lagsta`}
+                                  label={`Lägstanivådagar${suffix}`}
+                                  value={p.daysUsed.lagsta}
+                                  stepper
+                                  slider
+                                  sliderMax={90}
+                                  onChange={(n) =>
+                                    setParentDays(id, {
+                                      sjukpenning: p.daysUsed.sjukpenning,
+                                      lagsta: n,
+                                    })
+                                  }
+                                />
+                              </div>
+                            ) : (
                               <NumberField
-                                id={`${id.toLowerCase()}-used-sjuk`}
-                                label={`Sjukpenningdagar${suffix}`}
-                                value={p.daysUsed.sjukpenning}
+                                key={id}
+                                id={`${id.toLowerCase()}-used`}
+                                label={`Uttagna dagar${suffix}`}
+                                value={
+                                  p.daysUsed.sjukpenning + p.daysUsed.lagsta
+                                }
                                 stepper
                                 slider
-                                sliderMax={390}
+                                sliderMax={480}
                                 onChange={(n) =>
                                   setParentDays(id, {
                                     sjukpenning: n,
-                                    lagsta: p.daysUsed.lagsta,
+                                    lagsta: 0,
                                   })
                                 }
                               />
-                              <NumberField
-                                id={`${id.toLowerCase()}-used-lagsta`}
-                                label={`Lägstanivådagar${suffix}`}
-                                value={p.daysUsed.lagsta}
-                                stepper
-                                slider
-                                sliderMax={90}
-                                onChange={(n) =>
-                                  setParentDays(id, {
-                                    sjukpenning: p.daysUsed.sjukpenning,
-                                    lagsta: n,
-                                  })
-                                }
-                              />
-                            </div>
-                          ) : (
-                            <NumberField
-                              key={id}
-                              id={`${id.toLowerCase()}-used`}
-                              label={`Uttagna dagar${suffix}`}
-                              value={
-                                p.daysUsed.sjukpenning + p.daysUsed.lagsta
-                              }
-                              stepper
-                              slider
-                              sliderMax={480}
-                              onChange={(n) =>
-                                setParentDays(id, {
-                                  sjukpenning: n,
-                                  lagsta: 0,
-                                })
-                              }
-                            />
-                          );
-                        })}
-                        <FkSourceHint what="Uttagna dagar" />
-                      </div>
-                    )}
-                  </div>
+                            );
+                          })}
+                          <FkSourceHint what="Uttagna dagar" />
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="space-y-2">
-                    <CheckRow
-                      id="include-lagsta"
-                      checked={includeLagsta}
-                      onChange={(b) =>
-                        setForm((f) => ({ ...f, includeLagsta: b }))
-                      }
-                    >
-                      Ta ut lägstanivådagarna (90 dagar à 180 kr)
-                    </CheckRow>
-                    <p className="text-muted-foreground text-xs">
-                      {includeLagsta
-                        ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
-                        : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
-                    </p>
-                  </div>
-                </>,
-              )}
-            </>
-          )}
+                    <div className="space-y-2">
+                      <CheckRow
+                        id="include-lagsta"
+                        checked={includeLagsta}
+                        onChange={(b) =>
+                          setForm((f) => ({ ...f, includeLagsta: b }))
+                        }
+                      >
+                        Ta ut lägstanivådagarna (90 dagar à 180 kr)
+                      </CheckRow>
+                      <p className="text-muted-foreground text-xs">
+                        {includeLagsta
+                          ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
+                          : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
+                      </p>
+                    </div>
+                  </>,
+                )}
+              </>
+            )}
 
-          {current === 2 && (
-            <>
-              <p className="text-muted-foreground text-sm">
-                {soloMode
-                  ? "Dina uppgifter — du har alla dagarna."
-                  : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
-              </p>
-
-              {caregiverFlow(firstId)}
-
-              <Separator />
-              {advanced(caregiverAdvanced(firstId))}
-            </>
-          )}
-
-          {current === 3 && (
-            <>
-              <CheckRow
-                id="solo-mode"
-                checked={soloMode}
-                onChange={(b) =>
-                  setForm((f) => ({
-                    ...f,
-                    soloMode: b,
-                    ...(b ? { firstCaregiver: "A" as const } : {}),
-                  }))
-                }
-              >
-                Jag planerar ensam — det finns ingen andra vårdnadshavare
-              </CheckRow>
-
-              {soloMode ? (
+            {current === 2 && (
+              <>
                 <p className="text-muted-foreground text-sm">
-                  Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
+                  {soloMode
+                    ? "Dina uppgifter — du har alla dagarna."
+                    : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
                 </p>
-              ) : (
-                <>
+
+                {caregiverFlow(firstId)}
+
+                <Separator />
+                {advanced(caregiverAdvanced(firstId))}
+              </>
+            )}
+
+            {current === 3 && (
+              <>
+                <CheckRow
+                  id="solo-mode"
+                  checked={soloMode}
+                  onChange={(b) =>
+                    setForm((f) => ({
+                      ...f,
+                      soloMode: b,
+                      ...(b ? { firstCaregiver: "A" as const } : {}),
+                    }))
+                  }
+                >
+                  Jag planerar ensam — det finns ingen andra vårdnadshavare
+                </CheckRow>
+
+                {soloMode ? (
                   <p className="text-muted-foreground text-sm">
-                    {plan.parents[secondId].name?.trim() ||
-                      `Vårdnadshavare ${secondId}`}{" "}
-                    tar över när{" "}
-                    {plan.parents[firstId].name?.trim() ||
-                      `Vårdnadshavare ${firstId}`}{" "}
-                    är klar.
+                    Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
                   </p>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground text-sm">
+                      {plan.parents[secondId].name?.trim() ||
+                        `Vårdnadshavare ${secondId}`}{" "}
+                      tar över när{" "}
+                      {plan.parents[firstId].name?.trim() ||
+                        `Vårdnadshavare ${firstId}`}{" "}
+                      är klar.
+                    </p>
 
-                  {caregiverFlow(secondId)}
-                </>
-              )}
+                    {caregiverFlow(secondId)}
+                  </>
+                )}
 
-              <Separator />
-              {advanced(
-                <>
-                  {!soloMode && caregiverAdvanced(secondId)}
-                  {extrasAdvanced}
-                </>,
-              )}
-            </>
-          )}
+                <Separator />
+                {advanced(
+                  <>
+                    {!soloMode && caregiverAdvanced(secondId)}
+                    {extrasAdvanced}
+                  </>,
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Nav — pinned to the bottom of the screen, above the keyboard. */}
