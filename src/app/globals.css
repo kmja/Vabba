@@ -169,8 +169,32 @@
 .animate-flow-in {
   animation: flow-in 0.3s ease-out both;
 }
+
+/* Calendar months travel in the direction of the swipe, so the gesture
+   explains itself: swipe left → next month enters from the right. */
+@keyframes month-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(38%);
+  }
+}
+@keyframes month-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-38%);
+  }
+}
+.animate-month-next {
+  animation: month-from-right 0.32s cubic-bezier(0.22, 0.7, 0.3, 1) both;
+}
+.animate-month-prev {
+  animation: month-from-left 0.32s cubic-bezier(0.22, 0.7, 0.3, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-flow-in {
+  .animate-flow-in,
+  .animate-month-next,
+  .animate-month-prev {
     animation: none;
   }
 }

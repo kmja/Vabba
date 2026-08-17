@@ -58,6 +58,8 @@ export function InlineCalendar({
     selected ? startOfMonth(selected) : null,
   );
   const [today, setToday] = useState<Date | null>(null);
+  // +1 = moved forward (enter from the right), -1 = back (enter from the left).
+  const [dir, setDir] = useState(1);
   useEffect(() => {
     const now = new Date();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only init of "today"
@@ -90,12 +92,14 @@ export function InlineCalendar({
     ),
   ];
 
-  const shiftMonth = (delta: number) =>
+  const shiftMonth = (delta: number) => {
+    setDir(delta >= 0 ? 1 : -1);
     setView(
       new Date(
         Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + delta, 1),
       ),
     );
+  };
 
   // Swipe between months (horizontal only — vertical stays page scroll).
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -117,7 +121,6 @@ export function InlineCalendar({
 
   const isSameDay = (a: Date, b: Date | null) =>
     b != null && toIsoDate(a) === toIsoDate(b);
-
   const monthKey = `${first.getUTCFullYear()}-${first.getUTCMonth()}`;
 
   return (
@@ -133,21 +136,23 @@ export function InlineCalendar({
         </button>
         <div className="flex items-center gap-2">
           <span
+            key={`m-${monthKey}`}
             data-calendar-month
-            className="text-base font-medium sm:text-sm"
+            className={cn(
+              "w-24 text-center text-base font-medium sm:text-sm",
+              dir > 0 ? "animate-month-next" : "animate-month-prev",
+            )}
           >
             {SV_MONTHS[first.getUTCMonth()]}
           </span>
           <Select
             aria-label="År"
             value={first.getUTCFullYear()}
-            onChange={(e) =>
-              setView(
-                new Date(
-                  Date.UTC(Number(e.target.value), first.getUTCMonth(), 1),
-                ),
-              )
-            }
+            onChange={(e) => {
+              const y = Number(e.target.value);
+              setDir(y >= first.getUTCFullYear() ? 1 : -1);
+              setView(new Date(Date.UTC(y, first.getUTCMonth(), 1)));
+            }}
             className="w-24"
           >
             {years.map((y) => (
@@ -167,43 +172,52 @@ export function InlineCalendar({
         </button>
       </div>
 
+      {/* The grid is keyed by month so each change re-runs the slide-in. The
+          wrapper keeps the swipe handlers mounted across the animation. */}
       <div
-        key={monthKey}
-        data-calendar-grid
-        className="animate-flow-in grid touch-pan-y grid-cols-7 gap-1"
+        className="overflow-hidden"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
-        {SV_DAYS.map((d, i) => (
-          <div
-            key={`${d}-${i}`}
-            className="text-muted-foreground py-1 text-center text-xs font-medium"
-          >
-            {d}
-          </div>
-        ))}
-        {cells.map((day, i) =>
-          day ? (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onPick(toIsoDate(day))}
-              className={cn(
-                "flex h-11 items-center justify-center rounded-md text-base tabular-nums transition-colors duration-150 active:scale-95 sm:h-9 sm:text-sm",
-                isSameDay(day, selected)
-                  ? "bg-primary text-primary-foreground font-semibold"
-                  : cn(
-                      "hover:bg-secondary/60 active:bg-secondary",
-                      isSameDay(day, today) && "border-primary/50 border",
-                    ),
-              )}
+        <div
+          key={monthKey}
+          data-calendar-grid
+          className={cn(
+            "grid touch-pan-y grid-cols-7 gap-1",
+            dir > 0 ? "animate-month-next" : "animate-month-prev",
+          )}
+        >
+          {SV_DAYS.map((d, i) => (
+            <div
+              key={`${d}-${i}`}
+              className="text-muted-foreground py-1 text-center text-xs font-medium"
             >
-              {day.getUTCDate()}
-            </button>
-          ) : (
-            <div key={i} />
-          ),
-        )}
+              {d}
+            </div>
+          ))}
+          {cells.map((day, i) =>
+            day ? (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onPick(toIsoDate(day))}
+                className={cn(
+                  "flex h-11 items-center justify-center rounded-md text-base tabular-nums transition-colors duration-150 active:scale-95 sm:h-9 sm:text-sm",
+                  isSameDay(day, selected)
+                    ? "bg-primary text-primary-foreground font-semibold"
+                    : cn(
+                        "hover:bg-secondary/60 active:bg-secondary",
+                        isSameDay(day, today) && "border-primary/50 border",
+                      ),
+                )}
+              >
+                {day.getUTCDate()}
+              </button>
+            ) : (
+              <div key={i} />
+            ),
+          )}
+        </div>
       </div>
 
       {/* Hidden hook for browser autofill and automation — not part of the

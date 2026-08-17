@@ -427,12 +427,15 @@ export function Wizard({
     <div className="space-y-2">
       <FlowQuestion
         id="q-date"
-        label="Födelsedatum (eller beräknat)"
+        label="Födelsedatum"
         value={birth ? formatDate(birth) : null}
         open={activeQ === "q-date"}
         answered={birth != null}
         onOpen={() => openQ("q-date")}
       >
+        <p className="text-muted-foreground -mt-1 text-sm">
+          Barnets födelsedatum — eller beräknat datum om hen inte är född än.
+        </p>
         <InlineCalendar
           value={plan.birthDate}
           inputId="birth-date"
