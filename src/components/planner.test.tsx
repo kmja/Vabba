@@ -369,6 +369,40 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/Hemma till/).length).toBeGreaterThan(0);
   });
 
+  it("asks the goal and its settings as separate substeps", () => {
+    const { container } = render(<Planner />);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    next(); // → step 2
+    openQuestion(container, "a", "goal");
+    // Substep 1: only the three goal choices — no date or budget input yet.
+    expect(container.querySelector("#a-goal-untilDate")).not.toBeNull();
+    expect(container.querySelector("[data-calendar-grid]")).toBeNull();
+    expect(container.querySelector("#a-goal-budget-floor")).toBeNull();
+    // Choosing one collapses the choices and opens its own follow-up.
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    expect(
+      container.querySelector("#a-q-goal")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(
+      container.querySelector("#a-q-goaldetail")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(container.querySelector("[data-calendar-grid]")).not.toBeNull();
+    // Switching to the budget goal swaps the follow-up, not the choices.
+    fireEvent.click(container.querySelector("#a-q-goal")!);
+    fireEvent.click(container.querySelector("#a-goal-budget")!);
+    expect(container.querySelector("#a-goal-budget-floor")).not.toBeNull();
+    expect(container.querySelector("[data-calendar-grid]")).toBeNull();
+    // "Justera själv" needs no follow-up at all — it is skipped.
+    fireEvent.click(container.querySelector("#a-q-goal")!);
+    fireEvent.click(container.querySelector("#a-goal-manual")!);
+    expect(container.querySelector("#a-q-goaldetail")).toBeNull();
+    expect(
+      container.querySelector("#a-q-save")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
   it("solves the longest leave within a household budget from the wizard", () => {
     const { container } = render(<Planner />);
     fireEvent.change(container.querySelector("#birth-date")!, {

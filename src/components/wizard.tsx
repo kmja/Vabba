@@ -250,29 +250,33 @@ export function Wizard({
     }, 350);
   };
 
-  /** Focus the first visible field in `root` — the keyboard follows along. */
-  const focusFieldIn = (root: ParentNode | null): boolean => {
-    const field = visibleFields(root)[0];
-    if (!field) return false;
-    field.focus();
-    revealField(field);
-    return true;
-  };
-
-  /**
-   * Open a question AND focus its first field in the same user gesture
-   * (flushSync) — required for the mobile keyboard to stay open.
-   */
   const openQ = (qid: string, viaReopen = false) => {
     flushSync(() => {
       setActiveQ(qid);
       setReopened(viaReopen);
     });
-    const panel = document.getElementById(`${qid}-panel`);
-    // Choice questions have no field — bring the panel itself into view.
-    if (!focusFieldIn(panel)) {
-      panel?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    // Bring the question to the top of the scroll area, so its content gets
+    // the full remaining height rather than sitting under the summary rows
+    // that have piled up above it.
+    const box = document.getElementById(qid)?.parentElement;
+    const sc = contentRef.current;
+    if (box && sc?.getBoundingClientRect) {
+      const top =
+        box.getBoundingClientRect().top -
+        sc.getBoundingClientRect().top +
+        sc.scrollTop -
+        8;
+      sc.scrollTo?.({ top: Math.max(0, top), behavior: "smooth" });
     }
+    const panel = document.getElementById(`${qid}-panel`);
+    const field = visibleFields(panel)[0];
+    if (!field) return;
+    field.focus({ preventScroll: true });
+    // Re-check once the scroll above has settled, so the keyboard check
+    // measures the final position rather than a mid-animation one.
+    window.setTimeout(() => {
+      if (document.activeElement === field) revealField(field);
+    }, 400);
   };
 
   const goTo = (s: number, focus = false) => {
@@ -360,11 +364,13 @@ export function Wizard({
   /** The ordered question ids of a caregiver's flow. */
   const cgFlow = (id: ParentId): string[] => {
     const p = id.toLowerCase();
+    const goal = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
     return [
       `${p}-q-name`,
       `${p}-q-income`,
       `${p}-q-supplement`,
       `${p}-q-goal`,
+      ...(goal !== "manual" ? [`${p}-q-goaldetail`] : []),
       `${p}-q-save`,
       ...(childNumber >= 2 ? [`${p}-q-extra`] : []),
     ];
@@ -378,8 +384,12 @@ export function Wizard({
 
   const firstQuestionOf = (s: number): string => flowOf(s)[0] ?? "";
 
-  /** Collapse the answered question and bring the next one into focus. */
-  const advanceQ = (qid: string) => {
+  /**
+   * Collapse the answered question and bring the next one into focus.
+   * `nextOverride` is for answers that change the flow they're part of —
+   * the list read here still reflects the state before the answer.
+   */
+  const advanceQ = (qid: string, nextOverride?: string) => {
     flushSync(() =>
       setVisited((prev) => {
         const out = new Set(prev);
@@ -388,7 +398,7 @@ export function Wizard({
       }),
     );
     const flow = flowOf(current);
-    const next = flow[flow.indexOf(qid) + 1];
+    const next = nextOverride ?? flow[flow.indexOf(qid) + 1];
     if (next) {
       openQ(next);
       return;
@@ -656,14 +666,6 @@ export function Wizard({
         ]
       : [];
 
-    const goalValue =
-      mode === "untilDate"
-        ? dateStr && isValidIsoDate(dateStr)
-          ? `Hemma till ${formatDate(parseIsoDate(dateStr))}`
-          : "Hemma till ett datum"
-        : mode === "budget"
-          ? `Budget ≥ ${formatSek(budget)}/mån`
-          : "Justera själv";
 
     return (
       <div className="space-y-2">
@@ -768,10 +770,11 @@ export function Wizard({
           </div>
         </FlowQuestion>
 
+        {/* Two substeps: pick the goal, then configure just that goal. */}
         <FlowQuestion
           id={`${prefix}-q-goal`}
           label={`Vad vill ${goalName} uppnå?`}
-          value={goalValue}
+          value={GOAL_MODES.find((m) => m.value === mode)?.label ?? null}
           hero={!reopened}
           open={activeQ === `${prefix}-q-goal`}
           answered={mode !== "manual" || seen(`${prefix}-q-goal`)}
@@ -787,50 +790,77 @@ export function Wizard({
                 desc={m.desc}
                 onSelect={() => {
                   setGoal({ mode: m.value });
-                  // Manual needs nothing more; the other two open their input.
-                  if (m.value === "manual") advanceQ(`${prefix}-q-goal`);
+                  // "Justera själv" needs nothing further; the other two get
+                  // their own substep. The next id is passed explicitly —
+                  // the flow list still reflects the previous mode here.
+                  advanceQ(
+                    `${prefix}-q-goal`,
+                    m.value === "manual"
+                      ? `${prefix}-q-save`
+                      : `${prefix}-q-goaldetail`,
+                  );
                 }}
               />
             ))}
           </div>
+        </FlowQuestion>
 
-          {mode === "untilDate" && (
-            <div className="space-y-2 pt-1">
-              {presets.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {presets.map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => {
-                        setGoal({ dateStr: toIsoDate(p.date) });
-                        advanceQ(`${prefix}-q-goal`);
-                      }}
-                      className="text-muted-foreground hover:text-foreground active:bg-secondary/60 min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
-                    >
-                      {p.label} · {formatDate(p.date)}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <InlineCalendar
-                value={dateStr}
-                inputId={`${prefix}-goal-date`}
-                yearsBack={0}
-                yearsForward={3}
-                onPick={(iso) => {
-                  setGoal({ dateStr: iso });
-                  advanceQ(`${prefix}-q-goal`);
-                }}
-              />
-            </div>
-          )}
-
-          {mode === "budget" && (
-            <div className="space-y-3 pt-1">
+        {mode !== "manual" && (
+          <FlowQuestion
+            id={`${prefix}-q-goaldetail`}
+            label={
+              mode === "untilDate" ? "Hemma till och med" : "Hushållets golv"
+            }
+            value={
+              mode === "untilDate"
+                ? dateStr && isValidIsoDate(dateStr)
+                  ? formatDate(parseIsoDate(dateStr))
+                  : null
+                : `${formatSek(budget)}/mån`
+            }
+            hero={!reopened}
+            open={activeQ === `${prefix}-q-goaldetail`}
+            answered={
+              mode === "untilDate"
+                ? isValidIsoDate(dateStr) || seen(`${prefix}-q-goaldetail`)
+                : seen(`${prefix}-q-goaldetail`)
+            }
+            onOpen={() => openQ(`${prefix}-q-goaldetail`, true)}
+          >
+            {mode === "untilDate" ? (
+              <div className="space-y-2">
+                {presets.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {presets.map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => {
+                          setGoal({ dateStr: toIsoDate(p.date) });
+                          advanceQ(`${prefix}-q-goaldetail`);
+                        }}
+                        className="text-muted-foreground hover:text-foreground active:bg-secondary/60 min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
+                      >
+                        {p.label} · {formatDate(p.date)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <InlineCalendar
+                  value={dateStr}
+                  inputId={`${prefix}-goal-date`}
+                  yearsBack={0}
+                  yearsForward={3}
+                  onPick={(iso) => {
+                    setGoal({ dateStr: iso });
+                    advanceQ(`${prefix}-q-goaldetail`);
+                  }}
+                />
+              </div>
+            ) : (
               <NumberField
                 id={`${prefix}-goal-budget-floor`}
-                label="Hushållets lägsta inkomst efter skatt (kr/mån)"
+                label="Lägsta inkomst efter skatt (kr/mån)"
                 value={budget}
                 step={1000}
                 slider
@@ -840,9 +870,9 @@ export function Wizard({
                 }
                 hint="Perioden tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
               />
-            </div>
-          )}
-        </FlowQuestion>
+            )}
+          </FlowQuestion>
+        )}
 
         <FlowQuestion
           id={`${prefix}-q-save`}
