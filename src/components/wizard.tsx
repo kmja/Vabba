@@ -433,8 +433,8 @@ export function Wizard({
         answered={birth != null}
         onOpen={() => openQ("q-date")}
       >
-        <p className="text-muted-foreground -mt-1 text-sm">
-          Barnets födelsedatum — eller beräknat datum om hen inte är född än.
+        <p className="text-muted-foreground -mt-1 text-xs">
+          Eller beräknat datum, om barnet inte är fött än.
         </p>
         <InlineCalendar
           value={plan.birthDate}
@@ -1026,8 +1026,8 @@ export function Wizard({
         }}
       >
         {/* Compact progress header — stays pinned while the step scrolls. */}
-        <div className="bg-card/95 sticky top-0 z-30 space-y-2 border-b px-4 py-3 backdrop-blur sm:rounded-t-xl sm:px-6">
-          <div className="flex items-center justify-between text-xs font-medium">
+        <div className="bg-card/95 sticky top-0 z-30 space-y-1.5 border-b px-4 py-2 backdrop-blur sm:space-y-2 sm:rounded-t-xl sm:px-6 sm:py-3">
+          <div className="flex items-center justify-between text-[11px] leading-none font-medium sm:text-xs">
             <span className="text-muted-foreground">
               Steg {current} av {stepCount}
             </span>
@@ -1038,7 +1038,7 @@ export function Wizard({
               <div
                 key={t}
                 className={cn(
-                  "h-1.5 flex-1 rounded-full transition-colors duration-300",
+                  "h-1 flex-1 rounded-full transition-colors duration-300 sm:h-1.5",
                   i < current ? "bg-primary" : "bg-muted",
                 )}
               />
@@ -1048,7 +1048,7 @@ export function Wizard({
 
         <div
           ref={contentRef}
-          className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5"
+          className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
           {/* The family stage — persists across steps so the camera pans,
               the zoom-out and the handover animate between them. */}
@@ -1058,7 +1058,7 @@ export function Wizard({
             nameFirst={sceneName(firstId)}
             nameSecond={soloMode ? "" : sceneName(secondId)}
           />
-          <div key={current} className="animate-flow-in mt-4 space-y-5">
+          <div key={current} className="animate-flow-in mt-4 space-y-5 [@media(max-height:740px)]:mt-2 [@media(max-height:740px)]:space-y-3">
             {current === 1 && (
               <>
                 {babyFlow}
@@ -1245,7 +1245,7 @@ export function Wizard({
         </div>
 
         {/* Nav — pinned to the bottom of the screen, above the keyboard. */}
-        <div className="bg-card/95 sticky bottom-0 z-30 flex items-center justify-between gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6">
+        <div className="bg-card/95 sticky bottom-0 z-30 flex items-center justify-between gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6 [@media(max-height:740px)]:pt-2 [@media(max-height:740px)]:pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           <Button
             type="button"
             variant="ghost"

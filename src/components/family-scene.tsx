@@ -173,7 +173,7 @@ export function FamilyScene({
       aria-hidden
       data-family-scene
       preserveAspectRatio="xMidYMid meet"
-      className="pointer-events-none h-28 w-full select-none sm:h-32 [@media(max-height:560px)]:hidden"
+      className="pointer-events-none h-28 w-full select-none sm:h-32 [@media(max-height:560px)]:hidden [@media(max-height:740px)]:h-16"
     >
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">
         {/* Caregiver 1 — holds the baby first, then steps back out of focus */}

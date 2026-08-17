@@ -190,7 +190,7 @@ export function InlineCalendar({
           {SV_DAYS.map((d, i) => (
             <div
               key={`${d}-${i}`}
-              className="text-muted-foreground py-1 text-center text-xs font-medium"
+              className="text-muted-foreground py-0.5 text-center text-xs font-medium"
             >
               {d}
             </div>
@@ -202,7 +202,7 @@ export function InlineCalendar({
                 type="button"
                 onClick={() => onPick(toIsoDate(day))}
                 className={cn(
-                  "flex h-11 items-center justify-center rounded-md text-base tabular-nums transition-colors duration-150 active:scale-95 sm:h-9 sm:text-sm",
+                  "flex h-11 items-center justify-center rounded-md text-base tabular-nums transition-colors duration-150 active:scale-95 sm:h-9 sm:text-sm [@media(max-height:740px)]:h-10",
                   isSameDay(day, selected)
                     ? "bg-primary text-primary-foreground font-semibold"
                     : cn(
