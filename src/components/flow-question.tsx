@@ -51,10 +51,10 @@ export function FlowQuestion({
         onClick={onOpen}
         aria-expanded={open}
         className={cn(
-          "flex w-full items-center gap-2.5 text-left transition-[padding] duration-300",
+          "flex w-full items-center text-left transition-[padding,column-gap] duration-300",
           open
-            ? "px-0 pt-1 pb-0"
-            : "active:bg-secondary/50 min-h-13 rounded-xl px-4 py-3",
+            ? "gap-0 px-0 pt-1 pb-0"
+            : "active:bg-secondary/50 min-h-13 gap-2.5 rounded-xl px-4 py-3",
         )}
       >
         {/* Badge only exists in the collapsed row */}

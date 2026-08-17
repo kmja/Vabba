@@ -287,20 +287,24 @@ describe("<Planner /> wizard", () => {
     expect(document.activeElement?.id).toBe("a-save-days");
   });
 
-  it("walks the questions with Nästa and blocks the step until a date is set", () => {
+  it("walks the questions with Nästa and explains a missing date", () => {
     const { container } = render(<Planner />);
-    const nextBtn = () =>
-      screen.getByRole("button", { name: "Nästa" }) as HTMLButtonElement;
+    const nextBtn = () => screen.getByRole("button", { name: "Nästa" });
+    // Nothing is flagged before the user has tried to move on.
+    expect(screen.queryByText(/Välj ett datum/)).toBeNull();
     // While questions remain, Nästa advances through them (not the step).
-    expect(nextBtn().disabled).toBe(false);
     fireEvent.click(nextBtn()); // date → order (no date picked)
     expect(
       container.querySelector("#q-order")?.getAttribute("aria-expanded"),
     ).toBe("true");
     fireEvent.click(nextBtn()); // order → count
     fireEvent.click(nextBtn()); // count → flow done
-    // Flow walked but no birth date → the step itself is blocked.
-    expect(nextBtn().disabled).toBe(true);
+    fireEvent.click(nextBtn()); // tries the step → blocked, and says why
+    expect(screen.getByText(/Välj ett datum/)).toBeTruthy();
+    // It also takes the user back to the question that needs answering.
+    expect(
+      container.querySelector("#q-date")?.getAttribute("aria-expanded"),
+    ).toBe("true");
     expect(container.querySelector("#a-income")).toBeNull();
   });
 

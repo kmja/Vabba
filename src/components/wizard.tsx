@@ -161,6 +161,8 @@ export function Wizard({
   // Questions the user has actually answered/passed this session. Defaults
   // alone must not render as answered — a fresh plan should look untouched.
   const [visited, setVisited] = useState<Set<string>>(() => new Set());
+  // Validation stays quiet until the user tries to move on.
+  const [triedNext, setTriedNext] = useState(false);
   const seen = (qid: string) => visited.has(qid);
 
   const formRef = useRef<HTMLFormElement>(null);
@@ -350,10 +352,21 @@ export function Wizard({
       return;
     }
     if (current < stepCount) {
-      if (canAdvance) goTo(current + 1, true);
+      if (canAdvance) {
+        goTo(current + 1, true);
+      } else {
+        // Blocked: say why, and take them back to the question that needs it.
+        setTriedNext(true);
+        openQ("q-date");
+      }
       return;
     }
-    if (valid) onSubmit();
+    if (valid) {
+      onSubmit();
+    } else {
+      setTriedNext(true);
+      goTo(1);
+    }
   };
 
   // Enter walks through the fields like a checkout: focus the next visible
@@ -1062,9 +1075,9 @@ export function Wizard({
             {current === 1 && (
               <>
                 {babyFlow}
-                {!valid && (
-                  <p className="text-destructive text-xs">
-                    Ange ett giltigt födelse- eller beräknat datum.
+                {!valid && triedNext && (
+                  <p className="text-destructive animate-flow-in text-xs">
+                    Välj ett datum i kalendern för att gå vidare.
                   </p>
                 )}
 
@@ -1269,17 +1282,13 @@ export function Wizard({
             const inFlow = activeQ !== "" && flowOf(current).includes(activeQ);
             if (current === stepCount && !inFlow) {
               return (
-                <Button type="button" disabled={!valid} onClick={onSubmit}>
+                <Button type="button" onClick={primaryAction}>
                   Visa plan <IconArrowRight />
                 </Button>
               );
             }
             return (
-              <Button
-                type="button"
-                disabled={!inFlow && !canAdvance}
-                onClick={primaryAction}
-              >
+              <Button type="button" onClick={primaryAction}>
                 Nästa <IconArrowRight />
               </Button>
             );
