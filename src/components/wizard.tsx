@@ -2,7 +2,6 @@
 
 import {
   useEffect,
-  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -28,7 +27,7 @@ import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
 import { FamilyScene } from "@/components/family-scene";
-import { FlowQuestion } from "@/components/flow-question";
+import { FlowQuestion, FlowSlot } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
 import {
@@ -49,6 +48,15 @@ import {
 } from "@/lib/dates";
 import type { ShareableState } from "@/lib/share";
 import { cn } from "@/lib/utils";
+
+/**
+ * The scrollable question area between the fixed progress/nav bars. Looked up
+ * from the DOM rather than held in a ref: the flow's callbacks are created
+ * while rendering, and a ref read from there is what the refs-during-render
+ * rule (rightly) rejects.
+ */
+const scrollArea = () =>
+  document.querySelector<HTMLElement>("[data-wizard-scroll]");
 
 /** Fields the flow can focus — excludes toggles and the hidden date hook. */
 const FIELD_SELECTOR =
@@ -172,6 +180,9 @@ export function Wizard({
   const [visited, setVisited] = useState<Set<string>>(() => new Set());
   // Validation stays quiet until the user tries to move on.
   const [triedNext, setTriedNext] = useState(false);
+  // Until when the focus-reveal must not scroll: right after a step change
+  // the family scene should stay in view rather than be pushed off.
+  const [holdSceneUntil, setHoldSceneUntil] = useState(0);
   // How much of the viewport the on-screen keyboard currently covers. Since
   // it overlays rather than resizes, the scroll area gets that much bottom
   // padding — otherwise a field near the end has no room to scroll clear.
@@ -191,7 +202,7 @@ export function Wizard({
         const box = el.getBoundingClientRect();
         const delta = box.bottom - (vv.offsetTop + vv.height - 12);
         if (delta > 0) {
-          contentRef.current?.scrollBy?.({ top: delta, behavior: "smooth" });
+          scrollArea()?.scrollBy?.({ top: delta, behavior: "smooth" });
         }
       }, 60);
     };
@@ -204,12 +215,7 @@ export function Wizard({
     };
   }, []);
 
-  const formRef = useRef<HTMLFormElement>(null);
-  // The scrollable question area between the fixed progress/nav bars.
-  const contentRef = useRef<HTMLDivElement>(null);
-  // Set while changing step: the focus-reveal must not scroll the family
-  // scene off screen — the step transition is exactly when it should be seen.
-  const holdSceneRef = useRef(false);
+
 
   /** Focusable fields, excluding those inside collapsed (inert) panels. */
   const visibleFields = (root: ParentNode | null): HTMLElement[] =>
@@ -237,7 +243,7 @@ export function Wizard({
       if (box.bottom > bottom - pad) delta = box.bottom - (bottom - pad);
       else if (box.top < top + pad) delta = box.top - (top + pad);
       if (delta === 0) return;
-      const scroller = contentRef.current;
+      const scroller = scrollArea();
       if (scroller && scroller.scrollHeight > scroller.clientHeight) {
         scroller.scrollBy({ top: delta, behavior: "smooth" });
       } else {
@@ -259,7 +265,7 @@ export function Wizard({
     // the full remaining height rather than sitting under the summary rows
     // that have piled up above it.
     const box = document.getElementById(qid)?.parentElement;
-    const sc = contentRef.current;
+    const sc = scrollArea();
     if (box && sc?.getBoundingClientRect) {
       const top =
         box.getBoundingClientRect().top -
@@ -285,21 +291,16 @@ export function Wizard({
       setAdvancedOpen(false);
       setActiveQ(firstQuestionOf(s));
       setReopened(false);
+      setHoldSceneUntil(Date.now() + 900);
     });
     // A step change always starts at the top so the family scene — and its
     // zoom/handover animation — is on screen. The first field still takes
     // focus (keyboard up), but without scrolling the stage away.
-    holdSceneRef.current = true;
-    contentRef.current?.scrollTo?.(0, 0);
+    scrollArea()?.scrollTo?.(0, 0);
     window.scrollTo(0, 0);
     if (focus) {
-      visibleFields(formRef.current)[0]?.focus({ preventScroll: true });
+      visibleFields(scrollArea())[0]?.focus({ preventScroll: true });
     }
-    // Release once the scene's transition has played, so in-step question
-    // advances scroll normally again.
-    window.setTimeout(() => {
-      holdSceneRef.current = false;
-    }, 900);
   };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
@@ -356,6 +357,16 @@ export function Wizard({
   // Which caregiver each step edits: step 2 = the one home first.
   const firstId: ParentId = soloMode ? "A" : firstCaregiver;
   const secondId: ParentId = firstId === "A" ? "B" : "A";
+
+  /** The line of context above the stage, per step. */
+  const stepIntro =
+    current === 2
+      ? soloMode
+        ? "Dina uppgifter — du har alla dagarna."
+        : "Vem går på ledighet först? Ofta den som fött barnet."
+      : current === 3 && !soloMode
+        ? `${plan.parents[secondId].name?.trim() || `Vårdnadshavare ${secondId}`} tar över när ${plan.parents[firstId].name?.trim() || `Vårdnadshavare ${firstId}`} är klar.`
+        : null;
 
   // Short name for the scene's name tags (first name, or the letter badge).
   const sceneName = (id: ParentId) =>
@@ -452,7 +463,7 @@ export function Wizard({
       return;
     }
     e.preventDefault();
-    const fields = visibleFields(formRef.current);
+    const fields = visibleFields(scrollArea());
     const next = fields[fields.indexOf(el) + 1];
     if (next) next.focus();
     else primaryAction();
@@ -514,6 +525,7 @@ export function Wizard({
         hero={!reopened}
         open={activeQ === "q-date"}
         answered={birth != null}
+        visited={seen("q-date")}
         onOpen={() => openQ("q-date", true)}
       >
         <p className="text-muted-foreground -mt-1 text-xs">
@@ -538,6 +550,7 @@ export function Wizard({
         hero={!reopened}
         open={activeQ === "q-order"}
         answered={childNumber >= 2 || seen("q-order")}
+        visited={seen("q-order")}
         onOpen={() => openQ("q-order", true)}
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -577,6 +590,7 @@ export function Wizard({
         hero={!reopened}
         open={activeQ === "q-count"}
         answered={plan.childrenInBirth >= 2 || seen("q-count")}
+        visited={seen("q-count")}
         onOpen={() => openQ("q-count", true)}
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -675,7 +689,8 @@ export function Wizard({
           value={displayName}
           hero={!reopened}
           open={activeQ === `${prefix}-q-name`}
-          answered={!!value.name?.trim() || seen(`${prefix}-q-name`)}
+          answered={!!value.name?.trim()}
+          visited={seen(`${prefix}-q-name`)}
           onOpen={() => openQ(`${prefix}-q-name`, true)}
         >
           <div className="space-y-1.5">
@@ -719,6 +734,7 @@ export function Wizard({
           hero={!reopened}
           open={activeQ === `${prefix}-q-income`}
           answered={aboveCap || income > 0}
+          visited={seen(`${prefix}-q-income`)}
           onOpen={() => openQ(`${prefix}-q-income`, true)}
         >
           {/* A plain numeric input — salaries above the SGI cap are simply
@@ -744,6 +760,7 @@ export function Wizard({
           hero={!reopened}
           open={activeQ === `${prefix}-q-supplement`}
           answered={!supplement.enabled || seen(`${prefix}-q-supplement`)}
+          visited={seen(`${prefix}-q-supplement`)}
           onOpen={() => openQ(`${prefix}-q-supplement`, true)}
         >
           <div className="grid grid-cols-2 gap-2">
@@ -778,6 +795,7 @@ export function Wizard({
           hero={!reopened}
           open={activeQ === `${prefix}-q-goal`}
           answered={mode !== "manual" || seen(`${prefix}-q-goal`)}
+          visited={seen(`${prefix}-q-goal`)}
           onOpen={() => openQ(`${prefix}-q-goal`, true)}
         >
           <div className="grid gap-2">
@@ -821,10 +839,9 @@ export function Wizard({
             hero={!reopened}
             open={activeQ === `${prefix}-q-goaldetail`}
             answered={
-              mode === "untilDate"
-                ? isValidIsoDate(dateStr) || seen(`${prefix}-q-goaldetail`)
-                : seen(`${prefix}-q-goaldetail`)
+              mode === "untilDate" ? isValidIsoDate(dateStr) : true
             }
+            visited={seen(`${prefix}-q-goaldetail`)}
             onOpen={() => openQ(`${prefix}-q-goaldetail`, true)}
           >
             {mode === "untilDate" ? (
@@ -880,7 +897,8 @@ export function Wizard({
           value={saveDays > 0 ? `${saveDays} dagar` : "Inga"}
           hero={!reopened}
           open={activeQ === `${prefix}-q-save`}
-          answered={saveDays > 0 || seen(`${prefix}-q-save`)}
+          answered={saveDays > 0}
+          visited={seen(`${prefix}-q-save`)}
           onOpen={() => openQ(`${prefix}-q-save`, true)}
         >
           <NumberField
@@ -907,7 +925,8 @@ export function Wizard({
             value={extraDays > 0 ? `${extraDays} dagar` : "Inga"}
             hero={!reopened}
           open={activeQ === `${prefix}-q-extra`}
-            answered={extraDays > 0 || seen(`${prefix}-q-extra`)}
+            answered={extraDays > 0}
+            visited={seen(`${prefix}-q-extra`)}
             onOpen={() => openQ(`${prefix}-q-extra`, true)}
           >
             <NumberField
@@ -1121,17 +1140,26 @@ export function Wizard({
     </div>
   );
 
+  /** The step's questions, rendered into whichever slot is being drawn. */
+  const stepQuestions =
+    current === 1
+      ? babyFlow
+      : current === 2
+        ? caregiverFlow(firstId)
+        : soloMode
+          ? null
+          : caregiverFlow(secondId);
+
   return (
     <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
       <form
-        ref={formRef}
         className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col"
         onSubmit={(e) => e.preventDefault()}
         onKeyDown={onFormKeyDown}
         onFocus={(e) => {
           // Any focused field is kept clear of the keyboard and pinned bars —
           // except right after a step change, where the scene stays in view.
-          if (holdSceneRef.current) return;
+          if (Date.now() < holdSceneUntil) return;
           const t = e.target as HTMLElement;
           if (t.matches?.(FIELD_SELECTOR)) revealField(t);
         }}
@@ -1158,22 +1186,40 @@ export function Wizard({
         </div>
 
         <div
-          ref={contentRef}
+          data-wizard-scroll
           style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
-          {/* The family stage — persists across steps so the camera pans,
-              the zoom-out and the handover animate between them. */}
-          <FamilyScene
-            step={current}
-            soloMode={soloMode}
-            nameFirst={sceneName(firstId)}
-            nameSecond={soloMode ? "" : sceneName(secondId)}
-          />
+          {stepIntro && (
+            <p
+              key={`intro-${current}`}
+              className="animate-flow-in text-muted-foreground mb-2 text-sm"
+            >
+              {stepIntro}
+            </p>
+          )}
+
+          {/* The stage sits beside the answered questions; it persists across
+              steps so the camera pans, the zoom-out and the handover animate
+              between them. */}
+          <div className="flex items-start gap-3">
+            <div className="w-24 shrink-0 sm:w-28">
+              <FamilyScene
+                step={current}
+                soloMode={soloMode}
+                nameFirst={sceneName(firstId)}
+                nameSecond={soloMode ? "" : sceneName(secondId)}
+              />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
+            </div>
+          </div>
+
           <div key={current} className="animate-flow-in mt-4 space-y-5 [@media(max-height:740px)]:mt-2 [@media(max-height:740px)]:space-y-3">
             {current === 1 && (
               <>
-                {babyFlow}
+                <FlowSlot slot="active">{babyFlow}</FlowSlot>
                 {!valid && triedNext && (
                   <p className="text-destructive animate-flow-in text-xs">
                     Välj ett datum i kalendern för att gå vidare.
@@ -1302,7 +1348,7 @@ export function Wizard({
                     : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
                 </p>
 
-                {caregiverFlow(firstId)}
+                <FlowSlot slot="active">{caregiverFlow(firstId)}</FlowSlot>
 
                 <Separator />
                 {advanced(caregiverAdvanced(firstId))}

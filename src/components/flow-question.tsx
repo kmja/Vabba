@@ -1,7 +1,26 @@
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { IconCheck, IconChevronDown } from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
+
+/**
+ * Which half of the layout is being rendered. The wizard renders its question
+ * flow twice — once beside the family scene (the answered summaries) and once
+ * below it (the question in focus) — and each question draws itself into
+ * exactly one of them. This keeps the flows written as a single linear list.
+ */
+type Slot = "summary" | "active" | "all";
+const SlotContext = createContext<Slot>("all");
+
+export function FlowSlot({
+  slot,
+  children,
+}: {
+  slot: Slot;
+  children: ReactNode;
+}) {
+  return <SlotContext value={slot}>{children}</SlotContext>;
+}
 
 /**
  * One question in the wizard's flow, with three states:
@@ -21,6 +40,7 @@ export function FlowQuestion({
   open,
   hero,
   answered,
+  visited,
   onOpen,
   children,
 }: {
@@ -31,14 +51,22 @@ export function FlowQuestion({
   open: boolean;
   /** Open as the full-screen question (first pass) rather than an edit. */
   hero?: boolean;
-  /** Shows the check badge when collapsed. */
+  /** Has a real value — shows the check badge and the value when collapsed. */
   answered: boolean;
+  /** The user has passed this question, so it stays reachable even if empty. */
+  visited?: boolean;
   onOpen: () => void;
   children: ReactNode;
 }) {
-  // A question the user hasn't got to is out of the flow entirely — only
-  // what's answered (above) and what's in focus is on screen.
-  if (!open && !answered) return null;
+  // Which half of the layout is being drawn (summaries beside the scene, or
+  // the question in focus below it).
+  const slot = useContext(SlotContext);
+
+  // A question the user hasn't got to is out of the flow entirely. One that
+  // was passed over stays listed (without a check) so it can be returned to.
+  if (!open && !answered && !visited) return null;
+  if (slot === "summary" && open) return null;
+  if (slot === "active" && !open) return null;
 
   const bare = open && hero;
 
