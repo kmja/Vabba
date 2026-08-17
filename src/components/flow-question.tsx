@@ -31,12 +31,16 @@ export function FlowQuestion({
   onOpen: () => void;
   children: ReactNode;
 }) {
+  // A question the user hasn't reached yet stays out of the flow entirely —
+  // only what's answered (above) and what's in focus is on screen.
+  if (!open && !answered) return null;
+
   return (
     <div
       className={cn(
         "transition-[background-color,border-color,box-shadow,margin] duration-300",
         open
-          ? "border-transparent bg-transparent py-1 shadow-none"
+          ? "animate-flow-in border-transparent bg-transparent py-1 shadow-none"
           : "bg-card rounded-xl border shadow-sm",
       )}
       style={{ borderWidth: 1, borderStyle: "solid" }}

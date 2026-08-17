@@ -45,9 +45,26 @@ function showPlan() {
   throw new Error("Visa plan never appeared");
 }
 
-/** Open a specific flow question (its header is always clickable). */
+/**
+ * Bring a flow question into focus by its id. Questions are revealed one at
+ * a time — an unreached one isn't in the DOM at all — so this advances with
+ * Nästa until it appears, then opens it if it collapsed behind us.
+ */
+function openQ(container: HTMLElement, id: string) {
+  for (let i = 0; i < 8; i++) {
+    const el = container.querySelector(`#${id}`);
+    if (el) {
+      if (el.getAttribute("aria-expanded") !== "true") fireEvent.click(el);
+      return;
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+  }
+  throw new Error(`never reached question #${id}`);
+}
+
+/** Same, for a caregiver's prefixed question (`a-q-income` …). */
 function openQuestion(container: HTMLElement, prefix: string, key: string) {
-  fireEvent.click(container.querySelector(`#${prefix}-q-${key}`)!);
+  openQ(container, `${prefix}-q-${key}`);
 }
 
 /** Fill the wizard to the LAST step (both incomes set), without submitting. */
@@ -265,8 +282,8 @@ describe("<Planner /> wizard", () => {
     // Enter in the name field opens the next question, focused.
     fireEvent.keyDown(container.querySelector("#a-name")!, { key: "Enter" });
     expect(document.activeElement?.id).toBe("a-income");
-    // Tapping a question header also lands focus in its first field.
-    fireEvent.click(container.querySelector("#a-q-save")!);
+    // Reaching a later question also lands focus in its first field.
+    openQ(container, "a-q-save");
     expect(document.activeElement?.id).toBe("a-save-days");
   });
 
@@ -490,7 +507,7 @@ describe("<Planner /> wizard", () => {
     });
     // Twins now live in the birth-count question (icon targets). It's the
     // step's last question, so answering it flows straight into step 2.
-    fireEvent.click(container.querySelector("#q-count")!);
+    openQ(container, "q-count");
     fireEvent.click(container.querySelector("#birth-count-2")!);
     expect(container.querySelector("#a-q-name")).not.toBeNull();
     openQuestion(container, "a", "income");
@@ -517,7 +534,7 @@ describe("<Planner /> wizard", () => {
     next();
     expect(container.querySelector("#a-extra")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
-    fireEvent.click(container.querySelector("#q-order")!);
+    openQ(container, "q-order");
     fireEvent.click(container.querySelector("#child-number-2")!);
     next(); // → step 2 — now it is.
     openQuestion(container, "a", "income");
