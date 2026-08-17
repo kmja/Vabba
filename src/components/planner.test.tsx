@@ -484,6 +484,25 @@ describe("<Planner /> wizard", () => {
     ).toBe("true");
   });
 
+  it("flags a date goal the days can't reach and offers the reachable one", () => {
+    const { container } = render(<Planner />);
+    pickBirth(container, futureIso(30));
+    next(); // → step 2
+    openQuestion(container, "a", "income");
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    // "2 år" is far beyond what A's reserved days can stretch to.
+    fireEvent.click(container.querySelector("#a-goal-preset-2")!);
+    // Said here, in the wizard — not saved up for the results page.
+    expect(screen.getByText(/det fattas ungefär/)).toBeTruthy();
+    // ...with the furthest reachable date as a one-tap fix.
+    fireEvent.click(screen.getByRole("button", { name: /Flytta till/ }));
+    expect(screen.queryByText(/det fattas ungefär/)).toBeNull();
+  });
+
   it("solves the longest leave within a household budget from the wizard", () => {
     const { container } = render(<Planner />);
     pickBirth(container, "2025-01-15");

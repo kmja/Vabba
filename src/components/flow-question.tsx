@@ -1,5 +1,9 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { IconCheck, IconChevronDown } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconChevronDown,
+} from "@tabler/icons-react";
 
 import { cn } from "@/lib/utils";
 
@@ -43,6 +47,7 @@ export function FlowQuestion({
   hero,
   answered,
   visited,
+  attention,
   onOpen,
   children,
 }: {
@@ -57,6 +62,8 @@ export function FlowQuestion({
   answered: boolean;
   /** The user has passed this question, so it stays reachable even if empty. */
   visited?: boolean;
+  /** This answer can't work — the row is flagged instead of checked. */
+  attention?: boolean;
   onOpen: () => void;
   children: ReactNode;
 }) {
@@ -83,6 +90,7 @@ export function FlowQuestion({
           ? "animate-flow-in border-transparent bg-transparent py-1 shadow-none"
           : cn("bg-card border shadow-sm", open ? "rounded-xl" : "rounded-lg"),
         open && !bare && "border-primary/50",
+        attention && !bare && "border-warning/60",
       )}
       style={{ borderWidth: 1, borderStyle: "solid" }}
     >
@@ -109,13 +117,17 @@ export function FlowQuestion({
               : cn(
                   "opacity-100",
                   open ? "size-6" : "size-5",
-                  answered
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground",
+                  attention
+                    ? "bg-warning text-warning-foreground"
+                    : answered
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
                 ),
           )}
         >
-          {answered && !open ? (
+          {attention && !open ? (
+            <IconAlertTriangle className="size-3.5" />
+          ) : answered && !open ? (
             <IconCheck className={open ? "size-4" : "size-3.5"} />
           ) : (
             <IconChevronDown
@@ -136,7 +148,9 @@ export function FlowQuestion({
                 ? "text-foreground text-sm font-medium"
                 : cn(
                     "truncate text-sm font-medium tabular-nums",
-                    answered ? "text-foreground" : "text-muted-foreground",
+                    answered || attention
+                      ? "text-foreground"
+                      : "text-muted-foreground",
                   ),
           )}
         >

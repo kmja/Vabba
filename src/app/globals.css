@@ -125,19 +125,28 @@
   }
 }
 
-/* Illustration tokens for the wizard's family scene — a cream swaddle that
-   reads against every caregiver colour, in both themes. */
+/* Illustration tokens for the wizard's family scene. A warm stone palette
+   that stands on its own — the scene paints its own background, so it reads
+   as a picture on the page rather than borrowing the page's colours. Dark
+   mode inverts the ground and the figures together, which keeps every
+   contrast pair (figure/ground, face/figure) intact. */
 :root {
-  --swaddle: oklch(0.965 0.022 85);
-  --swaddle-fold: oklch(0.9 0.045 80);
-  --baby-skin: oklch(0.9 0.05 62);
-  --baby-face: oklch(0.42 0.05 40);
+  --scene-bg: #f1efec;
+  --scene-ink: #3e3d3b; /* caregiver 1 */
+  --scene-ink-2: #6b655c; /* caregiver 2 */
+  --scene-bundle: #c9c5be;
+  --scene-limb: #b4b0a9;
+  --scene-face: #f1efec;
+  --scene-hair: #5b5b5b;
 }
 .dark {
-  --swaddle: oklch(0.94 0.025 85);
-  --swaddle-fold: oklch(0.85 0.05 80);
-  --baby-skin: oklch(0.87 0.055 62);
-  --baby-face: oklch(0.36 0.05 40);
+  --scene-bg: #2a2926;
+  --scene-ink: #e2ded8;
+  --scene-ink-2: #b3ab9d;
+  --scene-bundle: #8f8a82;
+  --scene-limb: #7c7770;
+  --scene-face: #2a2926;
+  --scene-hair: #c9c5be;
 }
 
 /* App-shell (phones, while the wizard is showing): the page as a whole never

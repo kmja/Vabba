@@ -80,6 +80,12 @@ export interface CaregiverOutcome {
   shortfallDays: number;
   /** True when the post-1-year SGI floor lifted this caregiver's pace. */
   sgiLifted: boolean;
+  /**
+   * Lowest household net (kr/month) during this caregiver's own stretch. In
+   * budget mode, when the floor cannot be met the solver already runs at the
+   * pace that pays most — so this is the highest floor that IS reachable.
+   */
+  lowestHouseholdNet: number | null;
 }
 
 export interface PlanSolve {
@@ -222,6 +228,13 @@ function outcomeOf(
   const extendsPastYear = intervals.some(
     (s) => s.endsAt.getTime() > oneYear.getTime(),
   );
+  let lowestNet: number | null = null;
+  for (const seg of intervals) {
+    const net = netAfterTax(
+      seg.monthly + spec.partnerSalary + partTimeSalary(spec, seg.pace),
+    );
+    if (lowestNet === null || net < lowestNet) lowestNet = net;
+  }
   return {
     intervals,
     outcome: {
@@ -238,6 +251,7 @@ function outcomeOf(
         !spec.worksPartTime &&
         extendsPastYear &&
         phases.phase1 < SGI_PROTECTION.minDaysPerWeekAfterAge1 - 1e-9,
+      lowestHouseholdNet: lowestNet,
     },
   };
 }

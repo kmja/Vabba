@@ -6,43 +6,40 @@
  * - Step 2: the camera pulls back — the caregiver holding the baby is in
  *   focus.
  * - Step 3: the baby is handed over; the second caregiver takes centre
- *   stage while the first steps back, lowers their arms and fades into the
+ *   stage while the first steps back, lowers their arm and fades into the
  *   background. In solo mode the second figure never appears.
  *
- * The figures are abstract, gender-neutral silhouettes tinted with each
- * caregiver's plan colour (chart-1 / chart-2, matching the results page), so
- * no family constellation is assumed. Decorative only for assistive tech.
+ * The figures are abstract, gender-neutral silhouettes, so no family
+ * constellation is assumed. Decorative only for assistive tech.
  */
 
 const EASE = "cubic-bezier(0.32, 0.8, 0.3, 1)";
 const DUR = "850ms";
 
-// World coordinates. The camera (see below) maps a focus point in this space
-// to the centre of the viewBox, so the figures can be laid out at a
-// comfortable scale regardless of how large the frame ends up being.
-const BASE = 118; // hem / ground line
-const SY = 64; // shoulder line
-const CHEST = SY + 32; // where the bundle rides
-const F1X = 165;
-const F2X = 245;
+// The frame. Its own little card, painted with the scene's background — the
+// illustration keeps its palette rather than borrowing the page's.
+const VIEW_W = 300;
+const VIEW_H = 440;
 
-// The frame itself: portrait, matching the column the scene sits in beside
-// the answered questions, so `meet` never letterboxes it.
-const VIEW_W = 132;
-const VIEW_H = 176;
+// World coordinates. The camera (below) maps a focus point in this space to
+// the centre of the frame, so the figures are laid out at a comfortable size
+// no matter how large the frame ends up being on screen.
+const BASE = 470; // hem / ground line
+const HEAD_Y = 118;
+const HEAD_R = 40;
+const F1X = 340;
+const F2X = 540;
+const NAME_Y = 502;
 
-/** Where caregiver 1 recedes to once the baby has been handed over: toward
- *  the centre of the frame, smaller and higher — the vanishing point. */
-const STEP_BACK = "translate(20px, -6px) scale(0.78)";
-
+/** Where the bundle rides, relative to whoever is holding it. */
 const BABY_AT = {
-  one: { x: F1X - 3, y: CHEST, rot: -9 },
-  two: { x: F2X - 3, y: CHEST - 3, rot: -9 },
+  one: { x: F1X + 45, y: 312 },
+  two: { x: F2X + 45, y: 306 },
 };
 
-/** Darken / lighten a theme colour without leaving the token system. */
-const dark = (v: string, p: number) => `color-mix(in oklab, var(${v}), black ${p}%)`;
-const light = (v: string, p: number) => `color-mix(in oklab, var(${v}), white ${p}%)`;
+/** Where caregiver 1 recedes to after the handover: toward the frame's
+ *  centre, smaller and higher — the vanishing point. */
+const STEP_BACK = "translate(70px, -22px) scale(0.68)";
 
 const move = {
   transitionProperty: "transform, opacity",
@@ -50,130 +47,141 @@ const move = {
   transitionTimingFunction: EASE,
 } as const;
 
-/**
- * One caregiver. Both arm poses are always rendered and cross-faded, because
- * SVG path data cannot be tweened by CSS — `holding` only shifts opacity.
- */
-function Figure({
-  cx,
-  tone,
-  tall = 0,
-  holding,
-}: {
-  cx: number;
-  tone: string;
-  tall?: number;
-  holding: boolean;
-}) {
-  const sy = SY - tall;
-  const headY = 48 - tall;
-  const headR = 14;
-
-  const cradleArm = `M ${cx + 14},${sy + 9} Q ${cx + 22},${sy + 26} ${cx + 15},${sy + 38} Q ${cx + 2},${sy + 47} ${cx - 13},${sy + 41}`;
-  const restArm = `M ${cx + 14},${sy + 9} Q ${cx + 21},${sy + 27} ${cx + 19},${sy + 46}`;
-  const cradleFar = `M ${cx - 14},${sy + 8} Q ${cx - 24},${sy + 24} ${cx - 19},${sy + 35}`;
-  const restFar = `M ${cx - 14},${sy + 8} Q ${cx - 21},${sy + 26} ${cx - 19},${sy + 46}`;
-
+/** One caregiver's silhouette: head and shoulders down to the hem. */
+function FigureBody({ cx, tone }: { cx: number; tone: string }) {
   return (
     <g>
-      <ellipse cx={cx} cy={BASE + 3} rx="27" ry="5" fill={dark("--secondary", 7)} />
-
-      {/* far arm (behind the torso), both poses cross-faded */}
-      <g style={{ ...move, opacity: holding ? 1 : 0 }} className="motion-reduce:transition-none!">
-        <path d={cradleFar} fill="none" stroke={dark(tone, 26)} strokeWidth="11" strokeLinecap="round" />
-      </g>
-      <g style={{ ...move, opacity: holding ? 0 : 1 }} className="motion-reduce:transition-none!">
-        <path d={restFar} fill="none" stroke={dark(tone, 26)} strokeWidth="11" strokeLinecap="round" />
-      </g>
-
-      {/* torso: soft shoulders, tapered waist */}
+      <circle cx={cx} cy={HEAD_Y} r={HEAD_R} fill={`var(${tone})`} />
       <path
-        d={`M ${cx - 16},${BASE} Q ${cx - 18},${sy + 20} ${cx - 15},${sy + 8}
-            Q ${cx - 12.5},${sy - 4} ${cx},${sy - 5} Q ${cx + 12.5},${sy - 4} ${cx + 15},${sy + 8}
-            Q ${cx + 18},${sy + 20} ${cx + 16},${BASE} Z`}
+        d={`M ${cx},158 C ${cx - 52},166 ${cx - 88},210 ${cx - 88},275
+            L ${cx - 88},${BASE} L ${cx + 88},${BASE} L ${cx + 88},275
+            C ${cx + 88},210 ${cx + 52},166 ${cx},158 Z`}
         fill={`var(${tone})`}
       />
-
-      {/* head, leaning toward the bundle while holding */}
-      <g
-        style={{ ...move, transform: `rotate(${holding ? -8 : 0}deg)`, transformOrigin: `${cx}px ${sy}px` }}
-        className="motion-reduce:transition-none!"
-      >
-        <rect x={cx - 4.5} y={headY + 7} width="9" height="13" rx="4" fill={dark(tone, 16)} />
-        <circle cx={cx} cy={headY} r={headR} fill={`var(${tone})`} />
-        <path
-          d={`M ${cx - headR},${headY} A ${headR},${headR} 0 0 1 ${cx + headR},${headY}
-              Q ${cx + 7},${headY - 6} ${cx},${headY - 6} Q ${cx - 7},${headY - 6} ${cx - headR},${headY} Z`}
-          fill={dark(tone, 26)}
-        />
-      </g>
-
-      {/* near arm + hand, in front — a shade lighter so the limb reads */}
-      <g style={{ ...move, opacity: holding ? 1 : 0 }} className="motion-reduce:transition-none!">
-        <path d={cradleArm} fill="none" stroke={light(tone, 14)} strokeWidth="11.5" strokeLinecap="round" />
-        <circle cx={cx - 13} cy={sy + 41} r="6.4" fill={light(tone, 20)} />
-      </g>
-      <g style={{ ...move, opacity: holding ? 0 : 1 }} className="motion-reduce:transition-none!">
-        <path d={restArm} fill="none" stroke={light(tone, 14)} strokeWidth="11.5" strokeLinecap="round" />
-        <circle cx={cx + 19} cy={sy + 46} r="6.4" fill={light(tone, 20)} />
-      </g>
     </g>
   );
 }
 
 /**
- * How several bundles sit together in one cradle — a small fan, each a bit
- * behind the last, so two to four read clearly at a glance.
+ * The cradling arm, drawn over the bundle. There is no resting pose to swap
+ * to — against a solid silhouette an arm at the side is invisible — so it
+ * simply fades away once the baby has been handed on.
+ */
+function FigureArm({
+  cx,
+  tone,
+  holding,
+}: {
+  cx: number;
+  tone: string;
+  holding: boolean;
+}) {
+  return (
+    <g
+      style={{ ...move, opacity: holding ? 1 : 0 }}
+      className="motion-reduce:transition-none!"
+    >
+      <path
+        d={`M ${cx - 22},318 C ${cx + 12},348 ${cx + 52},350 ${cx + 78},330`}
+        stroke={`var(${tone})`}
+        strokeWidth="30"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </g>
+  );
+}
+
+/**
+ * How several bundles sit together in one cradle — a row along the arm, each
+ * a little smaller, so two to four read clearly at a glance.
  */
 const BUNDLE_LAYOUT: { dx: number; dy: number; scale: number }[][] = [
   [{ dx: 0, dy: 0, scale: 1 }],
   [
-    { dx: -2, dy: -7, scale: 0.82 },
-    { dx: 4, dy: 6, scale: 0.82 },
+    { dx: -22, dy: 8, scale: 0.8 },
+    { dx: 22, dy: -8, scale: 0.8 },
   ],
   [
-    { dx: -4, dy: -11, scale: 0.72 },
-    { dx: 1, dy: -1, scale: 0.72 },
-    { dx: 6, dy: 9, scale: 0.72 },
+    { dx: -34, dy: 10, scale: 0.66 },
+    { dx: 0, dy: -6, scale: 0.66 },
+    { dx: 34, dy: 10, scale: 0.66 },
   ],
   [
-    { dx: -5, dy: -14, scale: 0.64 },
-    { dx: -1, dy: -5, scale: 0.64 },
-    { dx: 3, dy: 4, scale: 0.64 },
-    { dx: 7, dy: 13, scale: 0.64 },
+    { dx: -42, dy: 12, scale: 0.58 },
+    { dx: -14, dy: -4, scale: 0.58 },
+    { dx: 14, dy: -4, scale: 0.58 },
+    { dx: 42, dy: 12, scale: 0.58 },
   ],
 ];
 
-/** The swaddled newborn — a cream blanket that reads against either parent. */
-function Baby({ x, y, rot }: { x: number; y: number; rot: number }) {
+/** The newborn — a stone-coloured bundle with a pale, sleepy face. */
+function Baby() {
   return (
-    <g
-      style={{ ...move, transform: `translate(${x}px, ${y}px) rotate(${rot}deg)` }}
-      className="motion-reduce:transition-none!"
-    >
+    <g>
+      {/* arms and legs, behind the body */}
       <path
-        d="M -6,-12 Q 13,-10.5 20,-2.5 Q 23,0 20,2.5 Q 13,10.5 -6,12 Q -16,12 -16,0 Q -16,-12 -6,-12 Z"
-        fill="var(--swaddle)"
+        d="M -21,-20 L -37,-50"
+        stroke="var(--scene-limb)"
+        strokeWidth="16"
+        strokeLinecap="round"
+        fill="none"
       />
       <path
-        d="M -7,-11.5 Q -1,0 -7,11.5"
-        fill="none"
-        stroke="var(--swaddle-fold)"
-        strokeWidth="2.1"
+        d="M 23,-24 L 31,-4"
+        stroke="var(--scene-limb)"
+        strokeWidth="16"
         strokeLinecap="round"
+        fill="none"
       />
-      <circle cx="-18.5" cy="-0.5" r="9.2" fill="var(--baby-skin)" />
-      <path d="M -24,-7 Q -18.5,-11.6 -13,-7 Q -18.5,-9 -24,-7 Z" fill={dark("--baby-skin", 20)} />
-      <circle cx="-21.5" cy="-1.6" r="1.1" fill="var(--baby-face)" />
-      <circle cx="-15.9" cy="-1.6" r="1.1" fill="var(--baby-face)" />
       <path
-        d="M -21,2.3 Q -18.7,4.1 -16.4,2.3"
-        fill="none"
-        stroke="var(--baby-face)"
-        strokeWidth="1.1"
+        d="M -17,30 L -21,56"
+        stroke="var(--scene-limb)"
+        strokeWidth="20"
         strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M 17,30 L 21,56"
+        stroke="var(--scene-limb)"
+        strokeWidth="20"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <ellipse cx="0" cy="0" rx="38" ry="44" fill="var(--scene-bundle)" />
+
+      <circle cx="0" cy="-67" r="30" fill="var(--scene-face)" />
+      <path
+        d="M 0,-95 C -2,-103 3,-107 8,-103"
+        stroke="var(--scene-hair)"
+        strokeWidth="3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="-9" cy="-66" r="3" fill="var(--scene-ink)" />
+      <circle cx="9" cy="-66" r="3" fill="var(--scene-ink)" />
+      <path
+        d="M -7,-56 C -3,-52 3,-52 7,-56"
+        stroke="var(--scene-ink)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        fill="none"
       />
     </g>
+  );
+}
+
+/** A four-point star — the illustration's bit of sparkle. */
+function Sparkle({ x, y, r }: { x: number; y: number; r: number }) {
+  return (
+    <path
+      d={`M 0,${-r} l ${r * 0.27},${r * 0.73} ${r * 0.73},${r * 0.27}
+          ${-r * 0.73},${r * 0.27} ${-r * 0.27},${r * 0.73}
+          ${-r * 0.27},${-r * 0.73} ${-r * 0.73},${-r * 0.27}
+          ${r * 0.73},${-r * 0.27} z`}
+      transform={`translate(${x}, ${y})`}
+      fill="var(--scene-bundle)"
+    />
   );
 }
 
@@ -197,19 +205,18 @@ export function FamilyScene({
   const two = step >= 3 && !soloMode;
   const baby = two ? BABY_AT.two : BABY_AT.one;
 
-  // Camera: map a focus point to the centre of the viewBox at a given zoom.
+  // Camera: map a focus point to the centre of the frame at a given zoom.
   const cam = (fx: number, fy: number, s: number) =>
     `translate(${(VIEW_W / 2 - s * fx).toFixed(1)}px, ${(VIEW_H / 2 - s * fy).toFixed(1)}px) scale(${s})`;
   const camera =
     step <= 1
-      ? // Head and shoulders of whoever is holding — close enough that the
-        // bundle fills the frame, wide enough to read as a person. Framed to
-        // hold up to four bundles without re-zooming.
-        cam(F1X, 71, 1.95)
+      ? // Close on the cradle: the bundle centred, the arm around it and the
+        // parent's chest behind. Wide enough for four bundles.
+        cam(BABY_AT.one.x, 290, 2)
       : two
-        ? // Both figures in frame — caregiver 2 holding, caregiver 1 behind.
-          cam(218, 85.5, 1.05)
-        : cam(F1X, 87, 1.3);
+        ? // Both figures: caregiver 2 holding, caregiver 1 behind them.
+          cam(489, 290, 0.95)
+        : cam(F1X, 290, 1);
 
   return (
     <svg
@@ -219,60 +226,89 @@ export function FamilyScene({
       preserveAspectRatio="xMidYMid meet"
       className="pointer-events-none h-full w-full select-none"
     >
+      <rect
+        x="0"
+        y="0"
+        width={VIEW_W}
+        height={VIEW_H}
+        rx="16"
+        fill="var(--scene-bg)"
+      />
+      <Sparkle x={26} y={372} r={11} />
+      <Sparkle x={266} y={52} r={11} />
+
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">
         {/* Caregiver 1 — holds the baby first, then steps back out of focus */}
         <g
           style={{
             ...move,
-            opacity: two ? 0.36 : 1,
+            opacity: two ? 0.38 : 1,
             transform: two ? STEP_BACK : "none",
             transformOrigin: `${F1X}px ${BASE}px`,
           }}
           className="motion-reduce:transition-none!"
         >
-          <Figure cx={F1X} tone="--chart-1" holding={!two} />
+          <FigureBody cx={F1X} tone="--scene-ink" />
         </g>
 
         {/* Caregiver 2 — offstage until the handover (never in solo mode) */}
         <g style={{ ...move, opacity: two ? 1 : 0 }} className="motion-reduce:transition-none!">
-          <Figure cx={F2X} tone="--chart-2" tall={3} holding={two} />
+          <FigureBody cx={F2X} tone="--scene-ink-2" />
         </g>
 
+        {/* The bundle(s) travel between the two cradles: above both bodies,
+            below both arms, so whoever holds them holds them properly. */}
         {bundles.map((b, i) => (
           <g
             key={i}
             style={{
               ...move,
-              transform: `scale(${b.scale})`,
-              transformOrigin: `${baby.x + b.dx}px ${baby.y + b.dy}px`,
+              transform: `translate(${baby.x + b.dx}px, ${baby.y + b.dy}px) scale(${b.scale})`,
             }}
             className="motion-reduce:transition-none!"
           >
-            <Baby x={baby.x + b.dx} y={baby.y + b.dy} rot={baby.rot} />
+            <Baby />
           </g>
         ))}
+
+        <g
+          style={{
+            ...move,
+            opacity: two ? 0.38 : 1,
+            transform: two ? STEP_BACK : "none",
+            transformOrigin: `${F1X}px ${BASE}px`,
+          }}
+          className="motion-reduce:transition-none!"
+        >
+          <FigureArm cx={F1X} tone="--scene-ink" holding={!two} />
+        </g>
+        <g style={{ ...move, opacity: two ? 1 : 0 }} className="motion-reduce:transition-none!">
+          <FigureArm cx={F2X} tone="--scene-ink-2" holding={two} />
+        </g>
 
         {/* Name tags — the "character select" label under each figure */}
         <g style={{ ...move, opacity: step >= 2 ? 1 : 0 }} className="motion-reduce:transition-none!">
           <text
             x={F1X}
-            y={BASE + 18}
+            y={NAME_Y}
             textAnchor="middle"
-            fontSize="11"
-            // Follows caregiver 1 as they step back (the label itself keeps
-            // its size — only the figure shrinks).
-            style={{ ...move, transform: two ? "translate(20px, -10px)" : "none" }}
-            className="fill-muted-foreground motion-reduce:transition-none!"
+            fontSize="28"
+            fill="var(--scene-ink)"
+            // Follows caregiver 1 as they step back (the label keeps its size
+            // — only the figure shrinks).
+            style={{ ...move, transform: two ? "translate(70px, -26px)" : "none" }}
+            className="motion-reduce:transition-none!"
           >
             {nameFirst || ""}
           </text>
           <text
             x={F2X}
-            y={BASE + 18}
+            y={NAME_Y}
             textAnchor="middle"
-            fontSize="11"
+            fontSize="28"
+            fill="var(--scene-ink-2)"
             style={{ ...move, opacity: two ? 1 : 0 }}
-            className="fill-muted-foreground motion-reduce:transition-none!"
+            className="motion-reduce:transition-none!"
           >
             {nameSecond || ""}
           </text>

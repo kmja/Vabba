@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { DEFAULT_SAVE_DAYS, Wizard } from "@/components/wizard";
+import {
+  DEFAULT_SAVE_DAYS,
+  Wizard,
+  type WizardIssue,
+} from "@/components/wizard";
 import { Results } from "@/components/results";
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import type { LeaveProjection } from "@/components/timeline";
@@ -26,6 +30,7 @@ import {
   differenceInDays,
   isValidIsoDate,
   parseIsoDate,
+  toIsoDate,
 } from "@/lib/dates";
 import {
   approxMonthlyGross,
@@ -538,6 +543,115 @@ export function Planner() {
 
   const warnings = [...baseWarnings, ...goalWarnings];
 
+  /**
+   * The same trouble, caught in the wizard instead: each goal that cannot be
+   * met, pinned to the question that set it, with the nearest workable answer
+   * as a one-tap fix. Solved live, so it appears the moment the choice is made.
+   */
+  const wizardIssues: WizardIssue[] = useMemo(() => {
+    if (!planSolve || !deadlines) return [];
+    const order: ("A" | "B")[] = soloMode
+      ? ["A"]
+      : firstCaregiver === "B"
+        ? ["B", "A"]
+        : ["A", "B"];
+    const out: WizardIssue[] = [];
+
+    planSolve.perCaregiver.forEach((o, i) => {
+      const id = order[i];
+      if (!id) return;
+      const q = id.toLowerCase();
+      const isA = id === "A";
+      const mode = isA ? goalModeA : goalModeB;
+      const target = isA ? goalTargetA : goalTargetB;
+      const floor = isA ? goalBudgetA : goalBudgetB;
+
+      if (mode === "untilDate" && target && !o.targetMet) {
+        if (o.endsAt && o.shortfallDays > 0) {
+          const reach = o.endsAt;
+          out.push({
+            questionId: `${q}-q-goaldetail`,
+            message: `Dagarna räcker till ${formatDate(reach)} — det fattas ungefär ${o.shortfallDays} dagar till ${formatDate(target)}. Välj ett tidigare datum, eller låt ${o.name} ta fler dagar.`,
+            fix: {
+              label: `Flytta till ${formatDate(reach)}`,
+              apply: () =>
+                setForm((f) =>
+                  isA
+                    ? { ...f, goalDateA: toIsoDate(reach) }
+                    : { ...f, goalDateB: toIsoDate(reach) },
+                ),
+            },
+          });
+        } else {
+          out.push({
+            questionId: `${q}-q-goaldetail`,
+            message: `${formatDate(target)} har redan passerat när ${o.name}s period börjar — välj ett senare datum, eller låt ${o.name} börja först.`,
+          });
+        }
+      }
+
+      if (mode === "budget" && !o.targetMet && o.lowestHouseholdNet !== null) {
+        // The solver already runs at the pace that pays most, so this is the
+        // highest floor that can actually hold.
+        const best = Math.floor(o.lowestHouseholdNet / 500) * 500;
+        out.push({
+          questionId: `${q}-q-goaldetail`,
+          message: `Hushållet når som mest ${formatSek(o.lowestHouseholdNet)}/mån när ${o.name} är hemma — golvet på ${formatSek(floor)} går inte att hålla.`,
+          fix:
+            best > 0 && best < floor
+              ? {
+                  label: `Sänk golvet till ${formatSek(best)}`,
+                  apply: () =>
+                    setForm((f) =>
+                      isA
+                        ? { ...f, goalBudgetA: best }
+                        : { ...f, goalBudgetB: best },
+                    ),
+                }
+              : undefined,
+        });
+      }
+    });
+
+    // Days left over at the 4-year deadline — deliberate or cut by a date goal.
+    const excess = Math.round(planSolve.savedTotal) - 96;
+    if (excess > 0) {
+      const id: "A" | "B" = saveDaysB > saveDaysA ? "B" : "A";
+      const own = id === "A" ? saveDaysA : saveDaysB;
+      const trimmable = own >= excess;
+      out.push({
+        questionId: `${id.toLowerCase()}-q-save`,
+        message: `Planen lämnar ungefär ${Math.round(planSolve.savedTotal)} dagar oanvända. Vid 4-årsdagen (${formatDate(deadlines.sjukpenningDeadline)}) får högst 96 finnas kvar${trimmable ? "" : " — lägg ut fler dagar, t.ex. genom ett senare slutdatum"}.`,
+        fix: trimmable
+          ? {
+              label: `Spara ${own - excess} dagar i stället`,
+              apply: () =>
+                setForm((f) =>
+                  id === "A"
+                    ? { ...f, saveDaysA: own - excess }
+                    : { ...f, saveDaysB: own - excess },
+                ),
+            }
+          : undefined,
+      });
+    }
+    return out;
+  }, [
+    planSolve,
+    deadlines,
+    soloMode,
+    firstCaregiver,
+    goalModeA,
+    goalModeB,
+    goalTargetA,
+    goalTargetB,
+    goalBudgetA,
+    goalBudgetB,
+    saveDaysA,
+    saveDaysB,
+    setForm,
+  ]);
+
   // One-line result of the solved plan, shown in the "Justera" section.
   const goalSummary = useMemo(() => {
     if (!planSolve || !planSolve.endsAt) return null;
@@ -768,6 +882,7 @@ export function Planner() {
       form={form}
       setForm={setForm}
       valid={valid}
+      issues={wizardIssues}
       onSubmit={() => {
         window.scrollTo(0, 0);
         setForm((f) => ({ ...f, submitted: true }));

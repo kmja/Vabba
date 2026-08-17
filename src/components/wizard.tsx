@@ -10,6 +10,7 @@ import {
 import { flushSync } from "react-dom";
 import {
   IconAdjustments,
+  IconAlertTriangle,
   IconArrowLeft,
   IconArrowRight,
   IconBabyCarriage,
@@ -122,6 +123,18 @@ function BabyIcons({ count }: { count: number }) {
   );
 }
 
+/**
+ * A choice that cannot produce a working plan — surfaced on the question that
+ * caused it, while the user is still in the wizard, with the way out.
+ */
+export interface WizardIssue {
+  /** The FlowQuestion this belongs to (e.g. "a-q-goaldetail"). */
+  questionId: string;
+  message: string;
+  /** A one-tap way out, when there is a concrete one. */
+  fix?: { label: string; apply: () => void };
+}
+
 /** A big, animated selection target used by the choice questions. */
 function OptionCard({
   id,
@@ -166,12 +179,15 @@ export function Wizard({
   form,
   setForm,
   valid,
+  issues = [],
   onSubmit,
   onReset,
 }: {
   form: ShareableState;
   setForm: Dispatch<SetStateAction<ShareableState>>;
   valid: boolean;
+  /** Choices that can't work, keyed to the question that caused them. */
+  issues?: WizardIssue[];
   onSubmit: () => void;
   onReset: () => void;
 }) {
@@ -199,6 +215,9 @@ export function Wizard({
   // padding — otherwise a field near the end has no room to scroll clear.
   const [kbInset, setKbInset] = useState(0);
   const seen = (qid: string) => visited.has(qid);
+  /** Issues raised by a question the user has already been through. */
+  const issuesOn = (qid: string) =>
+    issues.filter((i) => i.questionId === qid && (seen(qid) || activeQ === qid));
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -933,6 +952,7 @@ export function Wizard({
               mode === "untilDate" ? isValidIsoDate(dateStr) : true
             }
             visited={seen(`${prefix}-q-goaldetail`)}
+            attention={issuesOn(`${prefix}-q-goaldetail`).length > 0}
             onOpen={() => openQ(`${prefix}-q-goaldetail`, true)}
           >
             {mode === "untilDate" ? (
@@ -1002,6 +1022,7 @@ export function Wizard({
           // Non-zero by default, so it only counts as answered once asked.
           answered={seen(`${prefix}-q-save`)}
           visited={seen(`${prefix}-q-save`)}
+          attention={issuesOn(`${prefix}-q-save`).length > 0}
           onOpen={() => openQ(`${prefix}-q-save`, true)}
         >
           <NumberField
@@ -1194,6 +1215,50 @@ export function Wizard({
     </div>
   );
 
+  /**
+   * What's wrong with this step's answers, and how to put it right. Shown
+   * under the question in focus so a choice that can't work is caught here
+   * rather than on the results page.
+   */
+  const stepIssues = flowOf(current).flatMap(issuesOn);
+  const issueBanner = stepIssues.length > 0 && (
+    <div className="space-y-2">
+      {stepIssues.map((issue) => (
+        <div
+          key={issue.questionId + issue.message}
+          className="border-warning/60 bg-warning/10 animate-flow-in space-y-2 rounded-xl border p-3"
+        >
+          <div className="flex gap-2">
+            <IconAlertTriangle className="text-warning mt-0.5 size-4 shrink-0" />
+            <p className="text-sm leading-snug">{issue.message}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 pl-6">
+            {issue.fix && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={issue.fix.apply}
+              >
+                {issue.fix.label}
+              </Button>
+            )}
+            {activeQ !== issue.questionId && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => openQ(issue.questionId, true)}
+              >
+                Ändra själv
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   /** The step's questions, rendered into whichever slot is being drawn. */
   const stepQuestions =
     current === 1
@@ -1237,7 +1302,7 @@ export function Wizard({
               steps so the camera pans, the zoom-out and the handover animate
               between them. */}
           <div className="flex items-start gap-3">
-            <div className="aspect-[3/4] w-28 shrink-0 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden">
+            <div className="aspect-[15/22] w-28 shrink-0 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden">
               <FamilyScene
                 step={current}
                 soloMode={soloMode}
@@ -1250,6 +1315,10 @@ export function Wizard({
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
             </div>
           </div>
+
+          {/* Right below the flagged summary row, above the question in
+              focus — so a choice that can't work is seen, not scrolled past. */}
+          {issueBanner}
 
           <div key={current} className="animate-flow-in mt-4 space-y-5 [@media(max-height:740px)]:mt-2 [@media(max-height:740px)]:space-y-3">
             {current === 1 && (
