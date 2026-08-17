@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -48,6 +49,10 @@ import {
 } from "@/lib/dates";
 import type { ShareableState } from "@/lib/share";
 import { cn } from "@/lib/utils";
+
+/** Fields the flow can focus — excludes toggles and the hidden date hook. */
+const FIELD_SELECTOR =
+  'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
 
 const CHILD_NUMBERS = [
   { value: 1, label: "Första" },
@@ -163,7 +168,37 @@ export function Wizard({
   const [visited, setVisited] = useState<Set<string>>(() => new Set());
   // Validation stays quiet until the user tries to move on.
   const [triedNext, setTriedNext] = useState(false);
+  // How much of the viewport the on-screen keyboard currently covers. Since
+  // it overlays rather than resizes, the scroll area gets that much bottom
+  // padding — otherwise a field near the end has no room to scroll clear.
+  const [kbInset, setKbInset] = useState(0);
   const seen = (qid: string) => visited.has(qid);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+      // The keyboard opening is its own event — no focus change fires — so
+      // lift the already-focused field if it just got covered.
+      const el = document.activeElement as HTMLElement | null;
+      if (!el?.matches?.(FIELD_SELECTOR)) return;
+      window.setTimeout(() => {
+        const box = el.getBoundingClientRect();
+        const delta = box.bottom - (vv.offsetTop + vv.height - 12);
+        if (delta > 0) {
+          contentRef.current?.scrollBy?.({ top: delta, behavior: "smooth" });
+        }
+      }, 60);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
 
   const formRef = useRef<HTMLFormElement>(null);
   // The scrollable question area between the fixed progress/nav bars.
@@ -172,9 +207,6 @@ export function Wizard({
   // scene off screen — the step transition is exactly when it should be seen.
   const holdSceneRef = useRef(false);
 
-  const FIELD_SELECTOR =
-    'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
-
   /** Focusable fields, excluding those inside collapsed (inert) panels. */
   const visibleFields = (root: ParentNode | null): HTMLElement[] =>
     Array.from(
@@ -182,16 +214,35 @@ export function Wizard({
     ).filter((el) => !el.closest("[inert]"));
 
   /**
-   * Keep a focused field visible: center it now AND again shortly after,
-   * when the on-screen keyboard has resized the viewport (the first scroll
-   * happens before the resize, which would leave the field hidden).
+   * Keep a focused field clear of the on-screen keyboard, which overlays the
+   * page (see interactiveWidget in layout.tsx). visualViewport reports the
+   * area the keyboard leaves visible; we scroll the content container by the
+   * smallest amount that brings the field inside it — so anything already
+   * visible (the family scene above) is left where it is. Runs again after
+   * the keyboard animates in, since the first pass predates it.
    */
   const revealField = (el: HTMLElement) => {
-    el.scrollIntoView?.({ block: "center", behavior: "smooth" });
-    window.setTimeout(() => {
-      if (document.activeElement === el) {
-        el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    const nudge = () => {
+      const box = el.getBoundingClientRect();
+      if (box.height === 0) return;
+      const vv = window.visualViewport;
+      const top = vv ? vv.offsetTop : 0;
+      const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const pad = 12;
+      let delta = 0;
+      if (box.bottom > bottom - pad) delta = box.bottom - (bottom - pad);
+      else if (box.top < top + pad) delta = box.top - (top + pad);
+      if (delta === 0) return;
+      const scroller = contentRef.current;
+      if (scroller && scroller.scrollHeight > scroller.clientHeight) {
+        scroller.scrollBy({ top: delta, behavior: "smooth" });
+      } else {
+        window.scrollBy({ top: delta, behavior: "smooth" });
       }
+    };
+    nudge();
+    window.setTimeout(() => {
+      if (document.activeElement === el) nudge();
     }, 350);
   };
 
@@ -1061,6 +1112,7 @@ export function Wizard({
 
         <div
           ref={contentRef}
+          style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
           {/* The family stage — persists across steps so the camera pans,
@@ -1255,9 +1307,10 @@ export function Wizard({
               </>
             )}
           </div>
+          <div aria-hidden style={{ height: kbInset }} />
         </div>
 
-        {/* Nav — pinned to the bottom of the screen, above the keyboard. */}
+        {/* Nav — pinned to the bottom of the wizard (the keyboard overlays it). */}
         <div className="bg-card/95 sticky bottom-0 z-30 flex items-center justify-between gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6 [@media(max-height:740px)]:pt-2 [@media(max-height:740px)]:pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           <Button
             type="button"

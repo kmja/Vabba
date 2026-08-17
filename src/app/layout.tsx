@@ -54,9 +54,11 @@ export const viewport: Viewport = {
   ],
   // cover: lets env(safe-area-inset-*) pad the pinned wizard nav on iOS.
   viewportFit: "cover",
-  // resizes-content: the Android keyboard shrinks the viewport instead of
-  // covering the pinned bottom bar.
-  interactiveWidget: "resizes-content",
+  // overlays-content: the keyboard is drawn ON TOP of the page rather than
+  // shrinking it, so the layout (family scene, question, nav) never reflows
+  // when it opens. Fields are kept clear of it by scrolling the content
+  // container — see revealField in wizard.tsx.
+  interactiveWidget: "overlays-content",
 };
 
 // Set the colour theme before paint so there's no flash. Reads a saved choice,
