@@ -163,6 +163,25 @@ describe("<Planner /> wizard", () => {
     expect(el?.textContent).toContain("Kim");
   });
 
+  it("reopens an answered question as an accordion, not the hero view", () => {
+    const { container } = render(<Planner />);
+    // First pass: the active question is the hero — no card chrome.
+    const dateBox = () => container.querySelector("#q-date")!.parentElement!;
+    expect(dateBox().className).toContain("bg-transparent");
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    // Answered → collapsed summary row, back in a card.
+    expect(dateBox().className).toContain("bg-card");
+    // Reopening it expands in place, keeping the card (not the hero).
+    fireEvent.click(container.querySelector("#q-date")!);
+    expect(
+      container.querySelector("#q-date")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(dateBox().className).toContain("bg-card");
+    expect(dateBox().className).not.toContain("bg-transparent");
+  });
+
   it("swipes between months in the calendar", () => {
     const { container } = render(<Planner />);
     const grid = container.querySelector("[data-calendar-grid]")!;

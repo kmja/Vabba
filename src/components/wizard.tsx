@@ -163,6 +163,10 @@ export function Wizard({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // The question currently in focus (its FlowQuestion id); "" = none.
   const [activeQ, setActiveQ] = useState("q-date");
+  // Whether the open question was REOPENED to edit an existing answer (an
+  // in-place accordion) rather than reached in the forward flow (the
+  // full-screen hero treatment).
+  const [reopened, setReopened] = useState(false);
   // Questions the user has actually answered/passed this session. Defaults
   // alone must not render as answered — a fresh plan should look untouched.
   const [visited, setVisited] = useState<Set<string>>(() => new Set());
@@ -259,8 +263,11 @@ export function Wizard({
    * Open a question AND focus its first field in the same user gesture
    * (flushSync) — required for the mobile keyboard to stay open.
    */
-  const openQ = (qid: string) => {
-    flushSync(() => setActiveQ(qid));
+  const openQ = (qid: string, viaReopen = false) => {
+    flushSync(() => {
+      setActiveQ(qid);
+      setReopened(viaReopen);
+    });
     const panel = document.getElementById(`${qid}-panel`);
     // Choice questions have no field — bring the panel itself into view.
     if (!focusFieldIn(panel)) {
@@ -273,6 +280,7 @@ export function Wizard({
       setStep(s);
       setAdvancedOpen(false);
       setActiveQ(firstQuestionOf(s));
+      setReopened(false);
     });
     // A step change always starts at the top so the family scene — and its
     // zoom/handover animation — is on screen. The first field still takes
@@ -493,9 +501,10 @@ export function Wizard({
         id="q-date"
         label="Födelsedatum"
         value={birth ? formatDate(birth) : null}
+        hero={!reopened}
         open={activeQ === "q-date"}
         answered={birth != null}
-        onOpen={() => openQ("q-date")}
+        onOpen={() => openQ("q-date", true)}
       >
         <p className="text-muted-foreground -mt-1 text-xs">
           Eller beräknat datum, om barnet inte är fött än.
@@ -516,9 +525,10 @@ export function Wizard({
         value={
           CHILD_NUMBERS.find((c) => c.value === childNumber)?.label ?? "Första"
         }
+        hero={!reopened}
         open={activeQ === "q-order"}
         answered={childNumber >= 2 || seen("q-order")}
-        onOpen={() => openQ("q-order")}
+        onOpen={() => openQ("q-order", true)}
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {CHILD_NUMBERS.map((c) => (
@@ -554,9 +564,10 @@ export function Wizard({
           BIRTH_COUNTS.find((c) => c.value === plan.childrenInBirth)?.label ??
           "Ett barn"
         }
+        hero={!reopened}
         open={activeQ === "q-count"}
         answered={plan.childrenInBirth >= 2 || seen("q-count")}
-        onOpen={() => openQ("q-count")}
+        onOpen={() => openQ("q-count", true)}
       >
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {BIRTH_COUNTS.map((c) => (
@@ -660,9 +671,10 @@ export function Wizard({
           id={`${prefix}-q-name`}
           label="Namn"
           value={displayName}
+          hero={!reopened}
           open={activeQ === `${prefix}-q-name`}
           answered={!!value.name?.trim() || seen(`${prefix}-q-name`)}
-          onOpen={() => openQ(`${prefix}-q-name`)}
+          onOpen={() => openQ(`${prefix}-q-name`, true)}
         >
           <div className="space-y-1.5">
             <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
@@ -702,9 +714,10 @@ export function Wizard({
                 ? "Över taket"
                 : null
           }
+          hero={!reopened}
           open={activeQ === `${prefix}-q-income`}
           answered={aboveCap || income > 0}
-          onOpen={() => openQ(`${prefix}-q-income`)}
+          onOpen={() => openQ(`${prefix}-q-income`, true)}
         >
           {/* A plain numeric input — salaries above the SGI cap are simply
               capped in the maths (the hint says so). */}
@@ -726,9 +739,10 @@ export function Wizard({
               ? `Ja · ${supplement.pct} % i ${supplement.months} mån`
               : "Ingen"
           }
+          hero={!reopened}
           open={activeQ === `${prefix}-q-supplement`}
           answered={!supplement.enabled || seen(`${prefix}-q-supplement`)}
-          onOpen={() => openQ(`${prefix}-q-supplement`)}
+          onOpen={() => openQ(`${prefix}-q-supplement`, true)}
         >
           <div className="grid grid-cols-2 gap-2">
             <OptionCard
@@ -758,9 +772,10 @@ export function Wizard({
           id={`${prefix}-q-goal`}
           label={`Vad vill ${goalName} uppnå?`}
           value={goalValue}
+          hero={!reopened}
           open={activeQ === `${prefix}-q-goal`}
           answered={mode !== "manual" || seen(`${prefix}-q-goal`)}
-          onOpen={() => openQ(`${prefix}-q-goal`)}
+          onOpen={() => openQ(`${prefix}-q-goal`, true)}
         >
           <div className="grid gap-2">
             {GOAL_MODES.map((m) => (
@@ -833,9 +848,10 @@ export function Wizard({
           id={`${prefix}-q-save`}
           label="Spara dagar?"
           value={saveDays > 0 ? `${saveDays} dagar` : "Inga"}
+          hero={!reopened}
           open={activeQ === `${prefix}-q-save`}
           answered={saveDays > 0 || seen(`${prefix}-q-save`)}
-          onOpen={() => openQ(`${prefix}-q-save`)}
+          onOpen={() => openQ(`${prefix}-q-save`, true)}
         >
           <NumberField
             id={`${prefix}-save-days`}
@@ -859,9 +875,10 @@ export function Wizard({
             id={`${prefix}-q-extra`}
             label="Dagar från tidigare barn"
             value={extraDays > 0 ? `${extraDays} dagar` : "Inga"}
-            open={activeQ === `${prefix}-q-extra`}
+            hero={!reopened}
+          open={activeQ === `${prefix}-q-extra`}
             answered={extraDays > 0 || seen(`${prefix}-q-extra`)}
-            onOpen={() => openQ(`${prefix}-q-extra`)}
+            onOpen={() => openQ(`${prefix}-q-extra`, true)}
           >
             <NumberField
               id={`${prefix}-extra`}

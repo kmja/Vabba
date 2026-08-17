@@ -4,19 +4,22 @@ import { IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
 /**
- * One question in the wizard's flow.
+ * One question in the wizard's flow, with three states:
  *
- * Active: no card chrome at all — the question is the content of the screen,
- * a large heading with its input directly below. Answered or pending: a
- * compact accordion row (check badge + the chosen value) that reopens on tap.
- * Every state change animates: the box fades in/out, the heading scales
- * between headline and label size, and the panel height eases open.
+ * - **Hero** (open while being answered the first time): no card chrome at
+ *   all — a large heading with its input as the content of the screen.
+ * - **Accordion** (an answered question reopened to edit): keeps its card and
+ *   compact header, expanding the input inside the box.
+ * - **Collapsed**: the summary row — check badge and the chosen value.
+ *
+ * A question the user hasn't reached yet isn't rendered at all.
  */
 export function FlowQuestion({
   id,
   label,
   value,
   open,
+  hero,
   answered,
   onOpen,
   children,
@@ -26,22 +29,27 @@ export function FlowQuestion({
   /** The chosen value, shown in the header while collapsed. */
   value?: string | null;
   open: boolean;
+  /** Open as the full-screen question (first pass) rather than an edit. */
+  hero?: boolean;
   /** Shows the check badge when collapsed. */
   answered: boolean;
   onOpen: () => void;
   children: ReactNode;
 }) {
-  // A question the user hasn't reached yet stays out of the flow entirely —
-  // only what's answered (above) and what's in focus is on screen.
+  // A question the user hasn't got to is out of the flow entirely — only
+  // what's answered (above) and what's in focus is on screen.
   if (!open && !answered) return null;
+
+  const bare = open && hero;
 
   return (
     <div
       className={cn(
         "transition-[background-color,border-color,box-shadow,margin] duration-300",
-        open
+        bare
           ? "animate-flow-in border-transparent bg-transparent py-1 shadow-none"
           : "bg-card rounded-xl border shadow-sm",
+        open && !bare && "border-primary/50",
       )}
       style={{ borderWidth: 1, borderStyle: "solid" }}
     >
@@ -52,35 +60,43 @@ export function FlowQuestion({
         aria-expanded={open}
         className={cn(
           "flex w-full items-center text-left transition-[padding,column-gap] duration-300",
-          open
+          bare
             ? "gap-0 px-0 pt-1 pb-0"
             : "active:bg-secondary/50 min-h-13 gap-2.5 rounded-xl px-4 py-3",
         )}
       >
-        {/* Badge only exists in the collapsed row */}
+        {/* Badge only exists outside the hero state */}
         <span
           className={cn(
             "flex shrink-0 items-center justify-center rounded-full transition-all duration-300",
-            open
+            bare
               ? "size-0 opacity-0"
               : answered
                 ? "bg-primary text-primary-foreground size-6 opacity-100"
                 : "bg-muted text-muted-foreground size-6 opacity-100",
           )}
         >
-          {answered ? (
+          {answered && !open ? (
             <IconCheck className="size-4" />
           ) : (
-            <IconChevronDown className="size-4" />
+            <IconChevronDown
+              className={cn(
+                "size-4 transition-transform duration-300",
+                open && "rotate-180",
+              )}
+            />
           )}
         </span>
 
         <span
           className={cn(
             "min-w-0 transition-all duration-300",
-            open
+            bare
               ? "text-foreground flex-1 text-2xl leading-tight font-semibold"
-              : "text-muted-foreground shrink-0 text-sm font-medium",
+              : cn(
+                  "shrink-0 text-sm font-medium",
+                  open ? "text-foreground" : "text-muted-foreground",
+                ),
           )}
         >
           {label}
@@ -108,7 +124,7 @@ export function FlowQuestion({
             id={`${id}-panel`}
             className={cn(
               "space-y-3 transition-[padding] duration-300",
-              open ? "px-0 pt-4 pb-2" : "px-4 pt-1 pb-4",
+              bare ? "px-0 pt-4 pb-2" : "px-4 pt-1 pb-4",
             )}
           >
             {children}
