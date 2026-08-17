@@ -67,14 +67,23 @@ function openQuestion(container: HTMLElement, prefix: string, key: string) {
   openQ(container, `${prefix}-q-${key}`);
 }
 
+/**
+ * Answer the birth-date question. Step 1 now opens on the number of babies,
+ * so the date question (and its hidden date input) has to be reached first.
+ */
+function pickBirth(container: HTMLElement, iso: string) {
+  openQ(container, "q-date");
+  fireEvent.change(container.querySelector("#birth-date")!, {
+    target: { value: iso },
+  });
+}
+
 /** Fill the wizard to the LAST step (both incomes set), without submitting. */
 function fillToResults(
   container: HTMLElement,
   opts: { incomeA?: string; incomeB?: string } = {},
 ) {
-  fireEvent.change(container.querySelector("#birth-date")!, {
-    target: { value: "2025-01-15" },
-  });
+  pickBirth(container, "2025-01-15");
   next(); // → step 2: the caregiver going first (A by default)
   openQuestion(container, "a", "income");
   fireEvent.change(container.querySelector("#a-income")!, {
@@ -125,9 +134,7 @@ describe("<Planner /> wizard", () => {
 
   it("puts the step-2 caregiver first on the timeline", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2: whoever is described here goes first
     fireEvent.change(container.querySelector("#a-name")!, {
       target: { value: "Kim" },
@@ -150,9 +157,7 @@ describe("<Planner /> wizard", () => {
     const scene = () => container.querySelector("[data-family-scene]");
     expect(scene()).not.toBeNull();
     const el = scene();
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2
     // Same element instance — the camera/handover can animate between steps.
     expect(scene()).toBe(el);
@@ -165,6 +170,7 @@ describe("<Planner /> wizard", () => {
 
   it("reopens an answered question as an accordion, not the hero view", () => {
     const { container } = render(<Planner />);
+    openQ(container, "q-date");
     // First pass: the active question is the hero — no card chrome.
     const dateBox = () => container.querySelector("#q-date")!.parentElement!;
     expect(dateBox().className).toContain("bg-transparent");
@@ -184,6 +190,7 @@ describe("<Planner /> wizard", () => {
 
   it("swipes between months in the calendar", () => {
     const { container } = render(<Planner />);
+    openQ(container, "q-date");
     const grid = container.querySelector("[data-calendar-grid]")!;
     const month = () =>
       container.querySelector("[data-calendar-month]")!.textContent;
@@ -197,6 +204,11 @@ describe("<Planner /> wizard", () => {
 
   it("collapses an answered question and opens the next one", () => {
     const { container } = render(<Planner />);
+    // Step 1 opens on the number of babies; answering it opens the date.
+    fireEvent.click(container.querySelector("#birth-count-1")!);
+    expect(
+      container.querySelector("#q-date")?.getAttribute("aria-expanded"),
+    ).toBe("true");
     // Picking a date auto-advances to the child-order question.
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
@@ -204,25 +216,17 @@ describe("<Planner /> wizard", () => {
     expect(
       container.querySelector("#q-order")?.getAttribute("aria-expanded"),
     ).toBe("true");
-    // The date question collapsed to a summary with the value in the header.
-    expect(
-      container.querySelector("#q-date")?.getAttribute("aria-expanded"),
-    ).toBe("false");
-    expect(screen.getAllByText(/15 jan(uari)?\.? 2025/).length).toBeGreaterThan(
-      0,
-    );
-    // Choosing the child order advances to the birth-count question.
-    fireEvent.click(container.querySelector("#child-number-1")!);
-    expect(
-      container.querySelector("#q-count")?.getAttribute("aria-expanded"),
-    ).toBe("true");
+    // The date question collapsed to a summary showing the answer alone —
+    // the question itself is not repeated beside the scene.
+    const dateRow = container.querySelector("#q-date")!;
+    expect(dateRow.getAttribute("aria-expanded")).toBe("false");
+    expect(dateRow.textContent).toMatch(/15 jan(uari)?\.? 2025/);
+    expect(dateRow.textContent).not.toContain("Födelsedatum");
   });
 
   it("supports planning alone via the step-3 opt-out", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2: the one going on leave first
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
@@ -248,9 +252,7 @@ describe("<Planner /> wizard", () => {
 
   it("drops the first 180 days to grundnivå when the 240-day rule isn't met", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2 (caregiver A)
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
@@ -290,12 +292,14 @@ describe("<Planner /> wizard", () => {
 
   it("advances with the Enter key and moves focus to the next field", () => {
     const { container } = render(<Planner />);
-    const birth = container.querySelector("#birth-date")!;
-    fireEvent.change(birth, { target: { value: "2025-01-15" } });
-    // The date pick auto-advanced; answer the two choice questions by tap —
-    // the LAST answer flows straight into step 2 with the name field focused.
-    fireEvent.click(container.querySelector("#child-number-1")!);
+    // Tap the babies count, pick a date, tap the child order — each answer
+    // auto-advances, and the LAST one flows straight into step 2 with the
+    // name field focused.
     fireEvent.click(container.querySelector("#birth-count-1")!);
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    fireEvent.click(container.querySelector("#child-number-1")!);
     expect(container.querySelector("#a-q-name")).not.toBeNull();
     expect(document.activeElement?.id).toBe("a-name");
     // Enter in the name field opens the next question, focused.
@@ -312,12 +316,15 @@ describe("<Planner /> wizard", () => {
     // Nothing is flagged before the user has tried to move on.
     expect(screen.queryByText(/Välj ett datum/)).toBeNull();
     // While questions remain, Nästa advances through them (not the step).
+    fireEvent.click(nextBtn()); // count → date
+    expect(
+      container.querySelector("#q-date")?.getAttribute("aria-expanded"),
+    ).toBe("true");
     fireEvent.click(nextBtn()); // date → order (no date picked)
     expect(
       container.querySelector("#q-order")?.getAttribute("aria-expanded"),
     ).toBe("true");
-    fireEvent.click(nextBtn()); // order → count
-    fireEvent.click(nextBtn()); // count → flow done
+    fireEvent.click(nextBtn()); // order → flow done
     fireEvent.click(nextBtn()); // tries the step → blocked, and says why
     expect(screen.getByText(/Välj ett datum/)).toBeTruthy();
     // It also takes the user back to the question that needs answering.
@@ -346,9 +353,7 @@ describe("<Planner /> wizard", () => {
 
   it("asks each caregiver's goal and solves a date goal from the wizard", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
@@ -371,9 +376,7 @@ describe("<Planner /> wizard", () => {
 
   it("asks the goal and its settings as separate substeps", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "goal");
     // Substep 1: only the three goal choices — no date or budget input yet.
@@ -405,9 +408,7 @@ describe("<Planner /> wizard", () => {
 
   it("solves the longest leave within a household budget from the wizard", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
@@ -533,9 +534,7 @@ describe("<Planner /> wizard", () => {
 
   it("includes the lägstanivå days when the step-1 toggle is on", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     // The lägstanivå toggle lives under step 1's advanced settings.
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#include-lagsta")!);
@@ -559,14 +558,11 @@ describe("<Planner /> wizard", () => {
 
   it("adds extra days for twins", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
-    // Twins now live in the birth-count question (icon targets). It's the
-    // step's last question, so answering it flows straight into step 2.
-    openQ(container, "q-count");
+    // Twins live in the birth-count question (icon targets), which now opens
+    // step 1.
     fireEvent.click(container.querySelector("#birth-count-2")!);
-    expect(container.querySelector("#a-q-name")).not.toBeNull();
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
@@ -584,16 +580,15 @@ describe("<Planner /> wizard", () => {
 
   it("asks about days from previous children from the second child on", () => {
     const { container } = render(<Planner />);
-    fireEvent.change(container.querySelector("#birth-date")!, {
-      target: { value: "2025-01-15" },
-    });
+    pickBirth(container, "2025-01-15");
     // First child: the carried-over question is not in the flow.
     next();
     expect(container.querySelector("#a-extra")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
     openQ(container, "q-order");
+    // It is the step's last question, so answering it flows into step 2 —
+    // where the carried-over-days question is now part of the flow.
     fireEvent.click(container.querySelector("#child-number-2")!);
-    next(); // → step 2 — now it is.
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },

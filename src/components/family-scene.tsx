@@ -17,11 +17,23 @@
 const EASE = "cubic-bezier(0.32, 0.8, 0.3, 1)";
 const DUR = "850ms";
 
+// World coordinates. The camera (see below) maps a focus point in this space
+// to the centre of the viewBox, so the figures can be laid out at a
+// comfortable scale regardless of how large the frame ends up being.
 const BASE = 118; // hem / ground line
 const SY = 64; // shoulder line
 const CHEST = SY + 32; // where the bundle rides
 const F1X = 165;
 const F2X = 245;
+
+// The frame itself: portrait, matching the column the scene sits in beside
+// the answered questions, so `meet` never letterboxes it.
+const VIEW_W = 132;
+const VIEW_H = 176;
+
+/** Where caregiver 1 recedes to once the baby has been handed over: toward
+ *  the centre of the frame, smaller and higher — the vanishing point. */
+const STEP_BACK = "translate(20px, -6px) scale(0.78)";
 
 const BABY_AT = {
   one: { x: F1X - 3, y: CHEST, rot: -9 },
@@ -109,6 +121,29 @@ function Figure({
   );
 }
 
+/**
+ * How several bundles sit together in one cradle — a small fan, each a bit
+ * behind the last, so two to four read clearly at a glance.
+ */
+const BUNDLE_LAYOUT: { dx: number; dy: number; scale: number }[][] = [
+  [{ dx: 0, dy: 0, scale: 1 }],
+  [
+    { dx: -2, dy: -7, scale: 0.82 },
+    { dx: 4, dy: 6, scale: 0.82 },
+  ],
+  [
+    { dx: -4, dy: -11, scale: 0.72 },
+    { dx: 1, dy: -1, scale: 0.72 },
+    { dx: 6, dy: 9, scale: 0.72 },
+  ],
+  [
+    { dx: -5, dy: -14, scale: 0.64 },
+    { dx: -1, dy: -5, scale: 0.64 },
+    { dx: 3, dy: 4, scale: 0.64 },
+    { dx: 7, dy: 13, scale: 0.64 },
+  ],
+];
+
 /** The swaddled newborn — a cream blanket that reads against either parent. */
 function Baby({ x, y, rot }: { x: number; y: number; rot: number }) {
   return (
@@ -145,35 +180,44 @@ function Baby({ x, y, rot }: { x: number; y: number; rot: number }) {
 export function FamilyScene({
   step,
   soloMode,
+  babyCount = 1,
   nameFirst,
   nameSecond,
 }: {
   /** Current wizard step (1 = the baby, 2 = first caregiver, 3 = second). */
   step: number;
   soloMode: boolean;
+  /** Children in this birth (1–4) — the cradle holds that many bundles. */
+  babyCount?: number;
   nameFirst?: string;
   nameSecond?: string;
 }) {
+  const bundles =
+    BUNDLE_LAYOUT[Math.min(Math.max(babyCount, 1), 4) - 1] ?? BUNDLE_LAYOUT[0];
   const two = step >= 3 && !soloMode;
   const baby = two ? BABY_AT.two : BABY_AT.one;
 
   // Camera: map a focus point to the centre of the viewBox at a given zoom.
   const cam = (fx: number, fy: number, s: number) =>
-    `translate(${(180 - s * fx).toFixed(1)}px, ${(73 - s * fy).toFixed(1)}px) scale(${s})`;
+    `translate(${(VIEW_W / 2 - s * fx).toFixed(1)}px, ${(VIEW_H / 2 - s * fy).toFixed(1)}px) scale(${s})`;
   const camera =
     step <= 1
-      ? cam(baby.x + 8, 97, 2.2)
+      ? // Head and shoulders of whoever is holding — close enough that the
+        // bundle fills the frame, wide enough to read as a person. Framed to
+        // hold up to four bundles without re-zooming.
+        cam(F1X, 71, 1.95)
       : two
-        ? cam(F2X, 84, 1.3)
-        : cam(F1X, 84, 1.3);
+        ? // Both figures in frame — caregiver 2 holding, caregiver 1 behind.
+          cam(218, 85.5, 1.05)
+        : cam(F1X, 87, 1.3);
 
   return (
     <svg
-      viewBox="0 0 360 146"
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       aria-hidden
       data-family-scene
       preserveAspectRatio="xMidYMid meet"
-      className="pointer-events-none h-28 w-full select-none sm:h-32 [@media(max-height:560px)]:hidden [@media(max-height:740px)]:h-16"
+      className="pointer-events-none h-full w-full select-none"
     >
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">
         {/* Caregiver 1 — holds the baby first, then steps back out of focus */}
@@ -181,7 +225,7 @@ export function FamilyScene({
           style={{
             ...move,
             opacity: two ? 0.36 : 1,
-            transform: two ? "translate(-12px, 0px) scale(0.87)" : "none",
+            transform: two ? STEP_BACK : "none",
             transformOrigin: `${F1X}px ${BASE}px`,
           }}
           className="motion-reduce:transition-none!"
@@ -194,7 +238,19 @@ export function FamilyScene({
           <Figure cx={F2X} tone="--chart-2" tall={3} holding={two} />
         </g>
 
-        <Baby x={baby.x} y={baby.y} rot={baby.rot} />
+        {bundles.map((b, i) => (
+          <g
+            key={i}
+            style={{
+              ...move,
+              transform: `scale(${b.scale})`,
+              transformOrigin: `${baby.x + b.dx}px ${baby.y + b.dy}px`,
+            }}
+            className="motion-reduce:transition-none!"
+          >
+            <Baby x={baby.x + b.dx} y={baby.y + b.dy} rot={baby.rot} />
+          </g>
+        ))}
 
         {/* Name tags — the "character select" label under each figure */}
         <g style={{ ...move, opacity: step >= 2 ? 1 : 0 }} className="motion-reduce:transition-none!">
@@ -203,7 +259,10 @@ export function FamilyScene({
             y={BASE + 18}
             textAnchor="middle"
             fontSize="11"
-            className="fill-muted-foreground"
+            // Follows caregiver 1 as they step back (the label itself keeps
+            // its size — only the figure shrinks).
+            style={{ ...move, transform: two ? "translate(20px, -10px)" : "none" }}
+            className="fill-muted-foreground motion-reduce:transition-none!"
           >
             {nameFirst || ""}
           </text>

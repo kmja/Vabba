@@ -29,7 +29,9 @@ export function FlowSlot({
  *   all — a large heading with its input as the content of the screen.
  * - **Accordion** (an answered question reopened to edit): keeps its card and
  *   compact header, expanding the input inside the box.
- * - **Collapsed**: the summary row — check badge and the chosen value.
+ * - **Collapsed**: the summary row — check badge and the answer alone. The
+ *   question itself isn't repeated: "15 jan 2025" says "Födelsedatum" well
+ *   enough, and the summaries live in a narrow column beside the scene.
  *
  * A question the user hasn't reached yet isn't rendered at all.
  */
@@ -69,6 +71,9 @@ export function FlowQuestion({
   if (slot === "active" && !open) return null;
 
   const bare = open && hero;
+  // Collapsed rows lead with the answer. A question that was passed over
+  // without one falls back to its label, so it stays identifiable.
+  const summary = answered && value ? value : label;
 
   return (
     <div
@@ -76,7 +81,7 @@ export function FlowQuestion({
         "transition-[background-color,border-color,box-shadow,margin] duration-300",
         bare
           ? "animate-flow-in border-transparent bg-transparent py-1 shadow-none"
-          : "bg-card rounded-xl border shadow-sm",
+          : cn("bg-card border shadow-sm", open ? "rounded-xl" : "rounded-lg"),
         open && !bare && "border-primary/50",
       )}
       style={{ borderWidth: 1, borderStyle: "solid" }}
@@ -90,7 +95,9 @@ export function FlowQuestion({
           "flex w-full items-center text-left transition-[padding,column-gap] duration-300",
           bare
             ? "gap-0 px-0 pt-1 pb-0"
-            : "active:bg-secondary/50 min-h-13 gap-2.5 rounded-xl px-4 py-3",
+            : open
+              ? "active:bg-secondary/50 min-h-13 gap-2.5 rounded-xl px-4 py-3"
+              : "active:bg-secondary/50 gap-2 rounded-lg px-2.5 py-2",
         )}
       >
         {/* Badge only exists outside the hero state */}
@@ -99,18 +106,22 @@ export function FlowQuestion({
             "flex shrink-0 items-center justify-center rounded-full transition-all duration-300",
             bare
               ? "size-0 opacity-0"
-              : answered
-                ? "bg-primary text-primary-foreground size-6 opacity-100"
-                : "bg-muted text-muted-foreground size-6 opacity-100",
+              : cn(
+                  "opacity-100",
+                  open ? "size-6" : "size-5",
+                  answered
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground",
+                ),
           )}
         >
           {answered && !open ? (
-            <IconCheck className="size-4" />
+            <IconCheck className={open ? "size-4" : "size-3.5"} />
           ) : (
             <IconChevronDown
               className={cn(
-                "size-4 transition-transform duration-300",
-                open && "rotate-180",
+                "transition-transform duration-300",
+                open ? "size-4 rotate-180" : "size-3.5",
               )}
             />
           )}
@@ -118,25 +129,18 @@ export function FlowQuestion({
 
         <span
           className={cn(
-            "min-w-0 transition-all duration-300",
+            "min-w-0 flex-1 transition-all duration-300",
             bare
-              ? "text-foreground flex-1 text-2xl leading-tight font-semibold"
-              : cn(
-                  "shrink-0 text-sm font-medium",
-                  open ? "text-foreground" : "text-muted-foreground",
-                ),
+              ? "text-foreground text-2xl leading-tight font-semibold"
+              : open
+                ? "text-foreground text-sm font-medium"
+                : cn(
+                    "truncate text-sm font-medium tabular-nums",
+                    answered ? "text-foreground" : "text-muted-foreground",
+                  ),
           )}
         >
-          {label}
-        </span>
-
-        <span
-          className={cn(
-            "ml-auto min-w-0 truncate text-right text-base font-semibold tabular-nums transition-opacity duration-300 sm:text-sm",
-            open ? "w-0 opacity-0" : "opacity-100",
-          )}
-        >
-          {answered ? value : null}
+          {open ? label : summary}
         </span>
       </button>
 

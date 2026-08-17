@@ -170,7 +170,7 @@ export function Wizard({
   const [step, setStep] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // The question currently in focus (its FlowQuestion id); "" = none.
-  const [activeQ, setActiveQ] = useState("q-date");
+  const [activeQ, setActiveQ] = useState("q-count");
   // Whether the open question was REOPENED to edit an existing answer (an
   // in-place accordion) rather than reached in the forward flow (the
   // full-screen hero treatment).
@@ -388,7 +388,7 @@ export function Wizard({
   };
 
   const flowOf = (s: number): string[] => {
-    if (s === 1) return ["q-date", "q-order", "q-count"];
+    if (s === 1) return ["q-count", "q-date", "q-order"];
     if (s === 2) return cgFlow(firstId);
     return soloMode ? [] : cgFlow(secondId);
   };
@@ -519,6 +519,41 @@ export function Wizard({
   const babyFlow = (
     <div className="space-y-2">
       <FlowQuestion
+        id="q-count"
+        label="Hur många barn väntar ni?"
+        value={
+          BIRTH_COUNTS.find((c) => c.value === plan.childrenInBirth)?.label ??
+          "Ett barn"
+        }
+        hero={!reopened}
+        open={activeQ === "q-count"}
+        answered={plan.childrenInBirth >= 2 || seen("q-count")}
+        visited={seen("q-count")}
+        onOpen={() => openQ("q-count", true)}
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {BIRTH_COUNTS.map((c) => (
+            <OptionCard
+              key={c.value}
+              id={`birth-count-${c.value}`}
+              selected={plan.childrenInBirth === c.value}
+              icon={<BabyIcons count={c.value} />}
+              label={c.label}
+              onSelect={() => {
+                setPlan((p) => ({ ...p, childrenInBirth: c.value }));
+                advanceQ("q-count");
+              }}
+            />
+          ))}
+        </div>
+        {plan.childrenInBirth >= 2 && (
+          <p className="text-muted-foreground text-xs">
+            Flerbarnsfödsel ger extra dagar utöver de 480.
+          </p>
+        )}
+      </FlowQuestion>
+
+      <FlowQuestion
         id="q-date"
         label="Födelsedatum"
         value={birth ? formatDate(birth) : null}
@@ -576,41 +611,6 @@ export function Wizard({
           <p className="text-muted-foreground text-xs">
             Varje barn har sin egen pott på 480 dagar. Dagar som finns kvar från
             tidigare barn anger du hos respektive vårdnadshavare.
-          </p>
-        )}
-      </FlowQuestion>
-
-      <FlowQuestion
-        id="q-count"
-        label="Hur många barn i födseln?"
-        value={
-          BIRTH_COUNTS.find((c) => c.value === plan.childrenInBirth)?.label ??
-          "Ett barn"
-        }
-        hero={!reopened}
-        open={activeQ === "q-count"}
-        answered={plan.childrenInBirth >= 2 || seen("q-count")}
-        visited={seen("q-count")}
-        onOpen={() => openQ("q-count", true)}
-      >
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {BIRTH_COUNTS.map((c) => (
-            <OptionCard
-              key={c.value}
-              id={`birth-count-${c.value}`}
-              selected={plan.childrenInBirth === c.value}
-              icon={<BabyIcons count={c.value} />}
-              label={c.label}
-              onSelect={() => {
-                setPlan((p) => ({ ...p, childrenInBirth: c.value }));
-                advanceQ("q-count");
-              }}
-            />
-          ))}
-        </div>
-        {plan.childrenInBirth >= 2 && (
-          <p className="text-muted-foreground text-xs">
-            Flerbarnsfödsel ger extra dagar utöver de 480.
           </p>
         )}
       </FlowQuestion>
@@ -1203,15 +1203,16 @@ export function Wizard({
               steps so the camera pans, the zoom-out and the handover animate
               between them. */}
           <div className="flex items-start gap-3">
-            <div className="w-24 shrink-0 sm:w-28">
+            <div className="aspect-[3/4] w-28 shrink-0 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden">
               <FamilyScene
                 step={current}
                 soloMode={soloMode}
+                babyCount={plan.childrenInBirth}
                 nameFirst={sceneName(firstId)}
                 nameSecond={soloMode ? "" : sceneName(secondId)}
               />
             </div>
-            <div className="min-w-0 flex-1 space-y-2">
+            <div className="min-w-0 flex-1 space-y-1.5">
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
             </div>
           </div>
@@ -1342,12 +1343,7 @@ export function Wizard({
 
             {current === 2 && (
               <>
-                <p className="text-muted-foreground text-sm">
-                  {soloMode
-                    ? "Dina uppgifter — du har alla dagarna."
-                    : "Vem går på ledighet först? Ofta den som fött barnet. Fyll i den personens uppgifter här."}
-                </p>
-
+                {/* No lead-in here — stepIntro already says whose step this is. */}
                 <FlowSlot slot="active">{caregiverFlow(firstId)}</FlowSlot>
 
                 <Separator />
@@ -1376,18 +1372,7 @@ export function Wizard({
                     Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
                   </p>
                 ) : (
-                  <>
-                    <p className="text-muted-foreground text-sm">
-                      {plan.parents[secondId].name?.trim() ||
-                        `Vårdnadshavare ${secondId}`}{" "}
-                      tar över när{" "}
-                      {plan.parents[firstId].name?.trim() ||
-                        `Vårdnadshavare ${firstId}`}{" "}
-                      är klar.
-                    </p>
-
-                    {caregiverFlow(secondId)}
-                  </>
+                  <FlowSlot slot="active">{caregiverFlow(secondId)}</FlowSlot>
                 )}
 
                 <Separator />
