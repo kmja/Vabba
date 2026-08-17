@@ -125,6 +125,21 @@
   }
 }
 
+/* Illustration tokens for the wizard's family scene — a cream swaddle that
+   reads against every caregiver colour, in both themes. */
+:root {
+  --swaddle: oklch(0.965 0.022 85);
+  --swaddle-fold: oklch(0.9 0.045 80);
+  --baby-skin: oklch(0.9 0.05 62);
+  --baby-face: oklch(0.42 0.05 40);
+}
+.dark {
+  --swaddle: oklch(0.94 0.025 85);
+  --swaddle-fold: oklch(0.85 0.05 80);
+  --baby-skin: oklch(0.87 0.055 62);
+  --baby-face: oklch(0.36 0.05 40);
+}
+
 /* App-shell (phones, while the wizard is showing): the page as a whole never
    scrolls — the site header and the wizard's progress/nav bars are fixed
    chrome, and only the question area in between scrolls. The keyboard

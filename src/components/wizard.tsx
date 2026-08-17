@@ -166,6 +166,9 @@ export function Wizard({
   const formRef = useRef<HTMLFormElement>(null);
   // The scrollable question area between the fixed progress/nav bars.
   const contentRef = useRef<HTMLDivElement>(null);
+  // Set while changing step: the focus-reveal must not scroll the family
+  // scene off screen — the step transition is exactly when it should be seen.
+  const holdSceneRef = useRef(false);
 
   const FIELD_SELECTOR =
     'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
@@ -218,14 +221,20 @@ export function Wizard({
       setAdvancedOpen(false);
       setActiveQ(firstQuestionOf(s));
     });
-    // Forward nav auto-scrolls via the focused field; on back, start the
-    // step from the top instead of inheriting the old scroll depth.
+    // A step change always starts at the top so the family scene — and its
+    // zoom/handover animation — is on screen. The first field still takes
+    // focus (keyboard up), but without scrolling the stage away.
+    holdSceneRef.current = true;
+    contentRef.current?.scrollTo?.(0, 0);
+    window.scrollTo(0, 0);
     if (focus) {
-      focusFieldIn(formRef.current);
-    } else {
-      contentRef.current?.scrollTo?.(0, 0);
-      window.scrollTo(0, 0);
+      visibleFields(formRef.current)[0]?.focus({ preventScroll: true });
     }
+    // Release once the scene's transition has played, so in-step question
+    // advances scroll normally again.
+    window.setTimeout(() => {
+      holdSceneRef.current = false;
+    }, 900);
   };
 
   const { plan, soloMode, hasUsedDays, detailedUsed } = form;
@@ -1006,7 +1015,9 @@ export function Wizard({
         onSubmit={(e) => e.preventDefault()}
         onKeyDown={onFormKeyDown}
         onFocus={(e) => {
-          // Any focused field is kept clear of the keyboard and pinned bars.
+          // Any focused field is kept clear of the keyboard and pinned bars —
+          // except right after a step change, where the scene stays in view.
+          if (holdSceneRef.current) return;
           const t = e.target as HTMLElement;
           if (t.matches?.(FIELD_SELECTOR)) revealField(t);
         }}
