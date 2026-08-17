@@ -42,6 +42,7 @@ export function InlineCalendar({
   inputId,
   yearsBack = 12,
   yearsForward = 1,
+  minDate,
 }: {
   /** ISO yyyy-mm-dd (or empty). */
   value: string;
@@ -50,6 +51,8 @@ export function InlineCalendar({
   inputId: string;
   yearsBack?: number;
   yearsForward?: number;
+  /** Earliest selectable day — days before it are shown but not pickable. */
+  minDate?: Date | null;
 }) {
   const selected = isValidIsoDate(value) ? parseIsoDate(value) : null;
   // The visible month is client-state; "today" is read after mount to keep
@@ -60,12 +63,14 @@ export function InlineCalendar({
   const [today, setToday] = useState<Date | null>(null);
   // +1 = moved forward (enter from the right), -1 = back (enter from the left).
   const [dir, setDir] = useState(1);
+  const minIso = minDate ? toIsoDate(minDate) : null;
   useEffect(() => {
     const now = new Date();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client-only init of "today"
     setToday(now);
-    setView((v) => v ?? startOfMonth(now));
-  }, []);
+    // Open on the first month anything can be picked in, not on today.
+    setView((v) => v ?? startOfMonth(minDate && minDate > now ? minDate : now));
+  }, [minDate]);
 
   const base = today ?? new Date(2026, 0, 1);
   const years: number[] = [];
@@ -195,28 +200,31 @@ export function InlineCalendar({
               {d}
             </div>
           ))}
-          {cells.map((day, i) =>
-            day ? (
+          {cells.map((day, i) => {
+            if (!day) return <div key={i} />;
+            const blocked = minIso != null && toIsoDate(day) < minIso;
+            return (
               <button
                 key={i}
                 type="button"
+                disabled={blocked}
                 onClick={() => onPick(toIsoDate(day))}
                 className={cn(
                   "flex h-11 items-center justify-center rounded-md text-base tabular-nums transition-colors duration-150 active:scale-95 sm:h-9 sm:text-sm [@media(max-height:740px)]:h-10",
-                  isSameDay(day, selected)
-                    ? "bg-primary text-primary-foreground font-semibold"
-                    : cn(
-                        "hover:bg-secondary/60 active:bg-secondary",
-                        isSameDay(day, today) && "border-primary/50 border",
-                      ),
+                  blocked
+                    ? "text-muted-foreground/40"
+                    : isSameDay(day, selected)
+                      ? "bg-primary text-primary-foreground font-semibold"
+                      : cn(
+                          "hover:bg-secondary/60 active:bg-secondary",
+                          isSameDay(day, today) && "border-primary/50 border",
+                        ),
                 )}
               >
                 {day.getUTCDate()}
               </button>
-            ) : (
-              <div key={i} />
-            ),
-          )}
+            );
+          })}
         </div>
       </div>
 

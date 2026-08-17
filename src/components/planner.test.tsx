@@ -450,7 +450,7 @@ describe("<Planner /> wizard", () => {
     ).toBe("true");
     // Substep 2 leads with the date shortcuts — the calendar only opens if
     // none of them fit.
-    expect(container.querySelector("#a-goal-preset-0")).not.toBeNull();
+    expect(container.querySelector("#a-goal-preset-6man")).not.toBeNull();
     expect(container.querySelector("[data-calendar-grid]")).toBeNull();
     fireEvent.click(container.querySelector("#a-goal-date-custom")!);
     expect(container.querySelector("[data-calendar-grid]")).not.toBeNull();
@@ -474,7 +474,7 @@ describe("<Planner /> wizard", () => {
     next(); // → step 2
     openQuestion(container, "a", "goal");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
-    fireEvent.click(container.querySelector("#a-goal-preset-0")!); // förskolestart
+    fireEvent.click(container.querySelector("#a-goal-preset-6man")!);
     // Answered and collapsed, with the saved-days question next up.
     expect(
       container.querySelector("#a-q-goaldetail")?.getAttribute("aria-expanded"),
@@ -494,13 +494,38 @@ describe("<Planner /> wizard", () => {
     });
     openQuestion(container, "a", "goal");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
-    // "2 år" is far beyond what A's reserved days can stretch to.
-    fireEvent.click(container.querySelector("#a-goal-preset-2")!);
+    // The child's second birthday is far beyond what A's reserved days can
+    // stretch to.
+    fireEvent.click(container.querySelector("#a-goal-preset-2ar")!);
     // Said here, in the wizard — not saved up for the results page.
     expect(screen.getByText(/det fattas ungefär/)).toBeTruthy();
     // ...with the furthest reachable date as a one-tap fix.
     fireEvent.click(screen.getByRole("button", { name: /Flytta till/ }));
     expect(screen.queryByText(/det fattas ungefär/)).toBeNull();
+  });
+
+  it("measures the second caregiver's dates from where the first one ends", () => {
+    const { container } = render(<Planner />);
+    pickBirth(container, futureIso(30));
+    next(); // → step 2
+    openQuestion(container, "a", "income");
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    const aSix = container.querySelector("#a-goal-preset-6man")!.textContent;
+    next(); // → step 3
+    openQuestion(container, "b", "income");
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "30000" },
+    });
+    openQuestion(container, "b", "goal");
+    fireEvent.click(container.querySelector("#b-goal-untilDate")!);
+    const bSix = container.querySelector("#b-goal-preset-6man")!.textContent;
+    // B's leave begins where A's ends, so six months of it lands on a
+    // different date than six months of A's.
+    expect(bSix).not.toBe(aSix);
   });
 
   it("solves the longest leave within a household budget from the wizard", () => {

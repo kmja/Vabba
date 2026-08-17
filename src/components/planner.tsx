@@ -544,6 +544,32 @@ export function Planner() {
   const warnings = [...baseWarnings, ...goalWarnings];
 
   /**
+   * When each caregiver's own stretch begins, from the live solve. The wizard
+   * measures their date shortcuts from here, so the second caregiver's
+   * choices start where the first one leaves off rather than at the birth.
+   */
+  const periodStarts: Partial<Record<"A" | "B", Date>> = useMemo(() => {
+    if (!planSolve || !deadlines || !asOf) return {};
+    const order: ("A" | "B")[] = soloMode
+      ? ["A"]
+      : firstCaregiver === "B"
+        ? ["B", "A"]
+        : ["A", "B"];
+    const out: Partial<Record<"A" | "B", Date>> = {};
+    let cursor = deadlines.birth > asOf ? deadlines.birth : asOf;
+    planSolve.perCaregiver.forEach((o, i) => {
+      const id = order[i];
+      if (!id) return;
+      // A caregiver with no days of their own still starts where the previous
+      // one ended — that is where their shortcuts should be measured from.
+      const from = o.startsAt ?? cursor;
+      out[id] = from;
+      cursor = o.endsAt ?? from;
+    });
+    return out;
+  }, [planSolve, deadlines, asOf, soloMode, firstCaregiver]);
+
+  /**
    * The same trouble, caught in the wizard instead: each goal that cannot be
    * met, pinned to the question that set it, with the nearest workable answer
    * as a one-tap fix. Solved live, so it appears the moment the choice is made.
@@ -883,6 +909,7 @@ export function Planner() {
       setForm={setForm}
       valid={valid}
       issues={wizardIssues}
+      periodStarts={periodStarts}
       onSubmit={() => {
         window.scrollTo(0, 0);
         setForm((f) => ({ ...f, submitted: true }));

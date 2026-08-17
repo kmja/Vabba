@@ -112,6 +112,69 @@ function forskolestart(birth: Date): Date {
     : new Date(Date.UTC(oneYear.getUTCFullYear() + 1, 7, 1));
 }
 
+/** The next month/day after `from` (this year's, or next year's if it passed). */
+function nextAnnual(from: Date, month: number, day: number): Date {
+  const y = from.getUTCFullYear();
+  const here = new Date(Date.UTC(y, month, day));
+  return here.getTime() > from.getTime()
+    ? here
+    : new Date(Date.UTC(y + 1, month, day));
+}
+
+interface DatePreset {
+  key: string;
+  label: string;
+  date: Date;
+}
+
+/**
+ * The shortcuts offered for "hemma till ett datum", in two kinds: landmarks
+ * in the child's life or the calendar, and plain lengths of leave.
+ *
+ * Both are measured from `from` — where THIS caregiver's leave begins, which
+ * for the second caregiver is where the first one ends. A shortcut that falls
+ * before their leave starts would only produce an impossible plan, so it is
+ * left out.
+ */
+function datePresetGroups(
+  birth: Date,
+  from: Date,
+): { title: string; items: DatePreset[] }[] {
+  const later = (d: Date) => d.getTime() > from.getTime() + 7 * 864e5;
+  const landmarks: DatePreset[] = [
+    { key: "1ar", label: "Barnet fyller 1", date: addYears(birth, 1) },
+    { key: "forskola", label: "Förskolestart", date: forskolestart(birth) },
+    { key: "15ar", label: "Barnet fyller 1,5", date: addMonths(birth, 18) },
+    { key: "2ar", label: "Barnet fyller 2", date: addYears(birth, 2) },
+    { key: "nyar", label: "Årsskiftet", date: nextAnnual(from, 11, 31) },
+    { key: "sommar", label: "Efter sommaren", date: nextAnnual(from, 7, 15) },
+  ]
+    .filter((p) => later(p.date))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Two landmarks can land on the same day (a 1 August förskolestart is also
+  // "efter sommaren") — keep the first, which sorted earliest.
+  const seen = new Set<string>();
+  const dates = landmarks.filter((p) => {
+    const iso = toIsoDate(p.date);
+    if (seen.has(iso)) return false;
+    seen.add(iso);
+    return true;
+  });
+  const spans = [3, 6, 9, 12]
+    .map((m) => ({
+      key: `${m}man`,
+      label: m === 12 ? "1 år" : `${m} månader`,
+      date: addMonths(from, m),
+    }))
+    // A caregiver starting at the birth would see "1 år" and "barnet fyller
+    // 1" as two buttons doing the same thing; the landmark says it better.
+    .filter((p) => later(p.date) && !seen.has(toIsoDate(p.date)));
+  return [
+    { title: "Fram till", items: dates },
+    { title: "Så länge", items: spans },
+  ].filter((g) => g.items.length > 0);
+}
+
 /** A row of baby-carriage icons — the pictogram for "n children". */
 function BabyIcons({ count }: { count: number }) {
   return (
@@ -180,6 +243,7 @@ export function Wizard({
   setForm,
   valid,
   issues = [],
+  periodStarts,
   onSubmit,
   onReset,
 }: {
@@ -188,6 +252,9 @@ export function Wizard({
   valid: boolean;
   /** Choices that can't work, keyed to the question that caused them. */
   issues?: WizardIssue[];
+  /** When each caregiver's own stretch begins, from the live solve — the
+   *  second one starts where the first leaves off. */
+  periodStarts?: Partial<Record<ParentId, Date>>;
   onSubmit: () => void;
   onReset: () => void;
 }) {
@@ -715,13 +782,11 @@ export function Wizard({
             },
       );
 
-    const presets = birth
-      ? [
-          { label: "Förskolestart", date: forskolestart(birth) },
-          { label: "1,5 år", date: addMonths(birth, 18) },
-          { label: "2 år", date: addYears(birth, 2) },
-        ]
-      : [];
+    // Where this caregiver's own stretch begins — after the first caregiver,
+    // for the second one. Their shortcuts and calendar start there.
+    const ownStart = periodStarts?.[id] ?? birth;
+    const groups = birth && ownStart ? datePresetGroups(birth, ownStart) : [];
+    const presets = groups.flatMap((g) => g.items);
     // The calendar is a step past the shortcuts — unless there are none, or
     // the date already set isn't one of them (reopened to tweak a own pick).
     const showCalendar =
@@ -962,25 +1027,35 @@ export function Wizard({
                   inputId={`${prefix}-goal-date`}
                   yearsBack={0}
                   yearsForward={3}
+                  minDate={ownStart}
                   onPick={(iso) => {
                     setGoal({ dateStr: iso });
                     advanceQ(`${prefix}-q-goaldetail`);
                   }}
                 />
               ) : (
-                <div className="grid gap-2">
-                  {presets.map((p, i) => (
-                    <OptionCard
-                      key={p.label}
-                      id={`${prefix}-goal-preset-${i}`}
-                      selected={dateStr === toIsoDate(p.date)}
-                      label={p.label}
-                      desc={formatDate(p.date)}
-                      onSelect={() => {
-                        setGoal({ dateStr: toIsoDate(p.date) });
-                        advanceQ(`${prefix}-q-goaldetail`);
-                      }}
-                    />
+                <div className="space-y-3">
+                  {groups.map((g) => (
+                    <div key={g.title} className="space-y-1.5">
+                      <p className="text-muted-foreground text-xs font-medium">
+                        {g.title}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {g.items.map((p) => (
+                          <OptionCard
+                            key={p.key}
+                            id={`${prefix}-goal-preset-${p.key}`}
+                            selected={dateStr === toIsoDate(p.date)}
+                            label={p.label}
+                            desc={formatDate(p.date)}
+                            onSelect={() => {
+                              setGoal({ dateStr: toIsoDate(p.date) });
+                              advanceQ(`${prefix}-q-goaldetail`);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                   <OptionCard
                     id={`${prefix}-goal-date-custom`}
