@@ -84,9 +84,9 @@ function pickBirth(container: HTMLElement, iso: string) {
 /** Fill the wizard to the LAST step (both incomes set), without submitting. */
 function fillToResults(
   container: HTMLElement,
-  opts: { incomeA?: string; incomeB?: string } = {},
+  opts: { incomeA?: string; incomeB?: string; birth?: string } = {},
 ) {
-  pickBirth(container, "2025-01-15");
+  pickBirth(container, opts.birth ?? "2025-01-15");
   next(); // → step 2: the caregiver going first (A by default)
   openQuestion(container, "a", "income");
   fireEvent.change(container.querySelector("#a-income")!, {
@@ -577,19 +577,28 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText("Förläng ledigheten").length).toBeGreaterThan(0);
   });
 
-  it("supports a second leave period (switch pace at 1 year)", () => {
+  it("splits a caregiver's leave where the pace changes at 1 year", () => {
     const { container } = render(<Planner />);
-    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
+    // A birth still ahead, so the leave actually crosses the 1-year mark.
+    fillToResults(container, {
+      incomeA: "45000",
+      incomeB: "30000",
+      birth: futureIso(30),
+    });
     showPlan();
-    expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
+    // One block per caregiver to start with.
+    expect(screen.getByText(/1 av 2/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: /Byt takt vid 1 år – Vårdnadshavare A/,
+        name: /Byt takt vid 1 år – Vårdnadshavare B/,
       }),
     );
-    // The period card now shows the post-1-year rate for caregiver A.
-    expect(screen.getAllByText(/Efter 1 år:/).length).toBeGreaterThan(0);
+    // B now runs at one pace before the 1-year mark and another after, which
+    // is two periods — not one card whose headline income is true for half
+    // of it.
+    expect(screen.getByText(/1 av 3/)).toBeTruthy();
+    expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
   });
 
   it("shows combined household income while one caregiver is on leave", () => {
@@ -630,7 +639,7 @@ describe("<Planner /> wizard", () => {
     // lägstanivådagar are held back unless the step-1 toggle asks for them.
     fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
     expect(screen.getAllByText(/280 dagar/).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/370 dagar/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /· lägstanivå/ })).toBeNull();
   });
 
   it("includes the lägstanivå days when the step-1 toggle is on", () => {
@@ -650,11 +659,10 @@ describe("<Planner /> wizard", () => {
       target: { value: "30000" },
     });
     showPlan();
-    // Household default (45k/30k): the lower earner B takes the 300 income-based
-    // days plus all 90 flat days = 390, less the 20 saved by default. B's card
-    // sits on the second period block.
-    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
-    expect(screen.getAllByText(/370 dagar/).length).toBeGreaterThan(0);
+    // The 90 flat days are taken — and since they pay a different rate they
+    // are their own block at the end of B's leave.
+    fireEvent.click(screen.getByRole("button", { name: /· lägstanivå/ }));
+    expect(screen.getAllByText("lägstanivå").length).toBeGreaterThan(0);
   });
 
   it("adds extra days for twins", () => {
