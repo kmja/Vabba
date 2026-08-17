@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { Wizard } from "@/components/wizard";
+import { DEFAULT_SAVE_DAYS, Wizard } from "@/components/wizard";
 import { Results } from "@/components/results";
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import type { LeaveProjection } from "@/components/timeline";
@@ -70,8 +70,8 @@ const DEFAULT_STATE: ShareableState = {
   goalDateB: "",
   goalBudgetA: 25000,
   goalBudgetB: 25000,
-  saveDaysA: 0,
-  saveDaysB: 0,
+  saveDaysA: DEFAULT_SAVE_DAYS,
+  saveDaysB: DEFAULT_SAVE_DAYS,
   customSplitA: 0.5,
   includeLagsta: false,
   firstCaregiver: "A",
@@ -249,8 +249,8 @@ export function Planner() {
   const goalDateStrB = form.goalDateB ?? form.goalDate ?? "";
   const goalBudgetA = form.goalBudgetA ?? form.goalBudget ?? 25000;
   const goalBudgetB = form.goalBudgetB ?? form.goalBudget ?? 25000;
-  const saveDaysA = form.saveDaysA ?? 0;
-  const saveDaysB = form.saveDaysB ?? 0;
+  const saveDaysA = form.saveDaysA ?? DEFAULT_SAVE_DAYS;
+  const saveDaysB = form.saveDaysB ?? DEFAULT_SAVE_DAYS;
   const goalTargetA = useMemo(
     () => (isValidIsoDate(goalDateStrA) ? parseIsoDate(goalDateStrA) : null),
     [goalDateStrA],
@@ -690,7 +690,6 @@ export function Planner() {
         soloName={soloName}
         twoParent={twoParent}
         solo={solo}
-        remaining={remaining}
         deadlines={deadlines}
         paceA={paceA}
         paceB={paceB}
@@ -752,7 +751,6 @@ export function Planner() {
         vabResult={vabResult}
         birthDays={birthDays ?? undefined}
         birthDaysName={birthDaysName}
-        savedLagstaDays={includeLagsta ? 0 : (remaining?.remaining.lagsta ?? 0)}
         warnings={warnings}
         onEdit={() => {
           window.scrollTo(0, 0);

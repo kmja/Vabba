@@ -62,6 +62,14 @@ const scrollArea = () =>
 const FIELD_SELECTOR =
   'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
 
+/**
+ * Days each caregiver holds back by default. Few families take every day in
+ * one stretch — a month or so covers inskolning, klämdagar and school
+ * holidays later on, and two caregivers at this level stay under the 96 days
+ * that may remain after the child turns 4.
+ */
+export const DEFAULT_SAVE_DAYS = 20;
+
 const CHILD_NUMBERS = [
   { value: 1, label: "Första" },
   { value: 2, label: "Andra" },
@@ -183,6 +191,9 @@ export function Wizard({
   // Until when the focus-reveal must not scroll: right after a step change
   // the family scene should stay in view rather than be pushed off.
   const [holdSceneUntil, setHoldSceneUntil] = useState(0);
+  // Date questions with presets show the shortcuts first; this holds the
+  // ones where the user asked for the calendar instead.
+  const [calendarFor, setCalendarFor] = useState<Record<string, boolean>>({});
   // How much of the viewport the on-screen keyboard currently covers. Since
   // it overlays rather than resizes, the scroll area gets that much bottom
   // padding — otherwise a field near the end has no room to scroll clear.
@@ -261,18 +272,25 @@ export function Wizard({
       setActiveQ(qid);
       setReopened(viaReopen);
     });
-    // Bring the question to the top of the scroll area, so its content gets
-    // the full remaining height rather than sitting under the summary rows
-    // that have piled up above it.
+    // Scroll by the SMALLEST amount that brings the question into view, so
+    // the family scene above it stays where it is. Only a question too tall
+    // for the remaining space falls back to sitting at the top.
     const box = document.getElementById(qid)?.parentElement;
     const sc = scrollArea();
     if (box && sc?.getBoundingClientRect) {
-      const top =
-        box.getBoundingClientRect().top -
-        sc.getBoundingClientRect().top +
-        sc.scrollTop -
-        8;
-      sc.scrollTo?.({ top: Math.max(0, top), behavior: "smooth" });
+      const area = sc.getBoundingClientRect();
+      const rect = box.getBoundingClientRect();
+      const pad = 8;
+      // How far the box would move to sit flush with the top of the area —
+      // the most we ever scroll, since past that it would leave the screen.
+      const toTop = rect.top - area.top - pad;
+      let delta = 0;
+      if (rect.bottom > area.bottom - pad) {
+        delta = Math.min(rect.bottom - (area.bottom - pad), Math.max(0, toTop));
+      } else if (toTop < 0) {
+        delta = toTop;
+      }
+      if (delta !== 0) sc.scrollBy?.({ top: delta, behavior: "smooth" });
     }
     const panel = document.getElementById(`${qid}-panel`);
     const field = visibleFields(panel)[0];
@@ -344,12 +362,7 @@ export function Wizard({
   // Always three steps — the number of caregivers is never asked. Step 2 is
   // whoever goes on leave first; step 3 is the other caregiver, with an
   // "I'm alone" opt-out.
-  const stepTitles = [
-    "Barnet",
-    soloMode ? "Du som är hemma" : "Hemma först",
-    "Den andra vårdnadshavaren",
-  ];
-  const stepCount = stepTitles.length;
+  const stepCount = 3;
   const current = Math.min(step, stepCount);
   const visibleIds: ParentId[] = soloMode ? ["A"] : ["A", "B"];
   const canAdvance = current !== 1 || valid;
@@ -376,10 +389,12 @@ export function Wizard({
   const cgFlow = (id: ParentId): string[] => {
     const p = id.toLowerCase();
     const goal = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
+    const supp = id === "A" ? supplementA : supplementB;
     return [
       `${p}-q-name`,
       `${p}-q-income`,
       `${p}-q-supplement`,
+      ...(supp.enabled ? [`${p}-q-suppdetail`] : []),
       `${p}-q-goal`,
       ...(goal !== "manual" ? [`${p}-q-goaldetail`] : []),
       `${p}-q-save`,
@@ -401,6 +416,8 @@ export function Wizard({
    * the list read here still reflects the state before the answer.
    */
   const advanceQ = (qid: string, nextOverride?: string) => {
+    const wasReopened = reopened;
+    const done = new Set(visited).add(qid);
     flushSync(() =>
       setVisited((prev) => {
         const out = new Set(prev);
@@ -409,7 +426,14 @@ export function Wizard({
       }),
     );
     const flow = flowOf(current);
-    const next = nextOverride ?? flow[flow.indexOf(qid) + 1];
+    const next = wasReopened
+      ? // Editing an earlier answer: pick up where the user left off rather
+        // than walking them back through answers they already gave. (A new
+        // follow-up the edit just created still comes first.)
+        nextOverride && !done.has(nextOverride)
+        ? nextOverride
+        : flow.find((q) => !done.has(q))
+      : (nextOverride ?? flow[flow.indexOf(qid) + 1]);
     if (next) {
       openQ(next);
       return;
@@ -631,7 +655,7 @@ export function Wizard({
     const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
     const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
     const budget = (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
-    const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? 0;
+    const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
     const extraDays = id === "A" ? extraDaysA : extraDaysB;
     const displayName =
       value.name?.trim() || (soloMode ? "Du" : `Vårdnadshavare ${id}`);
@@ -679,6 +703,13 @@ export function Wizard({
           { label: "2 år", date: addYears(birth, 2) },
         ]
       : [];
+    // The calendar is a step past the shortcuts — unless there are none, or
+    // the date already set isn't one of them (reopened to tweak a own pick).
+    const showCalendar =
+      calendarFor[`${prefix}-q-goaldetail`] ??
+      (presets.length === 0 ||
+        (isValidIsoDate(dateStr) &&
+          !presets.some((p) => toIsoDate(p.date) === dateStr)));
 
 
     return (
@@ -752,11 +783,8 @@ export function Wizard({
         <FlowQuestion
           id={`${prefix}-q-supplement`}
           label="Föräldralön"
-          value={
-            supplement.enabled
-              ? `Ja · ${supplement.pct} % i ${supplement.months} mån`
-              : "Ingen"
-          }
+          // Just the answer — the terms are the next question's summary.
+          value={supplement.enabled ? "Ja" : "Nej"}
           hero={!reopened}
           open={activeQ === `${prefix}-q-supplement`}
           answered={!supplement.enabled || seen(`${prefix}-q-supplement`)}
@@ -767,25 +795,88 @@ export function Wizard({
             <OptionCard
               id={`${prefix}-supplement-yes`}
               selected={supplement.enabled}
-              label="Ja, via kollektivavtal"
-              desc={`Vanligast — fyller upp till ca ${supplement.pct} % i ${supplement.months} mån. Justera under Avancerat.`}
+              label="Ja"
+              desc="Arbetsgivaren fyller upp lönen en tid — via kollektivavtal eller annan förmån."
               onSelect={() => {
                 setSupplement(id, { ...supplement, enabled: true });
-                advanceQ(`${prefix}-q-supplement`);
+                // The next id is passed explicitly — the flow list still
+                // reflects the previous answer at this point.
+                advanceQ(`${prefix}-q-supplement`, `${prefix}-q-suppdetail`);
               }}
             />
             <OptionCard
               id={`${prefix}-supplement-no`}
               selected={!supplement.enabled}
-              label="Nej, ingen föräldralön"
-              desc="Inget kollektivavtal eller ingen förmån hos arbetsgivaren."
+              label="Nej"
+              desc="Ingen extra ersättning från arbetsgivaren."
               onSelect={() => {
                 setSupplement(id, { ...supplement, enabled: false });
-                advanceQ(`${prefix}-q-supplement`);
+                advanceQ(`${prefix}-q-supplement`, `${prefix}-q-goal`);
               }}
             />
           </div>
         </FlowQuestion>
+
+        {/* Saying yes asks how generous the agreement is, right away. */}
+        {supplement.enabled && (
+          <FlowQuestion
+            id={`${prefix}-q-suppdetail`}
+            label="Hur mycket föräldralön?"
+            value={`${supplement.pct} % i ${supplement.months} mån`}
+            hero={!reopened}
+            open={activeQ === `${prefix}-q-suppdetail`}
+            // Föräldralön is on by default, so this must not show up as an
+            // answer until the user has actually been asked.
+            answered={seen(`${prefix}-q-suppdetail`)}
+            visited={seen(`${prefix}-q-suppdetail`)}
+            onOpen={() => openQ(`${prefix}-q-suppdetail`, true)}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField
+                id={`${prefix}-supp-months`}
+                label="Antal månader"
+                value={supplement.months}
+                min={0}
+                max={24}
+                stepper
+                slider
+                onChange={(n) =>
+                  setSupplement(id, { ...supplement, months: n })
+                }
+              />
+              <NumberField
+                id={`${prefix}-supp-pct`}
+                label="Fyller upp till (% av lön)"
+                value={supplement.pct}
+                min={0}
+                max={100}
+                step={5}
+                stepper
+                slider
+                onChange={(n) => setSupplement(id, { ...supplement, pct: n })}
+              />
+            </div>
+            {aboveCap && (
+              <NumberField
+                id={`${prefix}-supp-salary`}
+                label="Faktisk månadslön (brutto)"
+                value={value.grossMonthlyIncome}
+                step={1000}
+                slider
+                sliderMax={100000}
+                onChange={(n) =>
+                  setParent(id, { ...value, grossMonthlyIncome: n })
+                }
+                hint="Behövs för att räkna föräldralön på lönedelar över taket."
+              />
+            )}
+            <p className="text-muted-foreground text-xs">
+              Vanligast är att lönen fylls upp till ca 90 % i ungefär 6 månader
+              — då kompenseras även lönedelar över taket. Står i
+              kollektivavtalet eller anställningsavtalet.
+            </p>
+          </FlowQuestion>
+        )}
 
         {/* Two substeps: pick the goal, then configure just that goal. */}
         <FlowQuestion
@@ -845,24 +936,7 @@ export function Wizard({
             onOpen={() => openQ(`${prefix}-q-goaldetail`, true)}
           >
             {mode === "untilDate" ? (
-              <div className="space-y-2">
-                {presets.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {presets.map((p) => (
-                      <button
-                        key={p.label}
-                        type="button"
-                        onClick={() => {
-                          setGoal({ dateStr: toIsoDate(p.date) });
-                          advanceQ(`${prefix}-q-goaldetail`);
-                        }}
-                        className="text-muted-foreground hover:text-foreground active:bg-secondary/60 min-h-10 rounded-full border px-3.5 py-1 text-sm sm:min-h-0 sm:px-3 sm:text-xs"
-                      >
-                        {p.label} · {formatDate(p.date)}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              showCalendar ? (
                 <InlineCalendar
                   value={dateStr}
                   inputId={`${prefix}-goal-date`}
@@ -873,7 +947,35 @@ export function Wizard({
                     advanceQ(`${prefix}-q-goaldetail`);
                   }}
                 />
-              </div>
+              ) : (
+                <div className="grid gap-2">
+                  {presets.map((p, i) => (
+                    <OptionCard
+                      key={p.label}
+                      id={`${prefix}-goal-preset-${i}`}
+                      selected={dateStr === toIsoDate(p.date)}
+                      label={p.label}
+                      desc={formatDate(p.date)}
+                      onSelect={() => {
+                        setGoal({ dateStr: toIsoDate(p.date) });
+                        advanceQ(`${prefix}-q-goaldetail`);
+                      }}
+                    />
+                  ))}
+                  <OptionCard
+                    id={`${prefix}-goal-date-custom`}
+                    selected={false}
+                    label="Välj datum"
+                    desc="Öppna kalendern och peka ut en dag."
+                    onSelect={() =>
+                      setCalendarFor((c) => ({
+                        ...c,
+                        [`${prefix}-q-goaldetail`]: true,
+                      }))
+                    }
+                  />
+                </div>
+              )
             ) : (
               <NumberField
                 id={`${prefix}-goal-budget-floor`}
@@ -897,7 +999,8 @@ export function Wizard({
           value={saveDays > 0 ? `${saveDays} dagar` : "Inga"}
           hero={!reopened}
           open={activeQ === `${prefix}-q-save`}
-          answered={saveDays > 0}
+          // Non-zero by default, so it only counts as answered once asked.
+          answered={seen(`${prefix}-q-save`)}
           visited={seen(`${prefix}-q-save`)}
           onOpen={() => openQ(`${prefix}-q-save`, true)}
         >
@@ -914,7 +1017,7 @@ export function Wizard({
                 id === "A" ? { ...f, saveDaysA: n } : { ...f, saveDaysB: n },
               )
             }
-            hint="Till klämdagar, lov och inskolning. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen."
+            hint={`Till klämdagar, lov och inskolning. ${DEFAULT_SAVE_DAYS} dagar räcker ungefär till inskolning och några lov. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen.`}
           />
         </FlowQuestion>
 
@@ -951,12 +1054,11 @@ export function Wizard({
     );
   };
 
-  /** Advanced per-caregiver details: the 240-day rule + föräldralön terms. */
+  /** Advanced per-caregiver details. The föräldralön terms are asked in the
+   *  flow itself, right after saying yes to it. */
   const caregiverAdvanced = (id: ParentId) => {
     const prefix = id.toLowerCase();
     const value = plan.parents[id];
-    const supplement = id === "A" ? supplementA : supplementB;
-    const aboveCap = value.incomeAboveCap ?? false;
     return (
       <div className="space-y-3">
         <CheckRow
@@ -973,54 +1075,6 @@ export function Wizard({
             De första 180 dagarna betalas då på grundnivå (250 kr/dag) i stället
             för på sjukpenningnivå.
           </p>
-        )}
-
-        {supplement.enabled && (
-          <div className="space-y-3">
-            {aboveCap && (
-              <NumberField
-                id={`${prefix}-supp-salary`}
-                label="Faktisk månadslön (brutto)"
-                value={value.grossMonthlyIncome}
-                step={1000}
-                slider
-                sliderMax={100000}
-                onChange={(n) =>
-                  setParent(id, { ...value, grossMonthlyIncome: n })
-                }
-                hint="Behövs för att räkna föräldralön på lönedelar över taket."
-              />
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField
-                id={`${prefix}-supp-months`}
-                label="Föräldralön: månader"
-                value={supplement.months}
-                min={0}
-                max={24}
-                stepper
-                slider
-                onChange={(n) =>
-                  setSupplement(id, { ...supplement, months: n })
-                }
-              />
-              <NumberField
-                id={`${prefix}-supp-pct`}
-                label="Fyller upp till (% av lön)"
-                value={supplement.pct}
-                min={0}
-                max={100}
-                step={5}
-                stepper
-                slider
-                onChange={(n) => setSupplement(id, { ...supplement, pct: n })}
-              />
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Många kollektivavtal fyller upp till ca 90 % av lönen i ungefär 6
-              månader — och kompenserar då även lönedelar över taket.
-            </p>
-          </div>
         )}
       </div>
     );
@@ -1164,29 +1218,9 @@ export function Wizard({
           if (t.matches?.(FIELD_SELECTOR)) revealField(t);
         }}
       >
-        {/* Compact progress header — stays pinned while the step scrolls. */}
-        <div className="bg-card/95 sticky top-0 z-30 space-y-1.5 border-b px-4 py-2 backdrop-blur sm:space-y-2 sm:rounded-t-xl sm:px-6 sm:py-3">
-          <div className="flex items-center justify-between text-[11px] leading-none font-medium sm:text-xs">
-            <span className="text-muted-foreground">
-              Steg {current} av {stepCount}
-            </span>
-            <span>{stepTitles[current - 1]}</span>
-          </div>
-          <div className="flex gap-1.5">
-            {stepTitles.map((t, i) => (
-              <div
-                key={t}
-                className={cn(
-                  "h-1 flex-1 rounded-full transition-colors duration-300 sm:h-1.5",
-                  i < current ? "bg-primary" : "bg-muted",
-                )}
-              />
-            ))}
-          </div>
-        </div>
-
         <div
           data-wizard-scroll
+          data-wizard-step={current}
           style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
@@ -1353,19 +1387,23 @@ export function Wizard({
 
             {current === 3 && (
               <>
-                <CheckRow
-                  id="solo-mode"
-                  checked={soloMode}
-                  onChange={(b) =>
-                    setForm((f) => ({
-                      ...f,
-                      soloMode: b,
-                      ...(b ? { firstCaregiver: "A" as const } : {}),
-                    }))
-                  }
-                >
-                  Jag planerar ensam — det finns ingen andra vårdnadshavare
-                </CheckRow>
+                {/* Naming the other caregiver answers this — the opt-out only
+                    stays while there is still nobody to name. */}
+                {!plan.parents[secondId].name?.trim() && (
+                  <CheckRow
+                    id="solo-mode"
+                    checked={soloMode}
+                    onChange={(b) =>
+                      setForm((f) => ({
+                        ...f,
+                        soloMode: b,
+                        ...(b ? { firstCaregiver: "A" as const } : {}),
+                      }))
+                    }
+                  >
+                    Jag planerar ensam — det finns ingen andra vårdnadshavare
+                  </CheckRow>
+                )}
 
                 {soloMode ? (
                   <p className="text-muted-foreground text-sm">

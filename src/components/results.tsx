@@ -3,7 +3,6 @@
 import { IconCheck, IconPencil, IconRefresh, IconShare2 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
-import { RemainingTiers } from "@/components/remaining-tiers";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import type { PhaseControls, PartTime } from "@/components/leave-levers";
@@ -13,7 +12,7 @@ import { VabResultCard } from "@/components/vab-result-card";
 import { BirthDaysCard } from "@/components/birth-days-card";
 import { WarningsList } from "@/components/warnings-list";
 import type { LeaveProjection } from "@/components/timeline";
-import type { PlanDeadlines, PlanInput, RemainingSummary } from "@/lib/calc";
+import type { PlanDeadlines, PlanInput } from "@/lib/calc";
 import type {
   Objective,
   OptimizeResult,
@@ -30,7 +29,6 @@ export function Results({
   soloName,
   twoParent,
   solo,
-  remaining,
   deadlines,
   paceA,
   paceB,
@@ -57,7 +55,6 @@ export function Results({
   vabResult,
   birthDays,
   birthDaysName,
-  savedLagstaDays,
   warnings,
   onEdit,
   onReset,
@@ -70,7 +67,6 @@ export function Results({
   soloName: string;
   twoParent: OptimizeResult | null;
   solo: SoloResult | null;
-  remaining: RemainingSummary;
   deadlines: PlanDeadlines;
   paceA: number;
   paceB: number;
@@ -99,7 +95,6 @@ export function Results({
   vabResult: VabResult | null;
   birthDays?: BirthDaysResult;
   birthDaysName: string;
-  savedLagstaDays: number;
   warnings: PlanWarning[];
   onEdit: () => void;
   onReset: () => void;
@@ -179,8 +174,6 @@ export function Results({
           editing={periodEdit}
         />
       </div>
-
-      <RemainingTiers remaining={remaining} savedLagstaDays={savedLagstaDays} />
 
       {vabResult && <VabResultCard result={vabResult} />}
 

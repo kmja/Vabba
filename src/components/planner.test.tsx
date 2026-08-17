@@ -23,7 +23,10 @@ afterEach(() => {
  * indicator changes. (Exact name — the calendar has a "Nästa månad" button.)
  */
 function next() {
-  const stepLabel = () => screen.getByText(/Steg \d av \d/).textContent;
+  const stepLabel = () =>
+    document
+      .querySelector("[data-wizard-step]")
+      ?.getAttribute("data-wizard-step");
   const before = stepLabel();
   for (let i = 0; i < 10; i++) {
     fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
@@ -117,8 +120,9 @@ describe("<Planner /> wizard", () => {
     // The period card leads with the household income.
     expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
     // Household-income default: the lower earner (B) takes the 300 income-based
-    // days while the higher earner (A) keeps their 90 reserved and stays at work.
-    expect(screen.getAllByText(/90 dagar/).length).toBeGreaterThan(0);
+    // days while the higher earner (A) keeps their 90 reserved and stays at
+    // work — less the 20 days each caregiver saves by default.
+    expect(screen.getAllByText(/70 dagar/).length).toBeGreaterThan(0);
   });
 
   it("flips between the period blocks", () => {
@@ -334,6 +338,57 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("#a-income")).toBeNull();
   });
 
+  it("asks how much föräldralön right after saying yes", () => {
+    const { container } = render(<Planner />);
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2
+    openQuestion(container, "a", "supplement");
+    // The terms aren't asked until there is a yes to configure.
+    expect(container.querySelector("#a-supp-months")).toBeNull();
+    fireEvent.click(container.querySelector("#a-supplement-yes")!);
+    expect(
+      container.querySelector("#a-q-suppdetail")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(container.querySelector("#a-supp-months")).not.toBeNull();
+    expect(container.querySelector("#a-supp-pct")).not.toBeNull();
+  });
+
+  it("skips the föräldralön terms when there is none", () => {
+    const { container } = render(<Planner />);
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2
+    openQuestion(container, "a", "supplement");
+    fireEvent.click(container.querySelector("#a-supplement-no")!);
+    expect(container.querySelector("#a-q-suppdetail")).toBeNull();
+    expect(
+      container.querySelector("#a-q-goal")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  it("returns to the waiting question after editing an earlier answer", () => {
+    const { container } = render(<Planner />);
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2, the name question in focus
+    fireEvent.change(container.querySelector("#a-name")!, {
+      target: { value: "Kim" },
+    });
+    fireEvent.keyDown(container.querySelector("#a-name")!, { key: "Enter" });
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    fireEvent.keyDown(container.querySelector("#a-income")!, { key: "Enter" });
+    // Go back to fix the name; submitting it must not walk back through the
+    // salary, which is already answered.
+    fireEvent.click(container.querySelector("#a-q-name")!);
+    fireEvent.keyDown(container.querySelector("#a-name")!, { key: "Enter" });
+    expect(
+      container.querySelector("#a-q-income")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(
+      container.querySelector("#a-q-supplement")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
   it("can reopen the inputs from the results page", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
@@ -361,6 +416,8 @@ describe("<Planner /> wizard", () => {
     });
     openQuestion(container, "a", "goal");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    // The shortcuts come first; the calendar is behind "Välj datum".
+    fireEvent.click(container.querySelector("#a-goal-date-custom")!);
     fireEvent.change(container.querySelector("#a-goal-date")!, {
       target: { value: futureIso(60) },
     });
@@ -391,6 +448,11 @@ describe("<Planner /> wizard", () => {
     expect(
       container.querySelector("#a-q-goaldetail")?.getAttribute("aria-expanded"),
     ).toBe("true");
+    // Substep 2 leads with the date shortcuts — the calendar only opens if
+    // none of them fit.
+    expect(container.querySelector("#a-goal-preset-0")).not.toBeNull();
+    expect(container.querySelector("[data-calendar-grid]")).toBeNull();
+    fireEvent.click(container.querySelector("#a-goal-date-custom")!);
     expect(container.querySelector("[data-calendar-grid]")).not.toBeNull();
     // Switching to the budget goal swaps the follow-up, not the choices.
     fireEvent.click(container.querySelector("#a-q-goal")!);
@@ -401,6 +463,22 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(container.querySelector("#a-q-goal")!);
     fireEvent.click(container.querySelector("#a-goal-manual")!);
     expect(container.querySelector("#a-q-goaldetail")).toBeNull();
+    expect(
+      container.querySelector("#a-q-save")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  it("answers the date goal from a shortcut without opening the calendar", () => {
+    const { container } = render(<Planner />);
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    fireEvent.click(container.querySelector("#a-goal-preset-0")!); // förskolestart
+    // Answered and collapsed, with the saved-days question next up.
+    expect(
+      container.querySelector("#a-q-goaldetail")?.getAttribute("aria-expanded"),
+    ).toBe("false");
     expect(
       container.querySelector("#a-q-save")?.getAttribute("aria-expanded"),
     ).toBe("true");
@@ -529,7 +607,11 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
     showPlan();
-    expect(screen.getByText(/ingår inte i planen/)).toBeTruthy();
+    // B's 300 income-based days (less the 20 saved) and no flat days — the 90
+    // lägstanivådagar are held back unless the step-1 toggle asks for them.
+    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
+    expect(screen.getAllByText(/280 dagar/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/370 dagar/)).toBeNull();
   });
 
   it("includes the lägstanivå days when the step-1 toggle is on", () => {
@@ -550,10 +632,10 @@ describe("<Planner /> wizard", () => {
     });
     showPlan();
     // Household default (45k/30k): the lower earner B takes the 300 income-based
-    // days plus all 90 flat days = 390 once lägstanivå is included. B's card
+    // days plus all 90 flat days = 390, less the 20 saved by default. B's card
     // sits on the second period block.
     fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
-    expect(screen.getAllByText(/390 dagar/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/370 dagar/).length).toBeGreaterThan(0);
   });
 
   it("adds extra days for twins", () => {
@@ -573,9 +655,10 @@ describe("<Planner /> wizard", () => {
       target: { value: "30000" },
     });
     showPlan();
-    // Twins add 90 income-based days: B now carries 300 + 90 = 390.
+    // Twins add 90 income-based days: B now carries 300 + 90, less the 20
+    // saved by default.
     fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
-    expect(screen.getAllByText(/390 dagar/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/370 dagar/).length).toBeGreaterThan(0);
   });
 
   it("asks about days from previous children from the second child on", () => {
