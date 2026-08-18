@@ -245,13 +245,33 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText(/1 av 1/)).toBeTruthy();
   });
 
-  it("adds the 10 birth-days for the other parent", () => {
+  it("includes the birth-days for the other parent by default", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    showPlan();
+    // On without being asked — taking them is the norm, and they sit on top
+    // of the 480 rather than drawing them down.
+    expect(screen.getByText("10 dagar vid barns födelse")).toBeTruthy();
+    // They belong to whoever is NOT home first (A goes first by default).
+    const desc = screen.getByText(/Tillfällig föräldrapenning för/);
+    expect(desc.textContent).toContain("Vårdnadshavare B");
+  });
+
+  it("gives the birth-days per child, so twins double them", () => {
+    const { container } = render(<Planner />);
+    fireEvent.click(container.querySelector("#birth-count-2")!);
+    fillToResults(container);
+    showPlan();
+    expect(screen.getByText("20 dagar vid barns födelse")).toBeTruthy();
+  });
+
+  it("can turn the birth-days off", () => {
     const { container } = render(<Planner />);
     fillToResults(container); // → last step
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#birth-days-enabled")!);
     showPlan();
-    expect(screen.getByText("10 dagar vid barns födelse")).toBeTruthy();
+    expect(screen.queryByText(/dagar vid barns födelse/)).toBeNull();
   });
 
   it("drops the first 180 days to grundnivå when the 240-day rule isn't met", () => {

@@ -44,7 +44,7 @@ import {
   type GoalMode,
 } from "@/lib/goal-seek";
 import { computeSupplement } from "@/lib/supplement";
-import { computeBirthDays } from "@/lib/birth-days";
+import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
 
@@ -86,9 +86,10 @@ const DEFAULT_STATE: ShareableState = {
   supplementMonthsB: 6,
   supplementPctA: 90,
   supplementPctB: 90,
-  birthDaysEnabled: false,
-  birthDaysCaregiver: "B",
-  birthDaysCount: 10,
+  // Taking these is the norm, and they sit on top of the 480 — so they are
+  // in the plan unless someone says otherwise. Who takes them and how many
+  // are derived from the birth (see birthDays below), so no defaults here.
+  birthDaysEnabled: true,
   hasExtraDays: false,
   extraDaysA: 0,
   extraDaysB: 0,
@@ -390,17 +391,22 @@ export function Planner() {
     [soloMode, form.supplementB, form.supplementPctB, form.supplementMonthsB, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, paceB],
   );
 
-  // "10 dagar vid barns födelse" — tillfällig FP for the chosen caregiver.
-  const birthDaysCaregiver = form.birthDaysCaregiver ?? "B";
+  // "10-dagar vid barns födelse" — tillfällig FP on top of the 480.
+  // The days belong to the parent who did not give birth — in this app's
+  // terms, whoever is NOT going on leave first.
+  const birthDaysCaregiver: "A" | "B" = firstCaregiver === "A" ? "B" : "A";
   const birthDays = useMemo(() => {
-    if (soloMode || !(form.birthDaysEnabled ?? false)) return null;
+    if (soloMode || !(form.birthDaysEnabled ?? true)) return null;
     const p = plan.parents[birthDaysCaregiver];
     return computeBirthDays({
       grossMonthlyIncome: p.grossMonthlyIncome,
       incomeAboveCap: p.incomeAboveCap,
-      days: form.birthDaysCount ?? 10,
+      // Left unset, the whole entitlement is taken — which grows with the
+      // number of children born.
+      days: form.birthDaysCount ?? birthDaysFor(plan.childrenInBirth),
+      childrenInBirth: plan.childrenInBirth,
     });
-  }, [soloMode, form.birthDaysEnabled, form.birthDaysCount, birthDaysCaregiver, plan.parents]);
+  }, [soloMode, form.birthDaysEnabled, form.birthDaysCount, birthDaysCaregiver, plan.parents, plan.childrenInBirth]);
   const birthDaysName =
     birthDaysCaregiver === "A" ? nameA : nameB;
 

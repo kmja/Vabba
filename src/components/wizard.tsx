@@ -38,6 +38,7 @@ import {
   type TierCount,
 } from "@/lib/calc";
 import type { GoalMode } from "@/lib/goal-seek";
+import { birthDaysFor } from "@/lib/birth-days";
 import { isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { formatDate, formatSek } from "@/lib/format";
 import {
@@ -425,14 +426,13 @@ export function Wizard({
   };
   const extraDaysA = form.extraDaysA ?? 0;
   const extraDaysB = form.extraDaysB ?? 0;
-  const nameA = plan.parents.A.name?.trim() || "Vårdnadshavare A";
-  const nameB = plan.parents.B.name?.trim() || "Vårdnadshavare B";
   const vabEnabled = form.vabEnabled ?? false;
   const vabChildren = form.vabChildren ?? 1;
   const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
-  const birthDaysEnabled = form.birthDaysEnabled ?? false;
-  const birthDaysCaregiver = form.birthDaysCaregiver ?? "B";
-  const birthDaysCount = form.birthDaysCount ?? 10;
+  const birthDaysEnabled = form.birthDaysEnabled ?? true;
+  // Ten per child, so a multiple birth gives more.
+  const birthDaysMax = birthDaysFor(plan.childrenInBirth);
+  const birthDaysCount = form.birthDaysCount ?? birthDaysMax;
   const birth =
     valid && isValidIsoDate(plan.birthDate)
       ? parseIsoDate(plan.birthDate)
@@ -1245,43 +1245,26 @@ export function Wizard({
             checked={birthDaysEnabled}
             onChange={(b) => setForm((f) => ({ ...f, birthDaysEnabled: b }))}
           >
-            10 dagar vid barns födelse (tillfällig föräldrapenning)
+            {birthDaysMax} dagar vid barns födelse (tillfällig föräldrapenning)
           </CheckRow>
           {birthDaysEnabled && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="birth-days-who">Vem tar ut dagarna?</Label>
-                  <Select
-                    id="birth-days-who"
-                    value={birthDaysCaregiver}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        birthDaysCaregiver: e.target.value as "A" | "B",
-                      }))
-                    }
-                  >
-                    <option value="A">{nameA}</option>
-                    <option value="B">{nameB}</option>
-                  </Select>
-                </div>
-                <NumberField
-                  id="birth-days-count"
-                  label="Antal dagar (max 10)"
-                  value={birthDaysCount}
-                  min={0}
-                  max={10}
-                  stepper
-                  slider
-                  onChange={(n) =>
-                    setForm((f) => ({ ...f, birthDaysCount: n }))
-                  }
-                />
-              </div>
+              <NumberField
+                id="birth-days-count"
+                label={`Antal dagar (max ${birthDaysMax})`}
+                value={Math.min(birthDaysCount, birthDaysMax)}
+                min={0}
+                max={birthDaysMax}
+                stepper
+                slider
+                onChange={(n) => setForm((f) => ({ ...f, birthDaysCount: n }))}
+              />
               <p className="text-muted-foreground text-xs">
-                Den andra vårdnadshavarens dagar i samband med födseln — utöver
-                de 480. Tas ut inom 60 dagar efter hemkomsten.
+                {sceneName(secondId) || "Den andra vårdnadshavaren"} tar dessa i
+                samband med födseln — utöver de 480, och utan att röra
+                föräldrapenningdagarna. Tas ut inom 60 dagar efter hemkomsten.
+                {plan.childrenInBirth >= 2 &&
+                  " Vid flerbarnsfödsel gäller 10 dagar per barn."}
               </p>
             </>
           )}

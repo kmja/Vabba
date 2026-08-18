@@ -95,11 +95,11 @@ export interface ShareableState {
   supplementPctA?: number;
   supplementPctB?: number;
   /**
-   * "10-dagar": tillfällig föräldrapenning the other parent draws around birth,
-   * on top of the 480. Which caregiver takes them and how many (0–10).
+   * "10-dagar": tillfällig föräldrapenning the other parent draws around
+   * birth, on top of the 480. On unless turned off; who takes them follows
+   * from the leave order, and left unset the whole entitlement is taken.
    */
   birthDaysEnabled?: boolean;
-  birthDaysCaregiver?: "A" | "B";
   birthDaysCount?: number;
   /** Leftover föräldrapenning days carried over from previous children. */
   hasExtraDays?: boolean;

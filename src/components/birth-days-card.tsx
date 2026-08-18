@@ -22,7 +22,8 @@ export function BirthDaysCard({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <IconGift className="size-4" /> 10 dagar vid barns födelse
+          <IconGift className="size-4" />
+          {`${result.maxDays} dagar vid barns födelse`}
         </CardTitle>
         <CardDescription>
           Tillfällig föräldrapenning för {caregiverName} — utöver de 480 dagarna.
