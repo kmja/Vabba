@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import { IconChevronDown } from "@tabler/icons-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CG_BAR, PeriodCard, type LeaveProjection } from "@/components/timeline";
@@ -14,7 +13,7 @@ import { formatDate } from "@/lib/format";
 import { formatMonths } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
 
-/** Callbacks that let the pager's date edits drive the plan ("custom" mode). */
+/** Callbacks that let a period's date edits drive the plan ("custom" mode). */
 export interface PeriodEditing {
   /** Caregiver display name → parent id. */
   idByName: Record<string, "A" | "B">;
@@ -114,14 +113,18 @@ function rowForPeriod(base: MonthlyRow, p: Period): MonthlyRow {
       ? (base.partTimeSalary * (7 - seg.pace)) / (7 - basePace)
       : base.partTimeSalary;
   const supp = base.supplement;
+  // Rounded, because it is shown as "i ca N mån" — a raw overlap would read
+  // as 2.3026315789473686.
   const suppMonths = supp
-    ? Math.max(
-        0,
-        Math.min(
-          months,
-          supp.months - differenceInDays(p.caregiverStart, p.startsAt) / 30.4,
-        ),
-      )
+    ? Math.round(
+        Math.max(
+          0,
+          Math.min(
+            months,
+            supp.months - differenceInDays(p.caregiverStart, p.startsAt) / 30.4,
+          ),
+        ) * 10,
+      ) / 10
     : 0;
   return {
     ...base,
@@ -147,9 +150,11 @@ function rowForPeriod(base: MonthlyRow, p: Period): MonthlyRow {
 }
 
 /**
- * The results centrepiece: each stretch of leave as a discrete block to flip
- * through. The start and end dates are directly editable — an end date becomes
- * that caregiver's "hemma till" goal, a start date delays their period.
+ * The results centrepiece: every stretch of leave listed top to bottom, each
+ * one an accordion — the header carries who, when and how long, and opening
+ * it shows the editable span and the economy of that stretch. The start and
+ * end dates are directly editable: an end date becomes that caregiver's
+ * "hemma till" goal, a start date delays their period.
  */
 export function PeriodPager({
   projection,
@@ -162,7 +167,9 @@ export function PeriodPager({
   deadlines: PlanDeadlines;
   editing: PeriodEditing;
 }) {
-  const [idx, setIdx] = useState(0);
+  // Which block is expanded. One at a time keeps the list scannable; the
+  // open one can be clicked shut.
+  const [openIdx, setOpenIdx] = useState<number | null>(0);
   const segments = projection?.segments ?? [];
   const periods = toPeriods(segments);
   const cgOrder = periods
@@ -181,158 +188,169 @@ export function PeriodPager({
     );
   }
 
-  const current = Math.min(idx, periods.length - 1);
-  const p = periods[current];
-  const base = rows.find((r) => r.name === p.caregiver);
-  const row = base ? rowForPeriod(base, p) : undefined;
-  const id = editing.idByName[p.caregiver];
-  const mode: GoalMode = id ? editing.modeById[id] : "manual";
-  const colorIdx = Math.max(0, cgOrder.indexOf(p.caregiver));
-  const months = formatMonths(differenceInDays(p.startsAt, p.endsAt) / 30.4);
-  const prev = periods[current - 1];
-  const next = periods[current + 1];
-  const gapBefore = prev
-    ? differenceInDays(prev.endsAt, p.startsAt)
-    : differenceInDays(deadlines.birth, p.startsAt);
-  /** How a block is announced in the pager's buttons. */
-  const blockName = (per: Period) =>
-    per.caregiver === p.caregiver && per.phase ? per.phase : per.caregiver;
+  const total = formatMonths(
+    differenceInDays(periods[0].startsAt, periods[periods.length - 1].endsAt) /
+      30.4,
+  );
 
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="leading-none font-semibold">Perioder</h2>
         <span className="text-muted-foreground text-xs tabular-nums">
-          {current + 1} av {periods.length}
+          {total} totalt
         </span>
       </div>
 
-      {/* Overview strip: one chip per period, tap to jump. */}
-      <div className="flex items-center gap-1.5">
-        {periods.map((per, i) => (
-          <button
-            key={i}
-            type="button"
-            aria-label={`Period ${i + 1}: ${per.caregiver}${per.phase ? ` · ${per.phase}` : ""}`}
-            onClick={() => setIdx(i)}
-            className={cn(
-              "h-3.5 flex-1 rounded-full transition-opacity active:opacity-80 sm:h-2.5",
-              CG_BAR[Math.max(0, cgOrder.indexOf(per.caregiver)) % CG_BAR.length],
-              i === current ? "opacity-100" : "opacity-35 hover:opacity-60",
-            )}
-          />
-        ))}
-      </div>
+      <div className="space-y-2">
+        {periods.map((p, i) => {
+          const isOpen = openIdx === i;
+          const base = rows.find((r) => r.name === p.caregiver);
+          const row = base ? rowForPeriod(base, p) : undefined;
+          const id = editing.idByName[p.caregiver];
+          const mode: GoalMode = id ? editing.modeById[id] : "manual";
+          const colorIdx = Math.max(0, cgOrder.indexOf(p.caregiver));
+          const months = formatMonths(
+            differenceInDays(p.startsAt, p.endsAt) / 30.4,
+          );
+          const prev = periods[i - 1];
+          const gapBefore = prev
+            ? differenceInDays(prev.endsAt, p.startsAt)
+            : differenceInDays(deadlines.birth, p.startsAt);
 
-      <div className="bg-card rounded-lg border p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-2 text-sm font-semibold">
-            <span
+          return (
+            <div
+              key={i}
               className={cn(
-                "inline-block size-2.5 rounded-sm",
-                CG_BAR[colorIdx % CG_BAR.length],
+                "bg-card rounded-lg border shadow-sm transition-colors",
+                isOpen && "border-primary/40",
               )}
-            />
-            {p.caregiver} är hemma
-            {p.phase && (
-              <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
-                {p.phase}
-              </span>
-            )}
-          </span>
-          <span className="text-muted-foreground text-xs tabular-nums">
-            {months}
-          </span>
-        </div>
-
-        {/* Editable span — edits become goals ("custom" planning). */}
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor={`period-start-${current}`} className="text-xs">
-              Från
-            </Label>
-            <Input
-              id={`period-start-${current}`}
-              type="date"
-              value={toIsoDate(p.startsAt)}
-              // A later block starts where the previous one ended — only the
-              // start of the whole stretch is something to move.
-              disabled={!p.firstOfCaregiver}
-              onChange={(e) =>
-                id && e.target.value && editing.onStartDate(id, e.target.value)
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor={`period-end-${current}`} className="text-xs">
-              Till
-            </Label>
-            <Input
-              id={`period-end-${current}`}
-              type="date"
-              value={toIsoDate(p.endsAt)}
-              disabled={!p.lastOfCaregiver}
-              onChange={(e) =>
-                id && e.target.value && editing.onEndDate(id, e.target.value)
-              }
-            />
-          </div>
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-          {mode === "untilDate" && id && p.lastOfCaregiver && (
-            <button
-              type="button"
-              onClick={() => editing.onClearEnd(id)}
-              className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
             >
-              Släpp slutdatumet (automatisk längd)
-            </button>
-          )}
-          {id && p.firstOfCaregiver && editing.hasStartOverride[id] && (
-            <button
-              type="button"
-              onClick={() => editing.onStartDate(id, null)}
-              className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
-            >
-              Återställ startdatumet
-            </button>
-          )}
-        </div>
+              <button
+                type="button"
+                data-period-header
+                aria-expanded={isOpen}
+                aria-controls={`period-panel-${i}`}
+                onClick={() => setOpenIdx(isOpen ? null : i)}
+                className="active:bg-secondary/40 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left"
+              >
+                <span
+                  className={cn(
+                    "size-2.5 shrink-0 rounded-sm",
+                    CG_BAR[colorIdx % CG_BAR.length],
+                  )}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
+                    {p.caregiver} är hemma
+                    {p.phase && (
+                      <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
+                        {p.phase}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground mt-0.5 block text-xs tabular-nums">
+                    {formatDate(p.startsAt)} – {formatDate(p.endsAt)} · {months}
+                  </span>
+                </span>
+                <IconChevronDown
+                  className={cn(
+                    "text-muted-foreground size-4 shrink-0 transition-transform duration-300",
+                    isOpen && "rotate-180",
+                  )}
+                />
+              </button>
 
-        {gapBefore > 3 && (
-          <p className="text-muted-foreground mt-2 text-xs">
-            Glapp före perioden: ≈ {Math.round(gapBefore)} dagar
-            {prev ? " då båda jobbar" : " efter födseln"} — dagarna väntar.
-          </p>
-        )}
+              {/* Animated height: 0fr ↔ 1fr. The content stays mounted, and
+                  `inert` keeps a shut panel out of focus order. */}
+              <div
+                id={`period-panel-${i}`}
+                inert={!isOpen}
+                className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+                style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+              >
+                <div className="overflow-hidden">
+                  <div className="px-4 pt-1 pb-4">
+                    {/* Editable span — edits become goals ("custom" planning). */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor={`period-start-${i}`} className="text-xs">
+                          Från
+                        </Label>
+                        <Input
+                          id={`period-start-${i}`}
+                          type="date"
+                          value={toIsoDate(p.startsAt)}
+                          // A later block starts where the previous one ended
+                          // — only the start of the whole stretch can move.
+                          disabled={!p.firstOfCaregiver}
+                          onChange={(e) =>
+                            id &&
+                            e.target.value &&
+                            editing.onStartDate(id, e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`period-end-${i}`} className="text-xs">
+                          Till
+                        </Label>
+                        <Input
+                          id={`period-end-${i}`}
+                          type="date"
+                          value={toIsoDate(p.endsAt)}
+                          disabled={!p.lastOfCaregiver}
+                          onChange={(e) =>
+                            id &&
+                            e.target.value &&
+                            editing.onEndDate(id, e.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                      {mode === "untilDate" && id && p.lastOfCaregiver && (
+                        <button
+                          type="button"
+                          onClick={() => editing.onClearEnd(id)}
+                          className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
+                        >
+                          Släpp slutdatumet (automatisk längd)
+                        </button>
+                      )}
+                      {id &&
+                        p.firstOfCaregiver &&
+                        editing.hasStartOverride[id] && (
+                          <button
+                            type="button"
+                            onClick={() => editing.onStartDate(id, null)}
+                            className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
+                          >
+                            Återställ startdatumet
+                          </button>
+                        )}
+                    </div>
 
-        {/* The economy of this period. */}
-        {row && (
-          <div className="mt-3">
-            <PeriodCard row={row} colorIdx={colorIdx} />
-          </div>
-        )}
-      </div>
+                    {gapBefore > 3 && (
+                      <p className="text-muted-foreground mt-2 text-xs">
+                        Glapp före perioden: ≈ {Math.round(gapBefore)} dagar
+                        {prev ? " då båda jobbar" : " efter födseln"} — dagarna
+                        väntar.
+                      </p>
+                    )}
 
-      <div className="flex items-center justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={current === 0}
-          onClick={() => setIdx(current - 1)}
-        >
-          <IconChevronLeft /> {prev ? blockName(prev) : "Föregående"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={current >= periods.length - 1}
-          onClick={() => setIdx(current + 1)}
-        >
-          {next ? blockName(next) : "Nästa"} <IconChevronRight />
-        </Button>
+                    {/* The economy of this period. */}
+                    {row && (
+                      <div className="mt-3">
+                        <PeriodCard row={row} colorIdx={colorIdx} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <p className="text-muted-foreground text-xs">

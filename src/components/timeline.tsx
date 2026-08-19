@@ -389,7 +389,7 @@ export function PeriodCard({
         {row.supplement && (
           <div className="mt-0.5 text-xs">
             + Föräldralön (arbetsgivaren) ≈ {formatSek(row.supplement.monthly)}/mån i
-            ca {row.supplement.months} mån
+            ca {String(row.supplement.months).replace(".", ",")} mån
             {row.aboveCap ? " · täcker även lön över taket" : ""}
           </div>
         )}

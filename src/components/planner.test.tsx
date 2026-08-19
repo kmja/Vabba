@@ -100,6 +100,11 @@ function fillToResults(
   return container;
 }
 
+/** The results page lists every leave period as an accordion. */
+function periodHeaders(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll("[data-period-header]"));
+}
+
 /** An ISO date ~n days into the future (the projection starts "today"). */
 function futureIso(days: number): string {
   const d = new Date();
@@ -115,8 +120,8 @@ describe("<Planner /> wizard", () => {
 
     expect(screen.getByText("Justera planen")).toBeTruthy();
     expect(screen.getByText("Perioder")).toBeTruthy();
-    // Two caregivers → two period blocks to flip through.
-    expect(screen.getByText(/1 av 2/)).toBeTruthy();
+    // Two caregivers → two period blocks, listed top to bottom.
+    expect(periodHeaders(container).length).toBe(2);
     // The period card leads with the household income.
     expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
     // Household-income default: the lower earner (B) takes the 300 income-based
@@ -125,15 +130,23 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/70 dagar/).length).toBeGreaterThan(0);
   });
 
-  it("flips between the period blocks", () => {
+  it("expands one period block at a time", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
     showPlan();
-    expect(screen.getByText(/Vårdnadshavare A är hemma/)).toBeTruthy();
-    // The next-button is labelled with the next caregiver's name (exact match
-    // to avoid the overview chip, whose label is "Period 2: …").
-    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
-    expect(screen.getByText(/Vårdnadshavare B är hemma/)).toBeTruthy();
+    const headers = () => periodHeaders(container);
+    expect(headers()[0].textContent).toContain("Vårdnadshavare A är hemma");
+    expect(headers()[1].textContent).toContain("Vårdnadshavare B är hemma");
+    // The first block starts open.
+    expect(headers()[0].getAttribute("aria-expanded")).toBe("true");
+    expect(headers()[1].getAttribute("aria-expanded")).toBe("false");
+    // Opening another shuts the one before it.
+    fireEvent.click(headers()[1]);
+    expect(headers()[0].getAttribute("aria-expanded")).toBe("false");
+    expect(headers()[1].getAttribute("aria-expanded")).toBe("true");
+    // Clicking the open one shuts it too.
+    fireEvent.click(headers()[1]);
+    expect(headers()[1].getAttribute("aria-expanded")).toBe("false");
   });
 
   it("puts the step-2 caregiver first on the timeline", () => {
@@ -242,7 +255,7 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("#b-income")).toBeNull();
     showPlan();
     expect(screen.getByText("Justera planen")).toBeTruthy();
-    expect(screen.getByText(/1 av 1/)).toBeTruthy();
+    expect(periodHeaders(container).length).toBe(1);
   });
 
   it("includes the birth-days for the other parent by default", () => {
@@ -632,7 +645,7 @@ describe("<Planner /> wizard", () => {
     });
     showPlan();
     // One block per caregiver to start with.
-    expect(screen.getByText(/1 av 2/)).toBeTruthy();
+    expect(periodHeaders(container).length).toBe(2);
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     fireEvent.click(
       screen.getByRole("checkbox", {
@@ -642,7 +655,7 @@ describe("<Planner /> wizard", () => {
     // B now runs at one pace before the 1-year mark and another after, which
     // is two periods — not one card whose headline income is true for half
     // of it.
-    expect(screen.getByText(/1 av 3/)).toBeTruthy();
+    expect(periodHeaders(container).length).toBe(3);
     expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
   });
 
@@ -682,9 +695,9 @@ describe("<Planner /> wizard", () => {
     showPlan();
     // B's 300 income-based days (less the 20 saved) and no flat days — the 90
     // lägstanivådagar are held back unless the step-1 toggle asks for them.
-    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
     expect(screen.getAllByText(/280 dagar/).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /· lägstanivå/ })).toBeNull();
+    expect(periodHeaders(container).length).toBe(2);
+    expect(screen.queryByText("lägstanivå")).toBeNull();
   });
 
   it("includes the lägstanivå days when the step-1 toggle is on", () => {
@@ -706,8 +719,8 @@ describe("<Planner /> wizard", () => {
     showPlan();
     // The 90 flat days are taken — and since they pay a different rate they
     // are their own block at the end of B's leave.
-    fireEvent.click(screen.getByRole("button", { name: /· lägstanivå/ }));
-    expect(screen.getAllByText("lägstanivå").length).toBeGreaterThan(0);
+    const last = periodHeaders(container).at(-1)!;
+    expect(last.textContent).toContain("lägstanivå");
   });
 
   it("adds extra days for twins", () => {
@@ -729,7 +742,6 @@ describe("<Planner /> wizard", () => {
     showPlan();
     // Twins add 90 income-based days: B now carries 300 + 90, less the 20
     // saved by default.
-    fireEvent.click(screen.getByRole("button", { name: "Vårdnadshavare B" }));
     expect(screen.getAllByText(/370 dagar/).length).toBeGreaterThan(0);
   });
 
