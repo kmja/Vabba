@@ -341,6 +341,7 @@ function PaceRow({
   partnerSalary,
   value,
   onChange,
+  showIncome = true,
 }: {
   label: string;
   name: string;
@@ -351,6 +352,8 @@ function PaceRow({
   partnerSalary: number;
   value: number;
   onChange: (n: number) => void;
+  /** Inside a period block the card above already shows the income. */
+  showIncome?: boolean;
 }) {
   const household = householdMonthly(
     dailyRate,
@@ -367,7 +370,8 @@ function PaceRow({
           {label}
         </Label>
         <span className="text-sm font-semibold tabular-nums">
-          {value} dgr/v · ≈ {formatSek(household)}/mån
+          {value} dgr/v
+          {showIncome ? ` · ≈ ${formatSek(household)}/mån` : ""}
         </span>
       </div>
       <input
@@ -488,10 +492,17 @@ export function PeriodLevers({
   } = controls;
   if (days <= 0 || dailyRate <= 0) return null;
   const showPartTime = partnerSalary > 0;
+  // A goal (a date, a budget floor) makes the solver choose the pace and the
+  // length. The phase sliders write to settings it overrides, so offering
+  // them would be offering a dial that does nothing — and printing their
+  // arithmetic beside the block's own card would show two different numbers
+  // for the same month. A block can also be a phase because the SOLVER split
+  // it, not because this switch is on; that is the same case.
+  const showPace = which !== null && phase.on && !goalDriven;
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
-      {showToggles && (
+      {showToggles && (showPartTime || !goalDriven) && (
         <div className="flex flex-wrap gap-x-3 gap-y-1.5">
           {showPartTime && (
             <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
@@ -505,20 +516,24 @@ export function PeriodLevers({
               Jobbar deltid
             </label>
           )}
-          <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
-            <input
-              type="checkbox"
-              aria-label={`Byt takt vid 1 år – ${name}`}
-              checked={phase.on}
-              onChange={(e) => phase.onToggle(e.target.checked)}
-              className="accent-primary size-3.5"
-            />
-            Byt takt vid 1 år
-          </label>
+          {/* The solver sets the pace under a goal — this switch would not
+              change anything there. */}
+          {!goalDriven && (
+            <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                aria-label={`Byt takt vid 1 år – ${name}`}
+                checked={phase.on}
+                onChange={(e) => phase.onToggle(e.target.checked)}
+                className="accent-primary size-3.5"
+              />
+              Byt takt vid 1 år
+            </label>
+          )}
         </div>
       )}
 
-      {which !== null ? (
+      {showPace ? (
         <>
           <PaceRow
             label={which === 1 ? "Takt första året" : "Takt efter 1 år"}
@@ -530,6 +545,7 @@ export function PeriodLevers({
             partnerSalary={partnerSalary}
             value={which === 1 ? phase.phase1 : phase.phase2}
             onChange={which === 1 ? phase.onSetPhase1 : phase.onSetPhase2}
+            showIncome={false}
           />
           {which === 2 &&
             (phase.phase2 < 5 ? (
@@ -545,7 +561,8 @@ export function PeriodLevers({
         </>
       ) : goalDriven ? (
         <p className="text-muted-foreground text-xs">
-          Längden styrs av målet ovan — ändra datumet här eller målet i guiden.
+          Takten och längden räknas ut från målet — ändra datumet här ovanför,
+          eller målet i guiden.
         </p>
       ) : (
         <DurationLever

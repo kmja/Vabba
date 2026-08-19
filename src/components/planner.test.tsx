@@ -664,6 +664,31 @@ describe("<Planner /> wizard", () => {
     expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
   });
 
+  it("does not offer pace dials on a stretch the solver drives", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { birth: futureIso(30) });
+    openQuestion(container, "b", "goal");
+    fireEvent.click(container.querySelector("#b-goal-budget")!);
+    showPlan();
+    // B's stretch is shaped by the budget goal, so the pace dials — which
+    // write to settings the solver overrides — are not offered at all. They
+    // would show a number computed from a pace the plan does not use.
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /Byt takt vid 1 år – Vårdnadshavare B/,
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("slider", { name: /Takt.*Vårdnadshavare B/ }),
+    ).toBeNull();
+    // A has no goal, so A keeps theirs.
+    expect(
+      screen.getByRole("checkbox", {
+        name: /Byt takt vid 1 år – Vårdnadshavare A/,
+      }),
+    ).toBeTruthy();
+  });
+
   it("shows combined household income while one caregiver is on leave", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
