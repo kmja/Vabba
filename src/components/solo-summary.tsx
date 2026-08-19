@@ -3,12 +3,6 @@ import { IconChevronDown } from "@tabler/icons-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  LeaveLevers,
-  LeaveLengthSlider,
-  type PhaseControls,
-  type PartTime,
-} from "@/components/leave-levers";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
 import { cn } from "@/lib/utils";
@@ -26,27 +20,14 @@ export function SoloSummary({
   total,
   name,
   daysPerWeek,
-  onSetTarget,
-  phase,
-  bonusFullMonthly,
-  salary,
-  partTime,
   goalSummary,
-  goalText,
 }: {
   payout: ParentPayout;
   total: number;
   name: string;
   daysPerWeek: number;
-  onSetTarget: (minMonthly: number) => void;
-  phase: PhaseControls;
-  bonusFullMonthly: number;
-  salary: number;
-  partTime: PartTime;
   /** One-line result of the solved plan, shown when a goal is active. */
   goalSummary: string | null;
-  /** The goal description; null = manual (slider + levers apply). */
-  goalText: string | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -71,29 +52,12 @@ export function SoloSummary({
         </button>
       </div>
 
-      {/* Collapsed: the leave-length slider — or, when a goal drives the
-          length, its description instead. */}
-      {!open && (
-        <div className="space-y-2 px-4 sm:px-6">
-          {goalText ? (
-            <p className="text-sm tabular-nums">
-              <span className="font-medium">{name}:</span> {goalText}
-            </p>
-          ) : (
-            <LeaveLengthSlider
-              name={name}
-              days={total}
-              dailyRate={payout.dailyRate}
-              pace={daysPerWeek}
-              onSetTarget={onSetTarget}
-            />
-          )}
-          {goalSummary && (
-            <p className="text-muted-foreground text-xs tabular-nums">
-              {goalSummary}
-            </p>
-          )}
-        </div>
+      {/* Collapsed: the one line describing the solved plan. The dials live
+          on the period blocks below. */}
+      {!open && goalSummary && (
+        <p className="text-muted-foreground px-4 text-xs tabular-nums sm:px-6">
+          {goalSummary}
+        </p>
       )}
 
       {open && (
@@ -145,25 +109,9 @@ export function SoloSummary({
             </p>
           </div>
 
-          {goalText ? (
-            <p className="text-sm">
-              <span className="font-medium">{name}:</span> {goalText} — ändra i
-              perioderna nedan eller i guiden.
-            </p>
-          ) : (
-            <LeaveLevers
-              name={name}
-              days={total}
-              dailyRate={payout.dailyRate}
-              pace={daysPerWeek}
-              bonusFullMonthly={bonusFullMonthly}
-              salary={salary}
-              partnerSalary={0}
-              partTime={partTime}
-              onSetTarget={onSetTarget}
-              phase={phase}
-            />
-          )}
+          <p className="text-muted-foreground text-xs">
+            Takt, deltid och längd finjusteras på varje period nedan.
+          </p>
 
           <p className="text-muted-foreground text-xs">
             Förslaget fördelar alla återstående dagar — du kan förstås ta ut

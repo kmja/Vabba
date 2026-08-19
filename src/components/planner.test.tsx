@@ -120,8 +120,8 @@ describe("<Planner /> wizard", () => {
 
     expect(screen.getByText("Justera planen")).toBeTruthy();
     expect(screen.getByText("Perioder")).toBeTruthy();
-    // Two caregivers → two period blocks, listed top to bottom.
-    expect(periodHeaders(container).length).toBe(2);
+    // The 10-dagar around the birth, then one block per caregiver.
+    expect(periodHeaders(container).length).toBe(3);
     // The period card leads with the household income.
     expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
     // Household-income default: the lower earner (B) takes the 300 income-based
@@ -134,19 +134,21 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
     showPlan();
+    // [0] is the 10-dagar block, then the two caregivers in leave order.
     const headers = () => periodHeaders(container);
-    expect(headers()[0].textContent).toContain("Vårdnadshavare A är hemma");
-    expect(headers()[1].textContent).toContain("Vårdnadshavare B är hemma");
-    // The first block starts open.
+    expect(headers()[0].textContent).toContain("vid födseln");
+    expect(headers()[1].textContent).toContain("Vårdnadshavare A är hemma");
+    expect(headers()[2].textContent).toContain("Vårdnadshavare B är hemma");
+    // The topmost block starts open.
     expect(headers()[0].getAttribute("aria-expanded")).toBe("true");
-    expect(headers()[1].getAttribute("aria-expanded")).toBe("false");
+    expect(headers()[2].getAttribute("aria-expanded")).toBe("false");
     // Opening another shuts the one before it.
-    fireEvent.click(headers()[1]);
+    fireEvent.click(headers()[2]);
     expect(headers()[0].getAttribute("aria-expanded")).toBe("false");
-    expect(headers()[1].getAttribute("aria-expanded")).toBe("true");
+    expect(headers()[2].getAttribute("aria-expanded")).toBe("true");
     // Clicking the open one shuts it too.
-    fireEvent.click(headers()[1]);
-    expect(headers()[1].getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(headers()[2]);
+    expect(headers()[2].getAttribute("aria-expanded")).toBe("false");
   });
 
   it("puts the step-2 caregiver first on the timeline", () => {
@@ -262,12 +264,13 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
     showPlan();
-    // On without being asked — taking them is the norm, and they sit on top
-    // of the 480 rather than drawing them down.
-    expect(screen.getByText("10 dagar vid barns födelse")).toBeTruthy();
+    // On without being asked, and first in the list — they are the earliest
+    // leave there is. They sit on top of the 480 rather than drawing it down.
+    const first = periodHeaders(container)[0];
+    expect(first.textContent).toContain("vid födseln");
+    expect(first.textContent).toContain("10 dagar");
     // They belong to whoever is NOT home first (A goes first by default).
-    const desc = screen.getByText(/Tillfällig föräldrapenning för/);
-    expect(desc.textContent).toContain("Vårdnadshavare B");
+    expect(first.textContent).toContain("Vårdnadshavare B");
   });
 
   it("gives the birth-days per child, so twins double them", () => {
@@ -275,7 +278,7 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(container.querySelector("#birth-count-2")!);
     fillToResults(container);
     showPlan();
-    expect(screen.getByText("20 dagar vid barns födelse")).toBeTruthy();
+    expect(periodHeaders(container)[0].textContent).toContain("20 dagar");
   });
 
   it("can turn the birth-days off", () => {
@@ -284,7 +287,9 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#birth-days-enabled")!);
     showPlan();
-    expect(screen.queryByText(/dagar vid barns födelse/)).toBeNull();
+    // Only the two caregivers' own stretches are left.
+    expect(periodHeaders(container).length).toBe(2);
+    expect(screen.queryByText("vid födseln")).toBeNull();
   });
 
   it("drops the first 180 days to grundnivå when the 240-day rule isn't met", () => {
@@ -644,8 +649,8 @@ describe("<Planner /> wizard", () => {
       birth: futureIso(30),
     });
     showPlan();
-    // One block per caregiver to start with.
-    expect(periodHeaders(container).length).toBe(2);
+    // The 10-dagar block plus one per caregiver to start with.
+    expect(periodHeaders(container).length).toBe(3);
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     fireEvent.click(
       screen.getByRole("checkbox", {
@@ -655,7 +660,7 @@ describe("<Planner /> wizard", () => {
     // B now runs at one pace before the 1-year mark and another after, which
     // is two periods — not one card whose headline income is true for half
     // of it.
-    expect(periodHeaders(container).length).toBe(3);
+    expect(periodHeaders(container).length).toBe(4);
     expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
   });
 
@@ -696,7 +701,7 @@ describe("<Planner /> wizard", () => {
     // B's 300 income-based days (less the 20 saved) and no flat days — the 90
     // lägstanivådagar are held back unless the step-1 toggle asks for them.
     expect(screen.getAllByText(/280 dagar/).length).toBeGreaterThan(0);
-    expect(periodHeaders(container).length).toBe(2);
+    expect(periodHeaders(container).length).toBe(3);
     expect(screen.queryByText("lägstanivå")).toBeNull();
   });
 

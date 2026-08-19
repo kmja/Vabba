@@ -3,13 +3,17 @@
 import { IconCheck, IconPencil, IconRefresh, IconShare2 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
+import { CaregiverSummary } from "@/components/caregiver-summary";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
-import type { PhaseControls, PartTime } from "@/components/leave-levers";
+import type {
+  PeriodControls,
+  PhaseControls,
+  PartTime,
+} from "@/components/leave-levers";
 import { PeriodPager, type PeriodEditing } from "@/components/period-pager";
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
-import { BirthDaysCard } from "@/components/birth-days-card";
 import { WarningsList } from "@/components/warnings-list";
 import type { LeaveProjection } from "@/components/timeline";
 import type { PlanDeadlines, PlanInput } from "@/lib/calc";
@@ -55,6 +59,7 @@ export function Results({
   vabResult,
   birthDays,
   birthDaysName,
+  firstCaregiver,
   warnings,
   onEdit,
   onReset,
@@ -95,18 +100,47 @@ export function Results({
   vabResult: VabResult | null;
   birthDays?: BirthDaysResult;
   birthDaysName: string;
+  /** Which caregiver is home first — decides the order of the sections. */
+  firstCaregiver: "A" | "B";
   warnings: PlanWarning[];
-  onEdit: () => void;
+  /** Back to the wizard, optionally straight to a caregiver's own step. */
+  onEdit: (step?: number) => void;
   onReset: () => void;
   onShare: () => void;
   copied: boolean;
 }) {
+  // The dials each period block drives, keyed by caregiver.
+  const rowFor = (id: "A" | "B") => {
+    const name =
+      plan.parents[id].name?.trim() ||
+      (soloMode ? soloName : `Vårdnadshavare ${id}`);
+    return { name, row: monthlyRows.find((r) => r.name === name) };
+  };
+  const levers: Partial<Record<"A" | "B", PeriodControls>> = {};
+  for (const id of soloMode ? (["A"] as const) : (["A", "B"] as const)) {
+    const { name, row } = rowFor(id);
+    if (!row) continue;
+    const isA = id === "A";
+    levers[id] = {
+      name,
+      days: row.days,
+      dailyRate: row.dailyRate,
+      pace: isA ? paceA : paceB,
+      bonusFullMonthly: isA ? bonusFullA : bonusFullB,
+      salary: isA ? salaryA : salaryB,
+      partnerSalary: isA ? householdBaseA : householdBaseB,
+      partTime: isA ? partTimeA : partTimeB,
+      phase: isA ? phaseA : phaseB,
+      onSetTarget: isA ? onSetTargetA : onSetTargetB,
+    };
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Er plan</h2>
         <div className="flex gap-2">
-          <Button type="button" size="sm" onClick={onEdit}>
+          <Button type="button" size="sm" onClick={() => onEdit(1)}>
             <IconPencil /> Ändra uppgifter
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onShare}>
@@ -121,6 +155,35 @@ export function Results({
 
       <WarningsList warnings={warnings.filter((w) => w.level !== "info")} />
 
+      {/* Who is in this plan: a portrait, what they bring and what they are
+          aiming for, with a way straight back to their own step. */}
+      <div className="space-y-2">
+        {(soloMode
+          ? (["A"] as const)
+          : firstCaregiver === "B"
+            ? (["B", "A"] as const)
+            : (["A", "B"] as const)
+        ).map((id, i) => {
+          const name =
+            plan.parents[id].name?.trim() ||
+            (soloMode ? soloName : `Vårdnadshavare ${id}`);
+          return (
+            <CaregiverSummary
+              key={id}
+              name={name}
+              salary={id === "A" ? salaryA : salaryB}
+              row={monthlyRows.find((r) => r.name === name)}
+              goalText={id === "A" ? goalTextA : goalTextB}
+              second={id !== "A"}
+              holding={i === 0}
+              babyCount={plan.childrenInBirth}
+              // Step 2 is whoever is home first, step 3 the other one.
+              onEdit={() => onEdit(i === 0 ? 2 : 3)}
+            />
+          );
+        })}
+      </div>
+
       {/* The adjust controls stay pinned above the timeline (and release once
           the timeline scrolls past), so you can drag and watch it shift. */}
       <div>
@@ -130,13 +193,7 @@ export function Results({
             total={solo.allocatedTotal}
             name={soloName}
             daysPerWeek={paceA}
-            onSetTarget={onSetTargetA}
-            phase={phaseA}
-            bonusFullMonthly={bonusFullA}
-            salary={salaryA}
-            partTime={partTimeA}
             goalSummary={goalSummary}
-            goalText={goalTextA}
           />
         ) : twoParent ? (
           <SplitSuggestion
@@ -145,23 +202,7 @@ export function Results({
             plan={plan}
             splitA={splitA}
             onSplitChange={onSplitChange}
-            paceA={paceA}
-            paceB={paceB}
-            onSetTargetA={onSetTargetA}
-            onSetTargetB={onSetTargetB}
-            phaseA={phaseA}
-            phaseB={phaseB}
-            bonusFullA={bonusFullA}
-            bonusFullB={bonusFullB}
-            householdBaseA={householdBaseA}
-            householdBaseB={householdBaseB}
-            salaryA={salaryA}
-            salaryB={salaryB}
-            partTimeA={partTimeA}
-            partTimeB={partTimeB}
             goalSummary={goalSummary}
-            goalTextA={goalTextA}
-            goalTextB={goalTextB}
           />
         ) : null}
 
@@ -172,14 +213,16 @@ export function Results({
           rows={monthlyRows}
           deadlines={deadlines}
           editing={periodEdit}
+          levers={levers}
+          birthDays={
+            birthDays && birthDays.days > 0
+              ? { result: birthDays, name: birthDaysName }
+              : undefined
+          }
         />
       </div>
 
       {vabResult && <VabResultCard result={vabResult} />}
-
-      {birthDays && birthDays.days > 0 && (
-        <BirthDaysCard result={birthDays} caregiverName={birthDaysName} />
-      )}
     </div>
   );
 }

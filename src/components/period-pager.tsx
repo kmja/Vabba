@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CG_BAR, PeriodCard, type LeaveProjection } from "@/components/timeline";
 import type { MonthlyRow } from "@/components/monthly-estimate";
+import { PeriodLevers, type PeriodControls } from "@/components/leave-levers";
 import type { GoalMode } from "@/lib/goal-seek";
 import type { PlanDeadlines } from "@/lib/calc";
 import type { LeaveInterval } from "@/lib/projection";
-import { differenceInDays, toIsoDate } from "@/lib/dates";
+import type { BirthDaysResult } from "@/lib/birth-days";
+import { netAfterTax } from "@/lib/rules";
+import { formatDays, formatSek } from "@/lib/format";
+import { addDays, differenceInDays, toIsoDate } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
 import { formatMonths } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
@@ -149,6 +153,132 @@ function rowForPeriod(base: MonthlyRow, p: Period): MonthlyRow {
   };
 }
 
+/** The birth-days block's slot in the accordion's single-open state. */
+const BIRTH_IDX = -1;
+
+/** The shell every block shares: a header you can open, and a panel. */
+function Block({
+  colorIdx,
+  title,
+  phase,
+  subtitle,
+  open,
+  onToggle,
+  panelId,
+  children,
+}: {
+  colorIdx: number;
+  title: string;
+  phase: string | null;
+  subtitle: string;
+  open: boolean;
+  onToggle: () => void;
+  panelId: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-card rounded-lg border shadow-sm transition-colors",
+        open && "border-primary/40",
+      )}
+    >
+      <button
+        type="button"
+        data-period-header
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={onToggle}
+        className="active:bg-secondary/40 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left"
+      >
+        <span
+          className={cn(
+            "size-2.5 shrink-0 rounded-sm",
+            CG_BAR[colorIdx % CG_BAR.length],
+          )}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
+            {title}
+            {phase && (
+              <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
+                {phase}
+              </span>
+            )}
+          </span>
+          <span className="text-muted-foreground mt-0.5 block text-xs tabular-nums">
+            {subtitle}
+          </span>
+        </span>
+        <IconChevronDown
+          className={cn(
+            "text-muted-foreground size-4 shrink-0 transition-transform duration-300",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {/* Animated height: 0fr ↔ 1fr. The content stays mounted, and `inert`
+          keeps a shut panel out of focus order. */}
+      <div
+        id={panelId}
+        inert={!open}
+        className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <div className="px-4 pt-1 pb-4">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The 10-dagar: no dates to edit, no föräldrapenning days spent. */
+function BirthDaysBlock({
+  period,
+  result,
+  colorIdx,
+  open,
+  onToggle,
+}: {
+  period: Period;
+  result: BirthDaysResult;
+  colorIdx: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Block
+      colorIdx={colorIdx}
+      title={`${period.caregiver} är hemma`}
+      phase={period.phase}
+      subtitle={`${formatDate(period.startsAt)} – ${formatDate(period.endsAt)} · ${formatDays(result.days)}`}
+      open={open}
+      onToggle={onToggle}
+      panelId="period-panel-birth"
+    >
+      <div className="bg-secondary/40 flex items-baseline justify-between rounded-lg border p-4">
+        <span className="text-muted-foreground text-sm">
+          {formatDays(result.days)} × {formatSek(result.dailyAmount)}/dag
+        </span>
+        <span className="text-xl font-bold tabular-nums">
+          {formatSek(result.total)}
+        </span>
+      </div>
+      <p className="text-muted-foreground mt-2 text-xs">
+        Tillfällig föräldrapenning i samband med födseln — utöver de 480, så
+        inga föräldrapenningdagar går åt. ≈{" "}
+        {formatSek(netAfterTax(result.total))} efter skatt. Tas ut inom 60 dagar
+        efter hemkomsten.
+        {result.sgiCapped
+          ? " Beloppet är begränsat av taket för tillfällig föräldrapenning (7,5 prisbasbelopp)."
+          : ""}
+      </p>
+    </Block>
+  );
+}
+
 /**
  * The results centrepiece: every stretch of leave listed top to bottom, each
  * one an accordion — the header carries who, when and how long, and opening
@@ -161,15 +291,24 @@ export function PeriodPager({
   rows = [],
   deadlines,
   editing,
+  levers,
+  birthDays,
 }: {
   projection?: LeaveProjection;
   rows?: MonthlyRow[];
   deadlines: PlanDeadlines;
   editing: PeriodEditing;
+  /** Per-caregiver dials, so each block can drive its own stretch. */
+  levers?: Partial<Record<"A" | "B", PeriodControls>>;
+  /** The other parent's days around the birth — the first leave there is. */
+  birthDays?: { result: BirthDaysResult; name: string };
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut.
-  const [openIdx, setOpenIdx] = useState<number | null>(0);
+  const [openIdx, setOpenIdx] = useState<number | null>(
+    // The topmost block starts open — the 10-dagar one when there is one.
+    birthDays && birthDays.result.days > 0 ? BIRTH_IDX : 0,
+  );
   const segments = projection?.segments ?? [];
   const periods = toPeriods(segments);
   const cgOrder = periods
@@ -188,6 +327,21 @@ export function PeriodPager({
     );
   }
 
+  // "10-dagar" comes before everything else: the other parent is home from
+  // the birth, days that never touch the 480.
+  const birth: Period | null = birthDays
+    ? {
+        caregiver: birthDays.name,
+        startsAt: deadlines.birth,
+        endsAt: addDays(deadlines.birth, birthDays.result.days),
+        segments: [],
+        phase: "vid födseln",
+        firstOfCaregiver: false,
+        lastOfCaregiver: false,
+        caregiverStart: deadlines.birth,
+      }
+    : null;
+
   const total = formatMonths(
     differenceInDays(periods[0].startsAt, periods[periods.length - 1].endsAt) /
       30.4,
@@ -203,8 +357,18 @@ export function PeriodPager({
       </div>
 
       <div className="space-y-2">
+        {birth && birthDays && (
+          <BirthDaysBlock
+            period={birth}
+            result={birthDays.result}
+            colorIdx={Math.max(0, cgOrder.indexOf(birth.caregiver))}
+            open={openIdx === BIRTH_IDX}
+            onToggle={() =>
+              setOpenIdx(openIdx === BIRTH_IDX ? null : BIRTH_IDX)
+            }
+          />
+        )}
         {periods.map((p, i) => {
-          const isOpen = openIdx === i;
           const base = rows.find((r) => r.name === p.caregiver);
           const row = base ? rowForPeriod(base, p) : undefined;
           const id = editing.idByName[p.caregiver];
@@ -219,136 +383,107 @@ export function PeriodPager({
             : differenceInDays(deadlines.birth, p.startsAt);
 
           return (
-            <div
+            <Block
               key={i}
-              className={cn(
-                "bg-card rounded-lg border shadow-sm transition-colors",
-                isOpen && "border-primary/40",
-              )}
+              colorIdx={colorIdx}
+              title={`${p.caregiver} är hemma`}
+              phase={p.phase}
+              subtitle={`${formatDate(p.startsAt)} – ${formatDate(p.endsAt)} · ${months}`}
+              open={openIdx === i}
+              onToggle={() => setOpenIdx(openIdx === i ? null : i)}
+              panelId={`period-panel-${i}`}
             >
-              <button
-                type="button"
-                data-period-header
-                aria-expanded={isOpen}
-                aria-controls={`period-panel-${i}`}
-                onClick={() => setOpenIdx(isOpen ? null : i)}
-                className="active:bg-secondary/40 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left"
-              >
-                <span
-                  className={cn(
-                    "size-2.5 shrink-0 rounded-sm",
-                    CG_BAR[colorIdx % CG_BAR.length],
-                  )}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
-                    {p.caregiver} är hemma
-                    {p.phase && (
-                      <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
-                        {p.phase}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground mt-0.5 block text-xs tabular-nums">
-                    {formatDate(p.startsAt)} – {formatDate(p.endsAt)} · {months}
-                  </span>
-                </span>
-                <IconChevronDown
-                  className={cn(
-                    "text-muted-foreground size-4 shrink-0 transition-transform duration-300",
-                    isOpen && "rotate-180",
-                  )}
-                />
-              </button>
-
-              {/* Animated height: 0fr ↔ 1fr. The content stays mounted, and
-                  `inert` keeps a shut panel out of focus order. */}
-              <div
-                id={`period-panel-${i}`}
-                inert={!isOpen}
-                className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
-                style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
-              >
-                <div className="overflow-hidden">
-                  <div className="px-4 pt-1 pb-4">
-                    {/* Editable span — edits become goals ("custom" planning). */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label htmlFor={`period-start-${i}`} className="text-xs">
-                          Från
-                        </Label>
-                        <Input
-                          id={`period-start-${i}`}
-                          type="date"
-                          value={toIsoDate(p.startsAt)}
-                          // A later block starts where the previous one ended
-                          // — only the start of the whole stretch can move.
-                          disabled={!p.firstOfCaregiver}
-                          onChange={(e) =>
-                            id &&
-                            e.target.value &&
-                            editing.onStartDate(id, e.target.value)
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`period-end-${i}`} className="text-xs">
-                          Till
-                        </Label>
-                        <Input
-                          id={`period-end-${i}`}
-                          type="date"
-                          value={toIsoDate(p.endsAt)}
-                          disabled={!p.lastOfCaregiver}
-                          onChange={(e) =>
-                            id &&
-                            e.target.value &&
-                            editing.onEndDate(id, e.target.value)
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                      {mode === "untilDate" && id && p.lastOfCaregiver && (
-                        <button
-                          type="button"
-                          onClick={() => editing.onClearEnd(id)}
-                          className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
-                        >
-                          Släpp slutdatumet (automatisk längd)
-                        </button>
-                      )}
-                      {id &&
-                        p.firstOfCaregiver &&
-                        editing.hasStartOverride[id] && (
-                          <button
-                            type="button"
-                            onClick={() => editing.onStartDate(id, null)}
-                            className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
-                          >
-                            Återställ startdatumet
-                          </button>
-                        )}
-                    </div>
-
-                    {gapBefore > 3 && (
-                      <p className="text-muted-foreground mt-2 text-xs">
-                        Glapp före perioden: ≈ {Math.round(gapBefore)} dagar
-                        {prev ? " då båda jobbar" : " efter födseln"} — dagarna
-                        väntar.
-                      </p>
-                    )}
-
-                    {/* The economy of this period. */}
-                    {row && (
-                      <div className="mt-3">
-                        <PeriodCard row={row} colorIdx={colorIdx} />
-                      </div>
-                    )}
-                  </div>
+              {/* Editable span — edits become goals ("custom" planning). */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor={`period-start-${i}`} className="text-xs">
+                    Från
+                  </Label>
+                  <Input
+                    id={`period-start-${i}`}
+                    type="date"
+                    value={toIsoDate(p.startsAt)}
+                    // A later block starts where the previous one ended — only
+                    // the start of the whole stretch can move.
+                    disabled={!p.firstOfCaregiver}
+                    onChange={(e) =>
+                      id &&
+                      e.target.value &&
+                      editing.onStartDate(id, e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`period-end-${i}`} className="text-xs">
+                    Till
+                  </Label>
+                  <Input
+                    id={`period-end-${i}`}
+                    type="date"
+                    value={toIsoDate(p.endsAt)}
+                    disabled={!p.lastOfCaregiver}
+                    onChange={(e) =>
+                      id &&
+                      e.target.value &&
+                      editing.onEndDate(id, e.target.value)
+                    }
+                  />
                 </div>
               </div>
-            </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                {mode === "untilDate" && id && p.lastOfCaregiver && (
+                  <button
+                    type="button"
+                    onClick={() => editing.onClearEnd(id)}
+                    className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
+                  >
+                    Släpp slutdatumet (automatisk längd)
+                  </button>
+                )}
+                {id && p.firstOfCaregiver && editing.hasStartOverride[id] && (
+                  <button
+                    type="button"
+                    onClick={() => editing.onStartDate(id, null)}
+                    className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
+                  >
+                    Återställ startdatumet
+                  </button>
+                )}
+              </div>
+
+              {gapBefore > 3 && (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  Glapp före perioden: ≈ {Math.round(gapBefore)} dagar
+                  {prev ? " då båda jobbar" : " efter födseln"} — dagarna
+                  väntar.
+                </p>
+              )}
+
+              {/* The economy of this period. */}
+              {row && (
+                <div className="mt-3">
+                  <PeriodCard row={row} colorIdx={colorIdx} />
+                </div>
+              )}
+
+              {/* Play with this stretch: the pace and what it pays. */}
+              {id && levers?.[id] && (
+                <div className="mt-3">
+                  <PeriodLevers
+                    controls={levers[id]}
+                    phase={
+                      p.phase && p.segments[0]?.tier !== "lagsta"
+                        ? p.firstOfCaregiver
+                          ? 1
+                          : 2
+                        : null
+                    }
+                    showToggles={p.firstOfCaregiver}
+                    goalDriven={mode !== "manual"}
+                  />
+                </div>
+              )}
+            </Block>
           );
         })}
       </div>

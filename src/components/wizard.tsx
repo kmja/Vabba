@@ -245,6 +245,7 @@ export function Wizard({
   valid,
   issues = [],
   periodStarts,
+  initialStep = 1,
   onSubmit,
   onReset,
 }: {
@@ -256,13 +257,21 @@ export function Wizard({
   /** When each caregiver's own stretch begins, from the live solve — the
    *  second one starts where the first leaves off. */
   periodStarts?: Partial<Record<ParentId, Date>>;
+  /** Which step to open on — the results page sends people back to theirs. */
+  initialStep?: number;
   onSubmit: () => void;
   onReset: () => void;
 }) {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialStep);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // The question currently in focus (its FlowQuestion id); "" = none.
-  const [activeQ, setActiveQ] = useState("q-count");
+  const [activeQ, setActiveQ] = useState(() => {
+    if (initialStep === 1) return "q-count";
+    // Step 2 is whoever is home first, step 3 the other one.
+    const first = form.soloMode ? "A" : (form.firstCaregiver ?? "A");
+    const id = initialStep === 2 ? first : first === "A" ? "B" : "A";
+    return `${id.toLowerCase()}-q-name`;
+  });
   // Whether the open question was REOPENED to edit an existing answer (an
   // in-place accordion) rather than reached in the forward flow (the
   // full-screen hero treatment).

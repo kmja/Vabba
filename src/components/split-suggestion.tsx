@@ -2,12 +2,6 @@ import { useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 
 import {
-  LeaveLevers,
-  LeaveLengthSlider,
-  type PhaseControls,
-  type PartTime,
-} from "@/components/leave-levers";
-import {
   OBJECTIVE_DESCRIPTION,
   type Objective,
   type OptimizeResult,
@@ -27,23 +21,7 @@ export function SplitSuggestion({
   plan,
   splitA,
   onSplitChange,
-  paceA,
-  paceB,
-  onSetTargetA,
-  onSetTargetB,
-  phaseA,
-  phaseB,
-  bonusFullA,
-  bonusFullB,
-  householdBaseA,
-  householdBaseB,
-  salaryA,
-  salaryB,
-  partTimeA,
-  partTimeB,
   goalSummary,
-  goalTextA,
-  goalTextB,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -52,25 +30,8 @@ export function SplitSuggestion({
   splitA?: number;
   /** Live split handler; when set, a draggable split slider is shown. */
   onSplitChange?: (splitA: number) => void;
-  paceA: number;
-  paceB: number;
-  onSetTargetA: (minMonthly: number) => void;
-  onSetTargetB: (minMonthly: number) => void;
-  phaseA: PhaseControls;
-  phaseB: PhaseControls;
-  bonusFullA: number;
-  bonusFullB: number;
-  householdBaseA: number;
-  householdBaseB: number;
-  salaryA: number;
-  salaryB: number;
-  partTimeA: PartTime;
-  partTimeB: PartTime;
   /** One-line result of the solved plan, shown when any goal is active. */
   goalSummary: string | null;
-  /** Per-caregiver goal text; null = manual (slider + levers apply). */
-  goalTextA: string | null;
-  goalTextB: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const rec = result.recommended;
@@ -104,44 +65,12 @@ export function SplitSuggestion({
           </button>
         </div>
 
-        {/* Collapsed: each caregiver's leave-length slider — or, when a goal
-            drives their length, its description instead. */}
-        {!open && (
-          <div className="space-y-2">
-            {goalTextA ? (
-              <p className="text-sm tabular-nums">
-                <span className="font-medium">{parentName(plan, "A")}:</span>{" "}
-                {goalTextA}
-              </p>
-            ) : (
-              <LeaveLengthSlider
-                name={parentName(plan, "A")}
-                days={aDays}
-                dailyRate={rec.payout.A.dailyRate}
-                pace={paceA}
-                onSetTarget={onSetTargetA}
-              />
-            )}
-            {goalTextB ? (
-              <p className="text-sm tabular-nums">
-                <span className="font-medium">{parentName(plan, "B")}:</span>{" "}
-                {goalTextB}
-              </p>
-            ) : (
-              <LeaveLengthSlider
-                name={parentName(plan, "B")}
-                days={bDays}
-                dailyRate={rec.payout.B.dailyRate}
-                pace={paceB}
-                onSetTarget={onSetTargetB}
-              />
-            )}
-            {goalSummary && (
-              <p className="text-muted-foreground text-xs tabular-nums">
-                {goalSummary}
-              </p>
-            )}
-          </div>
+        {/* Collapsed: the one line that describes the whole solved plan. The
+            per-caregiver dials live on their own period blocks below. */}
+        {!open && goalSummary && (
+          <p className="text-muted-foreground text-xs tabular-nums">
+            {goalSummary}
+          </p>
         )}
       </div>
 
@@ -180,52 +109,9 @@ export function SplitSuggestion({
             {OBJECTIVE_DESCRIPTION[objective]}
           </p>
 
-          {/* Per-person pay ↔ duration levers. A caregiver whose length is
-              driven by a goal shows its description instead — the solver and
-              the levers would fight. */}
-          <div className="space-y-3">
-            <div className="text-muted-foreground text-xs">
-              Finjustera takten per vårdnadshavare:
-            </div>
-            {goalTextA ? (
-              <p className="text-sm">
-                <span className="font-medium">{parentName(plan, "A")}:</span>{" "}
-                {goalTextA} — ändra i perioderna nedan eller i guiden.
-              </p>
-            ) : (
-              <LeaveLevers
-                name={parentName(plan, "A")}
-                days={aDays}
-                dailyRate={rec.payout.A.dailyRate}
-                pace={paceA}
-                bonusFullMonthly={bonusFullA}
-                salary={salaryA}
-                partnerSalary={householdBaseA}
-                partTime={partTimeA}
-                onSetTarget={onSetTargetA}
-                phase={phaseA}
-              />
-            )}
-            {goalTextB ? (
-              <p className="text-sm">
-                <span className="font-medium">{parentName(plan, "B")}:</span>{" "}
-                {goalTextB} — ändra i perioderna nedan eller i guiden.
-              </p>
-            ) : (
-              <LeaveLevers
-                name={parentName(plan, "B")}
-                days={bDays}
-                dailyRate={rec.payout.B.dailyRate}
-                pace={paceB}
-                bonusFullMonthly={bonusFullB}
-                salary={salaryB}
-                partnerSalary={householdBaseB}
-                partTime={partTimeB}
-                onSetTarget={onSetTargetB}
-                phase={phaseB}
-              />
-            )}
-          </div>
+          <p className="text-muted-foreground text-xs">
+            Takt, deltid och längd finjusteras på varje period nedan.
+          </p>
 
           {/* Total payout */}
           <div className="bg-secondary/40 rounded-lg border p-4 text-center">

@@ -105,6 +105,9 @@ export function Planner() {
     DEFAULT_STATE,
   );
   const [asOf, setAsOf] = useState<Date | null>(null);
+  // Which wizard step "Ändra" reopens — the results page sends each caregiver
+  // back to their own.
+  const [editStep, setEditStep] = useState(1);
   const [copied, setCopied] = useState(false);
 
   // "Today" is read on the client only (avoids SSR/timezone hydration mismatch).
@@ -897,9 +900,11 @@ export function Planner() {
         vabResult={vabResult}
         birthDays={birthDays ?? undefined}
         birthDaysName={birthDaysName}
+        firstCaregiver={firstCaregiver}
         warnings={warnings}
-        onEdit={() => {
+        onEdit={(step = 1) => {
           window.scrollTo(0, 0);
+          setEditStep(step);
           setForm((f) => ({ ...f, submitted: false }));
         }}
         onReset={() => setForm(DEFAULT_STATE)}
@@ -916,6 +921,7 @@ export function Planner() {
       valid={valid}
       issues={wizardIssues}
       periodStarts={periodStarts}
+      initialStep={editStep}
       onSubmit={() => {
         window.scrollTo(0, 0);
         setForm((f) => ({ ...f, submitted: true }));

@@ -185,6 +185,62 @@ function Sparkle({ x, y, r }: { x: number; y: number; r: number }) {
   );
 }
 
+/**
+ * One caregiver on their own, framed head to hem — the same figure the wizard
+ * animates, reused as a portrait beside their summary on the results page.
+ */
+export function CaregiverPortrait({
+  second = false,
+  holding = false,
+  babyCount = 1,
+}: {
+  /** Draw the second caregiver's tone rather than the first's. */
+  second?: boolean;
+  /** Cradling the bundle(s) — for whoever is home in the period shown. */
+  holding?: boolean;
+  babyCount?: number;
+}) {
+  const tone = second ? "--scene-ink-2" : "--scene-ink";
+  const bundles =
+    BUNDLE_LAYOUT[Math.min(Math.max(babyCount, 1), 4) - 1] ?? BUNDLE_LAYOUT[0];
+  // Same world coordinates as the scene, framed on the one figure.
+  const s = 1;
+  const camera = `translate(${VIEW_W / 2 - s * F1X}px, ${VIEW_H / 2 - s * 274}px) scale(${s})`;
+  return (
+    <svg
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      aria-hidden
+      data-caregiver-portrait
+      preserveAspectRatio="xMidYMid meet"
+      className="pointer-events-none h-full w-full select-none"
+    >
+      <rect
+        x="0"
+        y="0"
+        width={VIEW_W}
+        height={VIEW_H}
+        rx="16"
+        fill="var(--scene-bg)"
+      />
+      <g style={{ transform: camera }}>
+        <FigureBody cx={F1X} tone={tone} />
+        {holding &&
+          bundles.map((b, i) => (
+            <g
+              key={i}
+              style={{
+                transform: `translate(${BABY_AT.one.x + b.dx}px, ${BABY_AT.one.y + b.dy}px) scale(${b.scale})`,
+              }}
+            >
+              <Baby />
+            </g>
+          ))}
+        <FigureArm cx={F1X} tone={tone} holding={holding} />
+      </g>
+    </svg>
+  );
+}
+
 export function FamilyScene({
   step,
   soloMode,

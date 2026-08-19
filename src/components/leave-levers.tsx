@@ -219,6 +219,7 @@ function DurationLever({
   partnerSalary,
   pace,
   onSetTarget,
+  showIncome = true,
 }: {
   name: string;
   days: number;
@@ -229,6 +230,8 @@ function DurationLever({
   partnerSalary: number;
   pace: number;
   onSetTarget: (minMonthly: number) => void;
+  /** Inside a period block the card above already shows the income live. */
+  showIncome?: boolean;
 }) {
   const { minDays, maxDays, curDays, fkFromDays } = leaveLengthModel(
     days,
@@ -248,10 +251,13 @@ function DurationLever({
 
   return (
     <>
+      {showIncome && (
       <div className="bg-secondary/40 rounded-md px-3 py-2">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-muted-foreground text-xs">
-            {partnerSalary > 0 ? "Hushåll per månad" : "Per månad"}
+            {partnerSalary > 0
+              ? "Hushåll per månad (före skatt)"
+              : "Per månad (före skatt)"}
           </span>
           <span className="text-lg font-bold tabular-nums">
             {formatSek(household)}
@@ -265,9 +271,10 @@ function DurationLever({
             : ""}
         </div>
       </div>
+      )}
 
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Label className="text-muted-foreground flex items-center gap-1.5 text-xs font-normal">
             <IconHourglass className="size-3.5" /> Ledighetens längd
           </Label>
@@ -429,5 +436,133 @@ function PhaseLevers({
         </p>
       )}
     </>
+  );
+}
+
+/** Everything one period block needs to drive its own stretch. */
+export interface PeriodControls {
+  name: string;
+  days: number;
+  dailyRate: number;
+  pace: number;
+  bonusFullMonthly: number;
+  salary: number;
+  partnerSalary: number;
+  partTime: PartTime;
+  phase: PhaseControls;
+  onSetTarget: (minMonthly: number) => void;
+}
+
+/**
+ * The levers for one period block — the same dials as the plan-wide panel,
+ * scoped to the stretch you are looking at. A block that IS a phase (the pace
+ * changes at the child's first birthday) gets that phase's pace row; a
+ * caregiver's single block gets the length slider instead.
+ *
+ * The two per-caregiver switches (part-time, change pace at 1 year) belong to
+ * the person rather than the stretch, so they sit on their first block only.
+ */
+export function PeriodLevers({
+  controls,
+  phase: which,
+  showToggles,
+  goalDriven,
+}: {
+  controls: PeriodControls;
+  /** 1 or 2 when this block is a phase; null when it is the whole stretch. */
+  phase: 1 | 2 | null;
+  showToggles: boolean;
+  /** A solved goal sets the length — the length slider would fight it. */
+  goalDriven: boolean;
+}) {
+  const {
+    name,
+    days,
+    dailyRate,
+    pace,
+    bonusFullMonthly,
+    salary,
+    partnerSalary,
+    partTime,
+    phase,
+  } = controls;
+  if (days <= 0 || dailyRate <= 0) return null;
+  const showPartTime = partnerSalary > 0;
+
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      {showToggles && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+          {showPartTime && (
+            <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+              <input
+                type="checkbox"
+                aria-label={`Jobbar deltid under ledigheten – ${name}`}
+                checked={partTime.works}
+                onChange={(e) => partTime.onToggle(e.target.checked)}
+                className="accent-primary size-3.5"
+              />
+              Jobbar deltid
+            </label>
+          )}
+          <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+            <input
+              type="checkbox"
+              aria-label={`Byt takt vid 1 år – ${name}`}
+              checked={phase.on}
+              onChange={(e) => phase.onToggle(e.target.checked)}
+              className="accent-primary size-3.5"
+            />
+            Byt takt vid 1 år
+          </label>
+        </div>
+      )}
+
+      {which !== null ? (
+        <>
+          <PaceRow
+            label={which === 1 ? "Takt första året" : "Takt efter 1 år"}
+            name={name}
+            dailyRate={dailyRate}
+            bonusFull={bonusFullMonthly}
+            salary={salary}
+            worksPartTime={partTime.works}
+            partnerSalary={partnerSalary}
+            value={which === 1 ? phase.phase1 : phase.phase2}
+            onChange={which === 1 ? phase.onSetPhase1 : phase.onSetPhase2}
+          />
+          {which === 2 &&
+            (phase.phase2 < 5 ? (
+              <p className="text-xs">
+                <span className="font-medium">Obs:</span> under 5 dagar/vecka
+                efter 1-årsdagen kan sänka SGI:n om du inte också arbetar.
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                5 dagar/vecka efter 1 år skyddar SGI:n.
+              </p>
+            ))}
+        </>
+      ) : goalDriven ? (
+        <p className="text-muted-foreground text-xs">
+          Längden styrs av målet ovan — ändra datumet här eller målet i guiden.
+        </p>
+      ) : (
+        <DurationLever
+          name={name}
+          days={days}
+          dailyRate={dailyRate}
+          bonusFull={bonusFullMonthly}
+          salary={salary}
+          worksPartTime={partTime.works}
+          partnerSalary={partnerSalary}
+          pace={pace}
+          onSetTarget={controls.onSetTarget}
+          // The period card right above already shows this stretch's income,
+          // live — a second number here only invites comparing gross to net.
+          showIncome={false}
+        />
+      )}
+    </div>
   );
 }
