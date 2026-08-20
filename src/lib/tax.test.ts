@@ -5,22 +5,32 @@ import {
   marginalRate,
   monthlyNet,
   netOfExtra,
-  TAX_MODEL,
+  DEFAULT_MUNICIPAL_RATE,
 } from "@/lib/tax";
 
 describe("monthlyNet", () => {
   it("lands close to a real payslip across the salary range", () => {
-    // Reference points from Skatteverket's tables (national average rate),
-    // allowed a few hundred kronor for the model's simplifications.
+    // At the national average rate, allowing a few hundred kronor for the
+    // model's simplifications.
     const cases: [number, number][] = [
       [25_000, 20_100],
       [35_000, 27_200],
       [45_000, 34_100],
-      [63_000, 44_400],
+      [63_000, 44_700],
     ];
     for (const [salary, expected] of cases) {
       expect(Math.abs(monthlyNet({ salary }) - expected)).toBeLessThan(600);
     }
+  });
+
+  it("follows the municipality's rate", () => {
+    // Österåker (lowest) against Dorotea (about the highest) — a spread worth
+    // thousands a month, which is why the rate is asked for rather than
+    // assumed.
+    const low = monthlyNet({ salary: 63_000 }, 0.2893);
+    const high = monthlyNet({ salary: 63_000 }, 0.353);
+    expect(low - high).toBeGreaterThan(3_000);
+    expect(low).toBeGreaterThan(46_000);
   });
 
   it("taxes a benefit harder than the same amount of salary", () => {
@@ -64,16 +74,14 @@ describe("marginalRate", () => {
     // taxed at it or above (the grundavdrag tapers).
     const onSalary = marginalRate({ salary: 30_000 }, false);
     const onBenefit = marginalRate({ benefit: 30_000 }, true);
-    expect(onSalary).toBeLessThan(TAX_MODEL.municipalRate);
-    expect(onBenefit).toBeGreaterThanOrEqual(TAX_MODEL.municipalRate);
+    expect(onSalary).toBeLessThan(DEFAULT_MUNICIPAL_RATE);
+    expect(onBenefit).toBeGreaterThanOrEqual(DEFAULT_MUNICIPAL_RATE);
     expect(onBenefit).toBeGreaterThan(onSalary);
   });
 
   it("adds state tax above the threshold", () => {
     const high = marginalRate({ salary: 80_000 }, false);
-    expect(high).toBeGreaterThan(
-      TAX_MODEL.municipalRate + TAX_MODEL.stateRate - 0.02,
-    );
+    expect(high).toBeGreaterThan(DEFAULT_MUNICIPAL_RATE + 0.18);
   });
 });
 

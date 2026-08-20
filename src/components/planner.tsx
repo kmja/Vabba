@@ -44,6 +44,7 @@ import {
   type GoalMode,
 } from "@/lib/goal-seek";
 import { computeSupplement } from "@/lib/supplement";
+import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
@@ -152,6 +153,10 @@ export function Planner() {
     form.childNumber ?? ((form.hasExtraDays ?? false) ? 2 : 1);
   const extraA = childNumber >= 2 ? (form.extraDaysA ?? 0) : 0;
   const extraB = childNumber >= 2 ? (form.extraDaysB ?? 0) : 0;
+  // Kommunalskatt drives every net figure on the results page and the budget
+  // solver's floor, so it travels with the plan.
+  const municipalRate =
+    (form.municipalRatePct ?? DEFAULT_MUNICIPAL_RATE * 100) / 100;
   const vabEnabled = form.vabEnabled ?? false;
   const vabChildren = form.vabChildren ?? 1;
   const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
@@ -493,8 +498,8 @@ export function Planner() {
     } else {
       return null;
     }
-    return solvePlan(deadlines.birth, start, specs);
-  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB]);
+    return solvePlan(deadlines.birth, start, specs, municipalRate);
+  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate]);
 
   const projection: LeaveProjection | null = useMemo(
     () =>
@@ -901,6 +906,7 @@ export function Planner() {
         birthDays={birthDays ?? undefined}
         birthDaysName={birthDaysName}
         firstCaregiver={firstCaregiver}
+        municipalRate={municipalRate}
         warnings={warnings}
         onEdit={(step = 1) => {
           window.scrollTo(0, 0);

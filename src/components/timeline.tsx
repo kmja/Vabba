@@ -304,10 +304,13 @@ export function PeriodCard({
   row,
   colorIdx,
   side = "left",
+  municipalRate,
 }: {
   row: MonthlyRow;
   colorIdx: number;
   side?: "left" | "right";
+  /** The household's kommunalskatt; the national average when unset. */
+  municipalRate?: number;
 }) {
   const [open, setOpen] = useState(false);
   const gross = approxMonthlyGross(row.dailyRate, row.daysPerWeek);
@@ -357,7 +360,7 @@ export function PeriodCard({
             {hasHousehold ? "Hushåll" : "Per månad"} · efter skatt
           </span>
           <span className="text-2xl font-bold tabular-nums sm:text-xl">
-            ≈ {formatSek(householdNetMonthly(row))}
+            ≈ {formatSek(householdNetMonthly(row, municipalRate))}
             <span className="text-muted-foreground text-xs font-normal">/mån</span>
           </span>
         </div>
@@ -423,7 +426,7 @@ export function PeriodCard({
           )}
           <div className="tabular-nums">
             {formatSek(gross)}/mån föräldrapenning · {formatSek(row.dailyRate)}/dag ·
-            ≈ {formatSek(monthlyNet({ benefit: gross }))} efter skatt
+            ≈ {formatSek(monthlyNet({ benefit: gross }, municipalRate))} efter skatt
           </div>
           <div className="tabular-nums">{formatPace(row.daysPerWeek)} dagar/vecka</div>
         </div>

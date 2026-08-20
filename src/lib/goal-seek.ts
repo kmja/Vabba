@@ -28,7 +28,7 @@ import {
 } from "@/lib/projection";
 import { addYears, differenceInDays } from "@/lib/dates";
 import { SGI_PROTECTION } from "@/lib/rules";
-import { householdNet } from "@/lib/tax";
+import { DEFAULT_MUNICIPAL_RATE, householdNet } from "@/lib/tax";
 
 const DAYS_PER_MONTH = 30.4;
 const MIN_PACE = 0.5;
@@ -118,14 +118,18 @@ function netWhileHome(
   spec: CaregiverPlanSpec,
   rate: number,
   pace: number,
+  municipalRate: number,
 ): number {
-  return householdNet([
-    {
-      benefit: (rate * pace * DAYS_PER_MONTH) / 7,
-      salary: partTimeSalary(spec, pace),
-    },
-    { salary: spec.partnerSalary },
-  ]);
+  return householdNet(
+    [
+      {
+        benefit: (rate * pace * DAYS_PER_MONTH) / 7,
+        salary: partTimeSalary(spec, pace),
+      },
+      { salary: spec.partnerSalary },
+    ],
+    municipalRate,
+  );
 }
 
 /** The same, for a segment whose monthly benefit is already known. */
@@ -133,11 +137,15 @@ function netForSegment(
   spec: CaregiverPlanSpec,
   monthlyBenefit: number,
   pace: number,
+  municipalRate: number,
 ): number {
-  return householdNet([
-    { benefit: monthlyBenefit, salary: partTimeSalary(spec, pace) },
-    { salary: spec.partnerSalary },
-  ]);
+  return householdNet(
+    [
+      { benefit: monthlyBenefit, salary: partTimeSalary(spec, pace) },
+      { salary: spec.partnerSalary },
+    ],
+    municipalRate,
+  );
 }
 
 /** The SGI floor for this caregiver's pace after the child's 1st birthday. */
@@ -243,6 +251,7 @@ function outcomeOf(
   extra: Pick<CaregiverOutcome, "targetMet" | "shortfallDays"> & {
     extraSaved?: number;
   },
+  municipalRate: number,
 ): OneResult {
   const allocated = spec.incomeDays + spec.lagstaDays;
   const saved = pools.saved + (extra.extraSaved ?? 0);
@@ -251,7 +260,7 @@ function outcomeOf(
   );
   let lowestNet: number | null = null;
   for (const seg of intervals) {
-    const net = netForSegment(spec, seg.monthly, seg.pace);
+    const net = netForSegment(spec, seg.monthly, seg.pace, municipalRate);
     if (lowestNet === null || net < lowestNet) lowestNet = net;
   }
   return {
@@ -280,6 +289,7 @@ function solveManual(
   pools: Pools,
   cursor: Date,
   oneYear: Date,
+  municipalRate: number,
 ): OneResult {
   const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
   let phases: { phase1: number; phase2: number };
@@ -302,10 +312,15 @@ function solveManual(
     cursor,
     blocksFor(spec, pools, phases, oneYear),
   );
-  return outcomeOf(spec, intervals, phases, pools, oneYear, {
-    targetMet: true,
-    shortfallDays: 0,
-  });
+  return outcomeOf(
+    spec,
+    intervals,
+    phases,
+    pools,
+    oneYear,
+    { targetMet: true, shortfallDays: 0 },
+    municipalRate,
+  );
 }
 
 function solveUntilDate(
@@ -314,6 +329,7 @@ function solveUntilDate(
   cursor: Date,
   oneYear: Date,
   target: Date,
+  municipalRate: number,
 ): OneResult {
   const f2 = postYearFloor(spec);
   const pacesAt = (s: number) => ({
@@ -329,22 +345,38 @@ function solveUntilDate(
 
   // Already past the target when this caregiver would start: nothing to take.
   if (target.getTime() <= cursor.getTime()) {
-    return outcomeOf(spec, [], pacesAt(1), pools, oneYear, {
-      targetMet: false,
-      shortfallDays: 0,
-      extraSaved: pools.income + pools.lagsta,
-    });
+    return outcomeOf(
+      spec,
+      [],
+      pacesAt(1),
+      pools,
+      oneYear,
+      {
+        targetMet: false,
+        shortfallDays: 0,
+        extraSaved: pools.income + pools.lagsta,
+      },
+      municipalRate,
+    );
   }
 
   // Plenty of days: full pace, cut at the target, the rest saved.
   if (endAt(1).getTime() >= target.getTime()) {
     const { clipped, used } = truncateAt(intervalsAt(1), target);
     const available = pools.income + pools.lagsta;
-    return outcomeOf(spec, clipped, pacesAt(1), pools, oneYear, {
-      targetMet: true,
-      shortfallDays: 0,
-      extraSaved: Math.max(0, available - used),
-    });
+    return outcomeOf(
+      spec,
+      clipped,
+      pacesAt(1),
+      pools,
+      oneYear,
+      {
+        targetMet: true,
+        shortfallDays: 0,
+        extraSaved: Math.max(0, available - used),
+      },
+      municipalRate,
+    );
   }
 
   // Even maximal stretching falls short: report the missing days.
@@ -356,10 +388,18 @@ function solveUntilDate(
         ? intervals[intervals.length - 1].pace
         : SGI_PROTECTION.minDaysPerWeekAfterAge1;
     const missingCal = differenceInDays(endSlow, target);
-    return outcomeOf(spec, intervals, pacesAt(0), pools, oneYear, {
-      targetMet: false,
-      shortfallDays: Math.ceil((missingCal / 7) * tailPace),
-    });
+    return outcomeOf(
+      spec,
+      intervals,
+      pacesAt(0),
+      pools,
+      oneYear,
+      {
+        targetMet: false,
+        shortfallDays: Math.ceil((missingCal / 7) * tailPace),
+      },
+      municipalRate,
+    );
   }
 
   // Stretch just enough: fastest pace scale that still reaches the target.
@@ -370,10 +410,15 @@ function solveUntilDate(
     if (endAt(mid).getTime() >= target.getTime()) lo = mid;
     else hi = mid;
   }
-  return outcomeOf(spec, intervalsAt(lo), pacesAt(lo), pools, oneYear, {
-    targetMet: true,
-    shortfallDays: 0,
-  });
+  return outcomeOf(
+    spec,
+    intervalsAt(lo),
+    pacesAt(lo),
+    pools,
+    oneYear,
+    { targetMet: true, shortfallDays: 0 },
+    municipalRate,
+  );
 }
 
 function solveBudget(
@@ -382,6 +427,7 @@ function solveBudget(
   cursor: Date,
   oneYear: Date,
   floorNet: number,
+  municipalRate: number,
 ): OneResult {
   // Smallest pace in [minPace, 7] whose household net clears the floor; if
   // none does, the pace that pays the most (part-timers can earn more at a
@@ -392,7 +438,7 @@ function solveBudget(
     let maxNet = -Infinity;
     for (let i = Math.round(minPace * 10); i <= MAX_PACE * 10; i++) {
       const pace = i / 10;
-      const net = netWhileHome(spec, rate, pace);
+      const net = netWhileHome(spec, rate, pace, municipalRate);
       if (net > maxNet) {
         maxNet = net;
         argmax = pace;
@@ -431,13 +477,18 @@ function solveBudget(
   const intervals = buildLeaveIntervals(cursor, blocks);
   let met = true;
   for (const seg of intervals) {
-    const net = netForSegment(spec, seg.monthly, seg.pace);
+    const net = netForSegment(spec, seg.monthly, seg.pace, municipalRate);
     if (net < floorNet - 1) met = false;
   }
-  return outcomeOf(spec, intervals, phases, pools, oneYear, {
-    targetMet: met,
-    shortfallDays: 0,
-  });
+  return outcomeOf(
+    spec,
+    intervals,
+    phases,
+    pools,
+    oneYear,
+    { targetMet: met, shortfallDays: 0 },
+    municipalRate,
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -448,6 +499,8 @@ export function solvePlan(
   birth: Date,
   start: Date,
   caregivers: CaregiverPlanSpec[],
+  /** The household's kommunalskatt — every net here is measured with it. */
+  municipalRate: number = DEFAULT_MUNICIPAL_RATE,
 ): PlanSolve {
   const oneYear = addYears(birth, 1);
   const intervals: LeaveInterval[] = [];
@@ -461,10 +514,24 @@ export function solvePlan(
     const pools = applySaveDays(spec);
     const one =
       spec.mode === "untilDate" && spec.targetDate
-        ? solveUntilDate(spec, pools, cursor, oneYear, spec.targetDate)
+        ? solveUntilDate(
+            spec,
+            pools,
+            cursor,
+            oneYear,
+            spec.targetDate,
+            municipalRate,
+          )
         : spec.mode === "budget"
-          ? solveBudget(spec, pools, cursor, oneYear, spec.budgetFloor ?? 0)
-          : solveManual(spec, pools, cursor, oneYear);
+          ? solveBudget(
+              spec,
+              pools,
+              cursor,
+              oneYear,
+              spec.budgetFloor ?? 0,
+              municipalRate,
+            )
+          : solveManual(spec, pools, cursor, oneYear, municipalRate);
     intervals.push(...one.intervals);
     perCaregiver.push(one.outcome);
     if (one.outcome.endsAt) cursor = one.outcome.endsAt;
@@ -474,7 +541,7 @@ export function solvePlan(
   for (const seg of intervals) {
     const spec = caregivers.find((c) => c.name === seg.caregiver);
     if (!spec) continue;
-    const net = netForSegment(spec, seg.monthly, seg.pace);
+    const net = netForSegment(spec, seg.monthly, seg.pace, municipalRate);
     if (minNet === null || net < minNet) minNet = net;
   }
 

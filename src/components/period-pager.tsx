@@ -239,6 +239,7 @@ function BirthDaysBlock({
   period,
   result,
   salary,
+  municipalRate,
   colorIdx,
   open,
   onToggle,
@@ -247,6 +248,7 @@ function BirthDaysBlock({
   result: BirthDaysResult;
   /** Their monthly salary — these days are taxed at its margin. */
   salary: number;
+  municipalRate: number;
   colorIdx: number;
   open: boolean;
   onToggle: () => void;
@@ -272,7 +274,7 @@ function BirthDaysBlock({
       <p className="text-muted-foreground mt-2 text-xs">
         Tillfällig föräldrapenning i samband med födseln — utöver de 480, så
         inga föräldrapenningdagar går åt. ≈{" "}
-        {formatSek(netOfExtra(result.total, { salary }))} efter skatt. Tas ut
+        {formatSek(netOfExtra(result.total, { salary }, true, municipalRate))} efter skatt. Tas ut
         inom 60 dagar
         efter hemkomsten.
         {result.sgiCapped
@@ -296,6 +298,7 @@ export function PeriodPager({
   deadlines,
   editing,
   levers,
+  municipalRate,
   birthDays,
 }: {
   projection?: LeaveProjection;
@@ -305,7 +308,14 @@ export function PeriodPager({
   /** Per-caregiver dials, so each block can drive its own stretch. */
   levers?: Partial<Record<"A" | "B", PeriodControls>>;
   /** The other parent's days around the birth — the first leave there is. */
-  birthDays?: { result: BirthDaysResult; name: string; salary: number };
+  birthDays?: {
+    result: BirthDaysResult;
+    name: string;
+    salary: number;
+    municipalRate: number;
+  };
+  /** The household's kommunalskatt — used for every net in a block. */
+  municipalRate?: number;
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut.
@@ -366,6 +376,7 @@ export function PeriodPager({
             period={birth}
             result={birthDays.result}
             salary={birthDays.salary}
+            municipalRate={birthDays.municipalRate}
             colorIdx={Math.max(0, cgOrder.indexOf(birth.caregiver))}
             open={openIdx === BIRTH_IDX}
             onToggle={() =>
@@ -467,7 +478,11 @@ export function PeriodPager({
               {/* The economy of this period. */}
               {row && (
                 <div className="mt-3">
-                  <PeriodCard row={row} colorIdx={colorIdx} />
+                  <PeriodCard
+                    row={row}
+                    colorIdx={colorIdx}
+                    municipalRate={municipalRate}
+                  />
                 </div>
               )}
 

@@ -60,6 +60,7 @@ export function Results({
   birthDays,
   birthDaysName,
   firstCaregiver,
+  municipalRate,
   warnings,
   onEdit,
   onReset,
@@ -102,6 +103,8 @@ export function Results({
   birthDaysName: string;
   /** Which caregiver is home first — decides the order of the sections. */
   firstCaregiver: "A" | "B";
+  /** The household's kommunalskatt, as a fraction — every net uses it. */
+  municipalRate: number;
   warnings: PlanWarning[];
   /** Back to the wizard, optionally straight to a caregiver's own step. */
   onEdit: (step?: number) => void;
@@ -194,6 +197,7 @@ export function Results({
             name={soloName}
             daysPerWeek={paceA}
             goalSummary={goalSummary}
+            municipalRate={municipalRate}
           />
         ) : twoParent ? (
           <SplitSuggestion
@@ -203,6 +207,7 @@ export function Results({
             splitA={splitA}
             onSplitChange={onSplitChange}
             goalSummary={goalSummary}
+            municipalRate={municipalRate}
           />
         ) : null}
 
@@ -214,6 +219,7 @@ export function Results({
           deadlines={deadlines}
           editing={periodEdit}
           levers={levers}
+          municipalRate={municipalRate}
           birthDays={
             birthDays && birthDays.days > 0
               ? {
@@ -222,6 +228,7 @@ export function Results({
                   // The days go to whoever is not home first, and are taxed
                   // at the margin of the salary they sit on top of.
                   salary: firstCaregiver === "A" ? salaryB : salaryA,
+                  municipalRate,
                 }
               : undefined
           }
@@ -232,6 +239,7 @@ export function Results({
         <VabResultCard
           result={vabResult}
           salary={firstCaregiver === "A" ? salaryA : salaryB}
+          municipalRate={municipalRate}
         />
       )}
     </div>

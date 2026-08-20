@@ -17,8 +17,10 @@ import { formatNumber, formatSek } from "@/lib/format";
 export function VabResultCard({
   result,
   salary = 0,
+  municipalRate,
 }: {
   result: VabResult;
+  municipalRate?: number;
   /** Monthly salary these days sit on top of — they are taxed at its margin. */
   salary?: number;
 }) {
@@ -56,7 +58,7 @@ export function VabResultCard({
         <div className="flex items-baseline justify-between">
           <span className="text-muted-foreground text-sm">≈ efter skatt</span>
           <span className="text-muted-foreground tabular-nums">
-            {formatSek(netOfExtra(result.remainingValue, { salary }))}
+            {formatSek(netOfExtra(result.remainingValue, { salary }, true, municipalRate))}
           </span>
         </div>
         <p className="text-muted-foreground text-xs">

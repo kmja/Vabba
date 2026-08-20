@@ -23,6 +23,7 @@ export function SoloSummary({
   name,
   daysPerWeek,
   goalSummary,
+  municipalRate,
 }: {
   payout: ParentPayout;
   total: number;
@@ -30,6 +31,7 @@ export function SoloSummary({
   daysPerWeek: number;
   /** One-line result of the solved plan, shown when a goal is active. */
   goalSummary: string | null;
+  municipalRate: number;
 }) {
   const [open, setOpen] = useState(false);
   // Their föräldrapenning is their whole income, so tax it as that — a
@@ -38,7 +40,7 @@ export function SoloSummary({
   const netPayout =
     monthlyBenefit > 0
       ? Math.round(
-          payout.amount * (monthlyNet({ benefit: monthlyBenefit }) / monthlyBenefit),
+          payout.amount * (monthlyNet({ benefit: monthlyBenefit }, municipalRate) / monthlyBenefit),
         )
       : 0;
   return (

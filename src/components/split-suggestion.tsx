@@ -23,6 +23,7 @@ export function SplitSuggestion({
   splitA,
   onSplitChange,
   goalSummary,
+  municipalRate,
 }: {
   result: OptimizeResult;
   objective: Objective;
@@ -33,6 +34,7 @@ export function SplitSuggestion({
   onSplitChange?: (splitA: number) => void;
   /** One-line result of the solved plan, shown when any goal is active. */
   goalSummary: string | null;
+  municipalRate: number;
 }) {
   const [open, setOpen] = useState(false);
   const rec = result.recommended;
@@ -45,7 +47,7 @@ export function SplitSuggestion({
   const netOfPayout = (amount: number, dailyRate: number) => {
     const monthly = approxMonthlyGross(dailyRate, 7);
     if (monthly <= 0) return 0;
-    return amount * (monthlyNet({ benefit: monthly }) / monthly);
+    return amount * (monthlyNet({ benefit: monthly }, municipalRate) / monthly);
   };
   const netTotal = Math.round(
     netOfPayout(rec.payout.A.amount, rec.payout.A.dailyRate) +

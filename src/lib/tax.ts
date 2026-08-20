@@ -28,20 +28,22 @@ const PBB = MONEY.prisbasbelopp;
 
 export const TAX_MODEL = {
   /**
-   * Kommunalskatt: the national average (kommun + region). Real rates run
-   * roughly 29–36 %, so an individual's net can differ by a few per cent
-   * either way. Source: SCB, "Kommunala skattesatser". Verify yearly.
-   */
-  municipalRate: 0.3241,
-
-  /**
    * Statlig inkomstskatt: 20 % of taxable income above the skiktgräns.
-   * TODO(confirm): this is the 2025 skiktgräns; the threshold is indexed
-   * yearly and needs re-checking against Skatteverket for 2026.
+   * 2026: 643 000 kr (brytpunkt 660 400 for under-66s). Source: Skatteverket,
+   * "Belopp och procent inkomstår 2026". Indexed yearly — re-check.
    */
   stateRate: 0.2,
-  stateThresholdAnnual: 625_800,
+  stateThresholdAnnual: 643_000,
 } as const;
+
+/**
+ * Kommunalskatt (kommun + region), the national average for 2026 — SCB puts
+ * it at 32,38 %, down 3 öre from 2025. It is only an average: rates run from
+ * 28,93 % (Österåker) to about 35 % (Dorotea), which at a 63 000 kr salary is
+ * a spread of some 3 300 kr a month. Every function here takes the real rate
+ * as an argument for that reason; this is just the fallback.
+ */
+export const DEFAULT_MUNICIPAL_RATE = 0.3238;
 
 /** What someone is paid in a month, split by how it is taxed. */
 export interface PersonIncome {
@@ -96,7 +98,10 @@ function jobbskatteavdrag(
 }
 
 /** A year's income tax for one person, given the split by income type. */
-function annualTax({ salary = 0, benefit = 0 }: PersonIncome): number {
+function annualTax(
+  { salary = 0, benefit = 0 }: PersonIncome,
+  municipalRate: number,
+): number {
   const earned = Math.max(0, salary) * 12;
   const benefits = Math.max(0, benefit) * 12;
   const total = earned + benefits;
@@ -104,28 +109,36 @@ function annualTax({ salary = 0, benefit = 0 }: PersonIncome): number {
 
   const deduction = grundavdrag(total);
   const taxable = Math.max(0, total - deduction);
-  const municipal = taxable * TAX_MODEL.municipalRate;
+  const municipal = taxable * municipalRate;
   const state =
     Math.max(0, taxable - TAX_MODEL.stateThresholdAnnual) * TAX_MODEL.stateRate;
   // The credit cannot exceed the municipal tax it is credited against.
   const credit = Math.min(
     municipal,
-    jobbskatteavdrag(earned, deduction, TAX_MODEL.municipalRate),
+    jobbskatteavdrag(earned, deduction, municipalRate),
   );
   return Math.max(0, municipal + state - credit);
 }
 
-/** What one person keeps of a month's income. */
-export function monthlyNet(income: PersonIncome): number {
+/** What one person keeps of a month's income, at their municipal rate. */
+export function monthlyNet(
+  income: PersonIncome,
+  municipalRate = DEFAULT_MUNICIPAL_RATE,
+): number {
   const { salary = 0, benefit = 0 } = income;
   return Math.round(
-    Math.max(0, salary) + Math.max(0, benefit) - annualTax(income) / 12,
+    Math.max(0, salary) +
+      Math.max(0, benefit) -
+      annualTax(income, municipalRate) / 12,
   );
 }
 
 /** What the household keeps — each person taxed on their own income. */
-export function householdNet(people: PersonIncome[]): number {
-  return people.reduce((sum, p) => sum + monthlyNet(p), 0);
+export function householdNet(
+  people: PersonIncome[],
+  municipalRate = DEFAULT_MUNICIPAL_RATE,
+): number {
+  return people.reduce((sum, p) => sum + monthlyNet(p, municipalRate), 0);
 }
 
 /**
@@ -133,12 +146,17 @@ export function householdNet(people: PersonIncome[]): number {
  * that arrives on top of what someone already earns, like vab or the days
  * around a birth, where the marginal rate is what they actually feel.
  */
-export function marginalRate(income: PersonIncome, extraIsBenefit = true): number {
+export function marginalRate(
+  income: PersonIncome,
+  extraIsBenefit = true,
+  municipalRate = DEFAULT_MUNICIPAL_RATE,
+): number {
   const step = 1000 / 12; // a small monthly bump, annualised inside annualTax
   const bumped: PersonIncome = extraIsBenefit
     ? { ...income, benefit: (income.benefit ?? 0) + step }
     : { ...income, salary: (income.salary ?? 0) + step };
-  const extraTax = annualTax(bumped) - annualTax(income);
+  const extraTax =
+    annualTax(bumped, municipalRate) - annualTax(income, municipalRate);
   return Math.min(0.7, Math.max(0, extraTax / (step * 12)));
 }
 
@@ -147,6 +165,9 @@ export function netOfExtra(
   total: number,
   alongside: PersonIncome,
   extraIsBenefit = true,
+  municipalRate = DEFAULT_MUNICIPAL_RATE,
 ): number {
-  return Math.round(total * (1 - marginalRate(alongside, extraIsBenefit)));
+  return Math.round(
+    total * (1 - marginalRate(alongside, extraIsBenefit, municipalRate)),
+  );
 }

@@ -105,6 +105,12 @@ export interface ShareableState {
   hasExtraDays?: boolean;
   extraDaysA?: number;
   extraDaysB?: number;
+  /**
+   * Kommunalskatt where they live, as a percentage. Rates run 28,93–35 %, and
+   * at a 63 000 kr salary that is a spread of some 3 300 kr a month — so the
+   * national average is only a starting point.
+   */
+  municipalRatePct?: number;
   /** Whether the vab (sick-child) step is included. */
   vabEnabled?: boolean;
   /** Number of children vab should cover (its own per-child allowance). */

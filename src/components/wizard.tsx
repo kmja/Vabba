@@ -39,6 +39,7 @@ import {
 } from "@/lib/calc";
 import type { GoalMode } from "@/lib/goal-seek";
 import { birthDaysFor } from "@/lib/birth-days";
+import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { isAboveSgiCap, sjukpenningnivaDailyAmount } from "@/lib/rules";
 import { formatDate, formatSek } from "@/lib/format";
 import {
@@ -1489,6 +1490,19 @@ export function Wizard({
                         </div>
                       )}
                     </div>
+
+                    <NumberField
+                      id="municipal-rate"
+                      label="Kommunalskatt (%)"
+                      value={form.municipalRatePct ?? DEFAULT_MUNICIPAL_RATE * 100}
+                      min={25}
+                      max={40}
+                      step={0.01}
+                      onChange={(n) =>
+                        setForm((f) => ({ ...f, municipalRatePct: n }))
+                      }
+                      hint="Där ni bor — den avgör alla nettobelopp i planen. Riksgenomsnittet är 32,38 %, men satserna går från 28,93 % till drygt 35 %; vid 63 000 kr i lön skiljer det runt 3 300 kr i månaden."
+                    />
 
                     <div className="space-y-2">
                       <CheckRow

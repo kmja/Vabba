@@ -61,12 +61,18 @@ export function householdMonthly(r: MonthlyRow): number {
  * the employer's föräldralön and any part-time work are salary, as is the
  * partner's pay.
  */
-export function householdNetMonthly(r: MonthlyRow): number {
-  return householdNet([
+export function householdNetMonthly(
+  r: MonthlyRow,
+  municipalRate?: number,
+): number {
+  return householdNet(
+    [
     {
       salary: (r.supplement?.monthly ?? 0) + (r.partTimeSalary ?? 0),
       benefit: approxMonthlyGross(r.dailyRate, r.daysPerWeek),
     },
-    { salary: r.householdBase ?? 0 },
-  ]);
+      { salary: r.householdBase ?? 0 },
+    ],
+    municipalRate,
+  );
 }
