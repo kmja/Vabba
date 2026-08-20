@@ -41,6 +41,7 @@ import {
   type MonthlyRow,
   formatMonths,
   householdMonthly,
+  householdNetMonthly,
   ownMonthly,
 } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
@@ -60,7 +61,8 @@ import {
   formatPace,
   formatSek,
 } from "@/lib/format";
-import { MONEY, netAfterTax } from "@/lib/rules";
+import { MONEY } from "@/lib/rules";
+import { monthlyNet } from "@/lib/tax";
 import type { LeaveInterval } from "@/lib/projection";
 
 export interface LeaveProjection {
@@ -355,7 +357,7 @@ export function PeriodCard({
             {hasHousehold ? "Hushåll" : "Per månad"} · efter skatt
           </span>
           <span className="text-2xl font-bold tabular-nums sm:text-xl">
-            ≈ {formatSek(netAfterTax(household))}
+            ≈ {formatSek(householdNetMonthly(row))}
             <span className="text-muted-foreground text-xs font-normal">/mån</span>
           </span>
         </div>
@@ -421,7 +423,7 @@ export function PeriodCard({
           )}
           <div className="tabular-nums">
             {formatSek(gross)}/mån föräldrapenning · {formatSek(row.dailyRate)}/dag ·
-            ≈ {formatSek(netAfterTax(gross))} efter skatt
+            ≈ {formatSek(monthlyNet({ benefit: gross }))} efter skatt
           </div>
           <div className="tabular-nums">{formatPace(row.daysPerWeek)} dagar/vecka</div>
         </div>

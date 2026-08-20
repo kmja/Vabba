@@ -114,9 +114,11 @@ describe("solvePlan — budget", () => {
     ]);
     const [anna] = res.perCaregiver;
     expect(anna.targetMet).toBe(true);
-    // net(own + 30 000) ≥ 30 000 ⇒ own gross ≈ 12 857 ⇒ pace ≈ 3.0.
-    expect(anna.paces.phase1).toBeGreaterThan(2.5);
-    expect(anna.paces.phase1).toBeLessThan(3.5);
+    // Taxed per person: the partner's 30 000 salary nets ≈ 23 600 on its own
+    // (jobbskatteavdrag), so Anna only needs ≈ 8 300 of benefit to clear the
+    // floor — pace 1,9 nets 30 099 for the household where 1,8 falls short.
+    expect(anna.paces.phase1).toBeGreaterThan(1.5);
+    expect(anna.paces.phase1).toBeLessThan(2.3);
     expect(anna.paces.phase2).toBeGreaterThanOrEqual(5);
     expect(anna.sgiLifted).toBe(true);
     expect(res.minHouseholdNet).toBeGreaterThanOrEqual(29999);

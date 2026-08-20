@@ -216,13 +216,24 @@ export function Results({
           levers={levers}
           birthDays={
             birthDays && birthDays.days > 0
-              ? { result: birthDays, name: birthDaysName }
+              ? {
+                  result: birthDays,
+                  name: birthDaysName,
+                  // The days go to whoever is not home first, and are taxed
+                  // at the margin of the salary they sit on top of.
+                  salary: firstCaregiver === "A" ? salaryB : salaryA,
+                }
               : undefined
           }
         />
       </div>
 
-      {vabResult && <VabResultCard result={vabResult} />}
+      {vabResult && (
+        <VabResultCard
+          result={vabResult}
+          salary={firstCaregiver === "A" ? salaryA : salaryB}
+        />
+      )}
     </div>
   );
 }

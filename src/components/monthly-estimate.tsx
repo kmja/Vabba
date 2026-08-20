@@ -1,4 +1,5 @@
 import { approxMonthlyGross } from "@/lib/format";
+import { householdNet } from "@/lib/tax";
 
 /**
  * One caregiver's leave, as the results page models it. The timeline renders a
@@ -52,4 +53,20 @@ export function ownMonthly(r: MonthlyRow): number {
 /** Household income while this caregiver is on leave and the partner works. */
 export function householdMonthly(r: MonthlyRow): number {
   return ownMonthly(r) + (r.partTimeSalary ?? 0) + (r.householdBase ?? 0);
+}
+
+/**
+ * The same month after tax — each person taxed on their own income, split by
+ * type. The leave-taker's föräldrapenning is a benefit (no jobbskatteavdrag);
+ * the employer's föräldralön and any part-time work are salary, as is the
+ * partner's pay.
+ */
+export function householdNetMonthly(r: MonthlyRow): number {
+  return householdNet([
+    {
+      salary: (r.supplement?.monthly ?? 0) + (r.partTimeSalary ?? 0),
+      benefit: approxMonthlyGross(r.dailyRate, r.daysPerWeek),
+    },
+    { salary: r.householdBase ?? 0 },
+  ]);
 }

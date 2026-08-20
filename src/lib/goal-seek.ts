@@ -27,7 +27,8 @@ import {
   type PaceBreak,
 } from "@/lib/projection";
 import { addYears, differenceInDays } from "@/lib/dates";
-import { SGI_PROTECTION, netAfterTax } from "@/lib/rules";
+import { SGI_PROTECTION } from "@/lib/rules";
+import { householdNet } from "@/lib/tax";
 
 const DAYS_PER_MONTH = 30.4;
 const MIN_PACE = 0.5;
@@ -108,15 +109,35 @@ function partTimeSalary(spec: CaregiverPlanSpec, pace: number): number {
   return (spec.salary * (MAX_PACE - p)) / MAX_PACE;
 }
 
-function householdNet(
+/**
+ * The household's net while this caregiver is home — each person taxed on
+ * their own income. Föräldrapenning carries no jobbskatteavdrag, so it keeps
+ * less of each krona than the partner's salary does.
+ */
+function netWhileHome(
   spec: CaregiverPlanSpec,
   rate: number,
   pace: number,
 ): number {
-  const ownGross = (rate * pace * DAYS_PER_MONTH) / 7;
-  return netAfterTax(
-    ownGross + spec.partnerSalary + partTimeSalary(spec, pace),
-  );
+  return householdNet([
+    {
+      benefit: (rate * pace * DAYS_PER_MONTH) / 7,
+      salary: partTimeSalary(spec, pace),
+    },
+    { salary: spec.partnerSalary },
+  ]);
+}
+
+/** The same, for a segment whose monthly benefit is already known. */
+function netForSegment(
+  spec: CaregiverPlanSpec,
+  monthlyBenefit: number,
+  pace: number,
+): number {
+  return householdNet([
+    { benefit: monthlyBenefit, salary: partTimeSalary(spec, pace) },
+    { salary: spec.partnerSalary },
+  ]);
 }
 
 /** The SGI floor for this caregiver's pace after the child's 1st birthday. */
@@ -230,9 +251,7 @@ function outcomeOf(
   );
   let lowestNet: number | null = null;
   for (const seg of intervals) {
-    const net = netAfterTax(
-      seg.monthly + spec.partnerSalary + partTimeSalary(spec, seg.pace),
-    );
+    const net = netForSegment(spec, seg.monthly, seg.pace);
     if (lowestNet === null || net < lowestNet) lowestNet = net;
   }
   return {
@@ -373,7 +392,7 @@ function solveBudget(
     let maxNet = -Infinity;
     for (let i = Math.round(minPace * 10); i <= MAX_PACE * 10; i++) {
       const pace = i / 10;
-      const net = householdNet(spec, rate, pace);
+      const net = netWhileHome(spec, rate, pace);
       if (net > maxNet) {
         maxNet = net;
         argmax = pace;
@@ -412,9 +431,7 @@ function solveBudget(
   const intervals = buildLeaveIntervals(cursor, blocks);
   let met = true;
   for (const seg of intervals) {
-    const net = netAfterTax(
-      seg.monthly + spec.partnerSalary + partTimeSalary(spec, seg.pace),
-    );
+    const net = netForSegment(spec, seg.monthly, seg.pace);
     if (net < floorNet - 1) met = false;
   }
   return outcomeOf(spec, intervals, phases, pools, oneYear, {
@@ -457,9 +474,7 @@ export function solvePlan(
   for (const seg of intervals) {
     const spec = caregivers.find((c) => c.name === seg.caregiver);
     if (!spec) continue;
-    const net = netAfterTax(
-      seg.monthly + spec.partnerSalary + partTimeSalary(spec, seg.pace),
-    );
+    const net = netForSegment(spec, seg.monthly, seg.pace);
     if (minNet === null || net < minNet) minNet = net;
   }
 

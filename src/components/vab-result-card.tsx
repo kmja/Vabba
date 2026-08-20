@@ -10,11 +10,18 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import type { VabResult } from "@/lib/vab";
-import { netAfterTax } from "@/lib/rules";
+import { netOfExtra } from "@/lib/tax";
 import { formatNumber, formatSek } from "@/lib/format";
 
 /** Compact vab (sick-child) summary for the results page. */
-export function VabResultCard({ result }: { result: VabResult }) {
+export function VabResultCard({
+  result,
+  salary = 0,
+}: {
+  result: VabResult;
+  /** Monthly salary these days sit on top of — they are taxed at its margin. */
+  salary?: number;
+}) {
   const usedPct =
     result.annualCapacity > 0 ? (result.used / result.annualCapacity) * 100 : 0;
 
@@ -49,7 +56,7 @@ export function VabResultCard({ result }: { result: VabResult }) {
         <div className="flex items-baseline justify-between">
           <span className="text-muted-foreground text-sm">≈ efter skatt</span>
           <span className="text-muted-foreground tabular-nums">
-            {formatSek(netAfterTax(result.remainingValue))}
+            {formatSek(netOfExtra(result.remainingValue, { salary }))}
           </span>
         </div>
         <p className="text-muted-foreground text-xs">

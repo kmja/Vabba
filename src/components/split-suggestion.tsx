@@ -6,7 +6,8 @@ import {
   type Objective,
   type OptimizeResult,
 } from "@/lib/optimizer";
-import { netAfterTax } from "@/lib/rules";
+import { monthlyNet } from "@/lib/tax";
+import { approxMonthlyGross } from "@/lib/format";
 import type { ParentId, PlanInput } from "@/lib/calc";
 import { cn } from "@/lib/utils";
 import { formatDays, formatSek } from "@/lib/format";
@@ -38,6 +39,18 @@ export function SplitSuggestion({
   const aDays = rec.allocatedTotals.A;
   const bDays = rec.allocatedTotals.B;
   const pctA = Math.round((splitA ?? 0.5) * 100);
+
+  // Each caregiver's föräldrapenning taxed as their own income, at the rate
+  // their monthly benefit puts them in — not the household total at one rate.
+  const netOfPayout = (amount: number, dailyRate: number) => {
+    const monthly = approxMonthlyGross(dailyRate, 7);
+    if (monthly <= 0) return 0;
+    return amount * (monthlyNet({ benefit: monthly }) / monthly);
+  };
+  const netTotal = Math.round(
+    netOfPayout(rec.payout.A.amount, rec.payout.A.dailyRate) +
+      netOfPayout(rec.payout.B.amount, rec.payout.B.dailyRate),
+  );
 
   const maxAlt = result.alternatives.find((a) => a.objective === "maxPayout");
   const diffVsMax = maxAlt ? rec.payout.total - maxAlt.payout.total : 0;
@@ -122,7 +135,7 @@ export function SplitSuggestion({
               {formatSek(rec.payout.total)}
             </div>
             <div className="text-muted-foreground text-xs">
-              ≈ {formatSek(netAfterTax(rec.payout.total))} efter skatt
+              ≈ {formatSek(netTotal)} efter skatt
             </div>
             {diffVsMax !== 0 && (
               <div className="text-muted-foreground mt-1 text-xs">

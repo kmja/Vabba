@@ -4,7 +4,9 @@ import { IconChevronDown } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { ParentPayout } from "@/lib/optimizer";
-import { TIER_LABEL, lagstanivaDailyAmount, netAfterTax } from "@/lib/rules";
+import { TIER_LABEL, lagstanivaDailyAmount } from "@/lib/rules";
+import { monthlyNet } from "@/lib/tax";
+import { approxMonthlyGross } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   approxLeaveMonths,
@@ -30,6 +32,15 @@ export function SoloSummary({
   goalSummary: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  // Their föräldrapenning is their whole income, so tax it as that — a
+  // benefit-only month carries no jobbskatteavdrag.
+  const monthlyBenefit = approxMonthlyGross(payout.dailyRate, daysPerWeek);
+  const netPayout =
+    monthlyBenefit > 0
+      ? Math.round(
+          payout.amount * (monthlyNet({ benefit: monthlyBenefit }) / monthlyBenefit),
+        )
+      : 0;
   return (
     <section
       className={cn(
@@ -74,7 +85,7 @@ export function SoloSummary({
               {formatSek(payout.amount)}
             </div>
             <div className="text-muted-foreground text-xs">
-              ≈ {formatSek(netAfterTax(payout.amount))} efter skatt
+              ≈ {formatSek(netPayout)} efter skatt
             </div>
           </div>
 

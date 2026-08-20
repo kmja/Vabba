@@ -10,7 +10,7 @@ import type { GoalMode } from "@/lib/goal-seek";
 import type { PlanDeadlines } from "@/lib/calc";
 import type { LeaveInterval } from "@/lib/projection";
 import type { BirthDaysResult } from "@/lib/birth-days";
-import { netAfterTax } from "@/lib/rules";
+import { netOfExtra } from "@/lib/tax";
 import { formatDays, formatSek } from "@/lib/format";
 import { addDays, differenceInDays, toIsoDate } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
@@ -238,12 +238,15 @@ function Block({
 function BirthDaysBlock({
   period,
   result,
+  salary,
   colorIdx,
   open,
   onToggle,
 }: {
   period: Period;
   result: BirthDaysResult;
+  /** Their monthly salary — these days are taxed at its margin. */
+  salary: number;
   colorIdx: number;
   open: boolean;
   onToggle: () => void;
@@ -269,7 +272,8 @@ function BirthDaysBlock({
       <p className="text-muted-foreground mt-2 text-xs">
         Tillfällig föräldrapenning i samband med födseln — utöver de 480, så
         inga föräldrapenningdagar går åt. ≈{" "}
-        {formatSek(netAfterTax(result.total))} efter skatt. Tas ut inom 60 dagar
+        {formatSek(netOfExtra(result.total, { salary }))} efter skatt. Tas ut
+        inom 60 dagar
         efter hemkomsten.
         {result.sgiCapped
           ? " Beloppet är begränsat av taket för tillfällig föräldrapenning (7,5 prisbasbelopp)."
@@ -301,7 +305,7 @@ export function PeriodPager({
   /** Per-caregiver dials, so each block can drive its own stretch. */
   levers?: Partial<Record<"A" | "B", PeriodControls>>;
   /** The other parent's days around the birth — the first leave there is. */
-  birthDays?: { result: BirthDaysResult; name: string };
+  birthDays?: { result: BirthDaysResult; name: string; salary: number };
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut.
@@ -361,6 +365,7 @@ export function PeriodPager({
           <BirthDaysBlock
             period={birth}
             result={birthDays.result}
+            salary={birthDays.salary}
             colorIdx={Math.max(0, cgOrder.indexOf(birth.caregiver))}
             open={openIdx === BIRTH_IDX}
             onToggle={() =>

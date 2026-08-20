@@ -317,14 +317,10 @@ export const ABOVE_CAP_MONTHLY_INCOME = Math.ceil(MONEY.sgiAnnualCap / 12) + 1;
 
 export const TAX = {
   /**
-   * Försäkringskassan withholds a flat 30 % preliminary tax on parental benefit
-   * by default. Final tax depends on total income and municipality, so any net
-   * figure derived from this is a rough estimate.
+   * Försäkringskassan withholds a flat 30 % preliminary tax on parental
+   * benefit by default. That is what lands in the account each month; the
+   * final tax is settled at deklaration and is what `lib/tax.ts` models,
+   * per person and per income type.
    */
   defaultWithholdingRate: 0.3,
 } as const;
-
-/** Rough net amount after FK's default 30 % preliminary tax withholding. */
-export function netAfterTax(amount: number): number {
-  return Math.round(amount * (1 - TAX.defaultWithholdingRate));
-}
