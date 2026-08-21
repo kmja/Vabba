@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   IconAlertCircle,
   IconApple,
@@ -363,29 +363,35 @@ export function PeriodCard({
           </span>
         </div>
 
-        {/* Where it comes from: one column per source, net over gross. */}
+        {/* Where it comes from, one line each — the netto column reads down
+            to the total above it. */}
         <div
           data-income-sources
-          className="mt-3 flex flex-wrap items-start gap-x-3 gap-y-2 border-t pt-2.5"
+          className="mt-3 grid grid-cols-[1fr_auto_auto] items-baseline gap-x-3 gap-y-1 border-t pt-2.5"
         >
+          <span />
+          <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
+            netto
+          </span>
+          <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
+            brutto
+          </span>
           {sources.map((s) => (
-            // A fourth source (part-time pay) wraps rather than squeezing the
-            // labels down to ellipses.
-            <div key={s.key} className="min-w-22 flex-1">
-              <div className="text-muted-foreground truncate text-[11px]">
+            <Fragment key={s.key}>
+              <span className="text-muted-foreground min-w-0 truncate text-xs">
                 {s.label}
-              </div>
-              <div className="text-sm font-semibold tabular-nums">
-                ≈ {formatSek(s.net)}
-              </div>
-              <div className="text-muted-foreground text-[11px] tabular-nums">
-                {formatSek(s.gross)} brutto
-              </div>
-            </div>
+              </span>
+              <span className="text-right text-sm font-semibold tabular-nums">
+                {formatSek(s.net)}
+              </span>
+              <span className="text-muted-foreground text-right text-xs tabular-nums">
+                {formatSek(s.gross)}
+              </span>
+            </Fragment>
           ))}
         </div>
 
-        <div className="text-muted-foreground mt-2 text-xs tabular-nums">
+        <div className="text-muted-foreground mt-3 text-xs tabular-nums">
           <span className="text-foreground font-medium">{months}</span> ·{" "}
           {formatDays(row.days)} · {formatPace(row.daysPerWeek)} dagar/vecka
         </div>
