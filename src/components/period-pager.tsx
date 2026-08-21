@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { IconChevronDown } from "@tabler/icons-react";
+import { Fragment, useState, type ReactNode } from "react";
+import { IconChevronDown, IconInfoCircle } from "@tabler/icons-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +11,11 @@ import type { PlanDeadlines } from "@/lib/calc";
 import type { LeaveInterval } from "@/lib/projection";
 import type { BirthDaysResult } from "@/lib/birth-days";
 import { netOfExtra } from "@/lib/tax";
+import { SGI_PROTECTION } from "@/lib/rules";
 import { formatDays, formatSek } from "@/lib/format";
 import { addDays, differenceInDays, toIsoDate } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
-import { formatMonths } from "@/components/monthly-estimate";
+import { formatMonths, householdNetMonthly } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
 
 /** Callbacks that let a period's date edits drive the plan ("custom" mode). */
@@ -156,6 +157,39 @@ function rowForPeriod(base: MonthlyRow, p: Period): MonthlyRow {
 /** The birth-days block's slot in the accordion's single-open state. */
 const BIRTH_IDX = -1;
 
+/**
+ * A dated line between two blocks — where one stretch ends and the next
+ * begins. Carries the gap note when there is real waiting time between them
+ * (both working); says nothing extra when the next stretch picks up right
+ * away, or overlaps the one before it (the 10-dagar alongside the first
+ * caregiver's own leave).
+ */
+function DateMarker({
+  date,
+  gapDays,
+  atBirth,
+}: {
+  date: Date;
+  gapDays: number;
+  /** This is the very first marker, dated to the birth itself. */
+  atBirth: boolean;
+}) {
+  return (
+    <div data-period-marker className="flex items-center gap-2 px-0.5">
+      <span className="bg-border h-px flex-1" />
+      <span className="text-muted-foreground shrink-0 text-center text-[11px] leading-tight tabular-nums">
+        <span className="block">{formatDate(date)}</span>
+        {gapDays > 0 && (
+          <span data-gap-note className="block">
+            ≈ {gapDays} dagar {atBirth ? "efter födseln" : "då båda jobbar"}
+          </span>
+        )}
+      </span>
+      <span className="bg-border h-px flex-1" />
+    </div>
+  );
+}
+
 /** The shell every block shares: a header you can open, and a panel. */
 function Block({
   colorIdx,
@@ -253,12 +287,13 @@ function BirthDaysBlock({
   open: boolean;
   onToggle: () => void;
 }) {
+  const net = netOfExtra(result.total, { salary }, true, municipalRate);
   return (
     <Block
       colorIdx={colorIdx}
       title={`${period.caregiver} är hemma`}
       phase={period.phase}
-      subtitle={`${formatDate(period.startsAt)} – ${formatDate(period.endsAt)} · ${formatDays(result.days)}`}
+      subtitle={`≈ ${formatSek(net)} · ${formatDays(result.days)}`}
       open={open}
       onToggle={onToggle}
       panelId="period-panel-birth"
@@ -273,10 +308,8 @@ function BirthDaysBlock({
       </div>
       <p className="text-muted-foreground mt-2 text-xs">
         Tillfällig föräldrapenning i samband med födseln — utöver de 480, så
-        inga föräldrapenningdagar går åt. ≈{" "}
-        {formatSek(netOfExtra(result.total, { salary }, true, municipalRate))} efter skatt. Tas ut
-        inom 60 dagar
-        efter hemkomsten.
+        inga föräldrapenningdagar går åt. ≈ {formatSek(net)} efter skatt. Tas
+        ut inom 60 dagar efter hemkomsten.
         {result.sgiCapped
           ? " Beloppet är begränsat av taket för tillfällig föräldrapenning (7,5 prisbasbelopp)."
           : ""}
@@ -299,6 +332,8 @@ export function PeriodPager({
   editing,
   levers,
   municipalRate,
+  oneYear,
+  sgiLiftedNames,
   birthDays,
 }: {
   projection?: LeaveProjection;
@@ -316,6 +351,10 @@ export function PeriodPager({
   };
   /** The household's kommunalskatt — used for every net in a block. */
   municipalRate?: number;
+  /** The child's first birthday, where the SGI pace floor starts to bite. */
+  oneYear?: Date;
+  /** Caregivers whose pace that floor raised. */
+  sgiLiftedNames?: Set<string>;
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut.
@@ -372,43 +411,67 @@ export function PeriodPager({
 
       <div className="space-y-2">
         {birth && birthDays && (
-          <BirthDaysBlock
-            period={birth}
-            result={birthDays.result}
-            salary={birthDays.salary}
-            municipalRate={birthDays.municipalRate}
-            colorIdx={Math.max(0, cgOrder.indexOf(birth.caregiver))}
-            open={openIdx === BIRTH_IDX}
-            onToggle={() =>
-              setOpenIdx(openIdx === BIRTH_IDX ? null : BIRTH_IDX)
-            }
-          />
+          <>
+            <DateMarker date={birth.startsAt} gapDays={0} atBirth />
+            <BirthDaysBlock
+              period={birth}
+              result={birthDays.result}
+              salary={birthDays.salary}
+              municipalRate={birthDays.municipalRate}
+              colorIdx={Math.max(0, cgOrder.indexOf(birth.caregiver))}
+              open={openIdx === BIRTH_IDX}
+              onToggle={() =>
+                setOpenIdx(openIdx === BIRTH_IDX ? null : BIRTH_IDX)
+              }
+            />
+          </>
         )}
         {periods.map((p, i) => {
           const base = rows.find((r) => r.name === p.caregiver);
           const row = base ? rowForPeriod(base, p) : undefined;
+          const net = row ? householdNetMonthly(row, municipalRate) : null;
           const id = editing.idByName[p.caregiver];
           const mode: GoalMode = id ? editing.modeById[id] : "manual";
           const colorIdx = Math.max(0, cgOrder.indexOf(p.caregiver));
           const months = formatMonths(
             differenceInDays(p.startsAt, p.endsAt) / 30.4,
           );
-          const prev = periods[i - 1];
-          const gapBefore = prev
-            ? differenceInDays(prev.endsAt, p.startsAt)
-            : differenceInDays(deadlines.birth, p.startsAt);
+          // The stretch that begins at the first birthday is where the SGI
+          // floor lifts the pace — say so there, once, instead of listing it
+          // as something wrong with the plan.
+          const sgiStartsHere =
+            oneYear != null &&
+            (sgiLiftedNames?.has(p.caregiver) ?? false) &&
+            !p.firstOfCaregiver &&
+            Math.abs(differenceInDays(oneYear, p.startsAt)) <= 2;
+          // The marker just above this block: the boundary with whatever
+          // came before it — the birth block's end for the very first
+          // period (so overlapping the 10-dagar reads as no gap at all,
+          // rather than one measured from the birth itself).
+          const priorEnd =
+            i > 0 ? periods[i - 1].endsAt : (birth?.endsAt ?? deadlines.birth);
+          const gapBefore = differenceInDays(priorEnd, p.startsAt);
 
           return (
-            <Block
-              key={i}
-              colorIdx={colorIdx}
-              title={`${p.caregiver} är hemma`}
-              phase={p.phase}
-              subtitle={`${formatDate(p.startsAt)} – ${formatDate(p.endsAt)} · ${months}`}
-              open={openIdx === i}
-              onToggle={() => setOpenIdx(openIdx === i ? null : i)}
-              panelId={`period-panel-${i}`}
-            >
+            <Fragment key={i}>
+              <DateMarker
+                date={p.startsAt}
+                gapDays={gapBefore > 3 ? gapBefore : 0}
+                atBirth={i === 0 && !birth}
+              />
+              <Block
+                colorIdx={colorIdx}
+                title={`${p.caregiver} är hemma`}
+                phase={p.phase}
+                subtitle={
+                  net != null
+                    ? `≈ ${formatSek(net)}/mån · ${months}`
+                    : months
+                }
+                open={openIdx === i}
+                onToggle={() => setOpenIdx(openIdx === i ? null : i)}
+                panelId={`period-panel-${i}`}
+              >
               {/* Editable span — edits become goals ("custom" planning). */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -467,11 +530,14 @@ export function PeriodPager({
                 )}
               </div>
 
-              {gapBefore > 3 && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  Glapp före perioden: ≈ {Math.round(gapBefore)} dagar
-                  {prev ? " då båda jobbar" : " efter födseln"} — dagarna
-                  väntar.
+              {sgiStartsHere && (
+                <p className="text-muted-foreground mt-2 flex items-start gap-2 text-xs">
+                  <IconInfoCircle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    Från 1-årsdagen krävs minst{" "}
+                    {SGI_PROTECTION.minDaysPerWeekAfterAge1} uttagsdagar i
+                    veckan för att SGI:n ska skyddas, så takten är höjd här.
+                  </span>
                 </p>
               )}
 
@@ -503,7 +569,8 @@ export function PeriodPager({
                   />
                 </div>
               )}
-            </Block>
+              </Block>
+            </Fragment>
           );
         })}
       </div>

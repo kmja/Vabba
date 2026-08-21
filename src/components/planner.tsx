@@ -23,7 +23,7 @@ import {
   optimizeSolo,
   type PlanWarning,
 } from "@/lib/optimizer";
-import { lagstanivaDailyAmount, MONEY, SGI_PROTECTION } from "@/lib/rules";
+import { lagstanivaDailyAmount, MONEY } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
 import {
   addYears,
@@ -196,6 +196,12 @@ export function Planner() {
     form.firstCaregiver,
     form.saveDaysA,
     form.saveDaysB,
+    // The incomes decide the split the floor is measured against, so a floor
+    // worked out before the second caregiver was asked must not survive them.
+    plan.parents.A.grossMonthlyIncome,
+    plan.parents.B.grossMonthlyIncome,
+    plan.parents.A.incomeAboveCap,
+    plan.parents.B.incomeAboveCap,
   ].join("|");
 
   // A caregiver who asked to be home for a set time needs the days for it.
@@ -587,7 +593,6 @@ export function Planner() {
   const goalWarnings: PlanWarning[] = useMemo(() => {
     if (!planSolve || !deadlines) return [];
     const out: PlanWarning[] = [];
-    const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
     for (const o of planSolve.perCaregiver) {
       const isA = soloMode || o.name === nameA;
       const mode = isA ? goalModeA : goalModeB;
@@ -610,13 +615,9 @@ export function Planner() {
           message: `När ${o.name} är hemma klarar hushållet inte golvet på ${formatSek(floor)}/mån efter skatt ens i full takt.`,
         });
       }
-      if (o.sgiLifted) {
-        out.push({
-          level: "warning",
-          code: "sgiPaceEnforced",
-          message: `${o.name}s takt höjs till ${sgiMin} dagar/vecka efter barnets 1-årsdag för att SGI:n ska skyddas.`,
-        });
-      }
+      // The SGI floor is not a problem with the plan — it is what happens to
+      // almost everyone who is home past the first birthday. It belongs on
+      // the period where it takes effect, not in a list of things gone wrong.
     }
     if (planSolve.savedTotal > 96) {
       out.push({
@@ -629,6 +630,17 @@ export function Planner() {
   }, [planSolve, deadlines, soloMode, nameA, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB]);
 
   const warnings = [...baseWarnings, ...goalWarnings];
+
+  /** Caregivers whose pace the post-1-year SGI floor raised. */
+  const sgiLiftedNames = useMemo(
+    () =>
+      new Set(
+        (planSolve?.perCaregiver ?? [])
+          .filter((o) => o.sgiLifted)
+          .map((o) => o.name),
+      ),
+    [planSolve],
+  );
 
   /**
    * When each caregiver's own stretch begins, from the live solve. The wizard
@@ -984,6 +996,8 @@ export function Planner() {
         birthDaysName={birthDaysName}
         firstCaregiver={firstCaregiver}
         municipalRate={municipalRate}
+        oneYear={oneYear ?? undefined}
+        sgiLiftedNames={sgiLiftedNames}
         warnings={warnings}
         onEdit={(step = 1) => {
           window.scrollTo(0, 0);

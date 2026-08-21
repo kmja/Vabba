@@ -61,6 +61,8 @@ export function Results({
   birthDaysName,
   firstCaregiver,
   municipalRate,
+  oneYear,
+  sgiLiftedNames,
   warnings,
   onEdit,
   onReset,
@@ -105,6 +107,10 @@ export function Results({
   firstCaregiver: "A" | "B";
   /** The household's kommunalskatt, as a fraction — every net uses it. */
   municipalRate: number;
+  /** The child's first birthday — where the SGI pace floor starts to bite. */
+  oneYear?: Date;
+  /** Caregivers whose pace that floor raised. */
+  sgiLiftedNames: Set<string>;
   warnings: PlanWarning[];
   /** Back to the wizard, optionally straight to a caregiver's own step. */
   onEdit: (step?: number) => void;
@@ -220,6 +226,8 @@ export function Results({
           editing={periodEdit}
           levers={levers}
           municipalRate={municipalRate}
+          oneYear={oneYear}
+          sgiLiftedNames={sgiLiftedNames}
           birthDays={
             birthDays && birthDays.days > 0
               ? {

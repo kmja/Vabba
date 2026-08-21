@@ -521,7 +521,7 @@ describe("<Planner /> wizard", () => {
     ).toBe("true");
   });
 
-  it("flags a date goal the days can't reach and offers the reachable one", () => {
+  it("says nothing about a goal until the household is known", () => {
     const { container } = render(<Planner />);
     pickBirth(container, futureIso(30));
     next(); // → step 2
@@ -531,9 +531,26 @@ describe("<Planner /> wizard", () => {
     });
     openQuestion(container, "a", "goal");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
-    // The child's second birthday is far beyond what A's reserved days can
-    // stretch to.
     fireEvent.click(container.querySelector("#a-goal-preset-2ar")!);
+    // The other caregiver has not been asked yet. Their salary counts toward
+    // the household and their share decides the days, so any verdict here
+    // would be worked out from a salary of zero.
+    expect(screen.queryByText(/det fattas ungefär/)).toBeNull();
+    expect(screen.queryByText(/går inte att hålla/)).toBeNull();
+  });
+
+  it("flags a date goal the days can't reach and offers the reachable one", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { birth: futureIso(30) });
+    fireEvent.click(screen.getByRole("button", { name: /Bakåt/ })); // → step 2
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    // Three years is beyond what the whole pool covers, so no reshuffling of
+    // the days between them can reach it.
+    fireEvent.click(container.querySelector("#a-goal-date-custom")!);
+    fireEvent.change(container.querySelector("#a-goal-date")!, {
+      target: { value: futureIso(30 + 365 * 3) },
+    });
     // Said here, in the wizard — not saved up for the results page.
     expect(screen.getByText(/det fattas ungefär/)).toBeTruthy();
     // ...with the furthest reachable date as a one-tap fix.
@@ -590,6 +607,57 @@ describe("<Planner /> wizard", () => {
     // goal, rather than the plan reporting an impossible six months.
     expect(screen.queryByText(/det fattas ungefär/)).toBeNull();
     expect(screen.getAllByText(/Hemma i 6 månader/).length).toBeGreaterThan(0);
+  });
+
+  it("shows net income and duration in a collapsed period row, no dates", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container);
+    showPlan();
+    const headers = periodHeaders(container);
+    // The birth-days block: a lump sum, not a monthly rate.
+    expect(headers[0].textContent).toMatch(/≈ [\d\s]+kr · \d+ dagar/);
+    // A caregiver's own stretch: net per month, then the length — no
+    // start/end dates baked into the row itself.
+    expect(headers[1].textContent).toMatch(/≈ [\d\s]+kr\/mån · ≈ [\d,]+ mån/);
+    for (const h of headers) {
+      expect(h.textContent).not.toMatch(/\d{4}/); // no year → no date in the row
+    }
+  });
+
+  it("puts a dated marker between each period instead of inside it", () => {
+    const { container } = render(<Planner />);
+    // A birth still ahead, so the leave starts right on the birth date
+    // rather than being pulled forward to "today" by a past one.
+    fillToResults(container, { birth: futureIso(14) });
+    showPlan();
+    const markers = container.querySelectorAll("[data-period-marker]");
+    const headers = periodHeaders(container);
+    // One marker ahead of every block, none trailing the last.
+    expect(markers.length).toBe(headers.length);
+    // The birth-days block and A's own leave both start on the birth date —
+    // they overlap rather than chain — so no marker claims a waiting gap.
+    for (const m of markers) {
+      expect(m.querySelector("[data-gap-note]")).toBeNull();
+    }
+  });
+
+  it("notes a real gap between periods, only where the dates actually leave one", () => {
+    const { container } = render(<Planner />);
+    fillToResults(container, { birth: futureIso(14) });
+    showPlan();
+    // Open B's block and push its start out — a real gap where both work.
+    const headers = () => periodHeaders(container);
+    fireEvent.click(headers()[headers().length - 1]);
+    const startInput = container.querySelector<HTMLInputElement>(
+      'input[id^="period-start-"]:not([disabled])',
+    )!;
+    fireEvent.change(startInput, { target: { value: futureIso(400) } });
+    const markers = container.querySelectorAll("[data-period-marker]");
+    const notes = Array.from(markers)
+      .map((m) => m.querySelector("[data-gap-note]"))
+      .filter(Boolean);
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes[0]!.textContent).toMatch(/dagar/);
   });
 
   it("solves the longest leave within a household budget from the wizard", () => {

@@ -301,9 +301,6 @@ export function Wizard({
   const [kbInset, setKbInset] = useState(0);
   const seen = (qid: string) => visited.has(qid);
   /** Issues raised by a question the user has already been through. */
-  const issuesOn = (qid: string) =>
-    issues.filter((i) => i.questionId === qid && (seen(qid) || activeQ === qid));
-
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -483,6 +480,27 @@ export function Wizard({
       : current === 3 && !soloMode
         ? `${plan.parents[secondId].name?.trim() || `Vårdnadshavare ${secondId}`} tar över när ${plan.parents[firstId].name?.trim() || `Vårdnadshavare ${firstId}`} är klar.`
         : null;
+
+  /**
+   * Every goal is judged against the whole household — a budget floor counts
+   * the partner's salary, and a length depends on how the days split between
+   * the two of them. Neither can be said anything about before the other
+   * caregiver has been asked, so until then there is nothing to report,
+   * rather than a verdict worked out from a salary of zero.
+   */
+  const secondIncome = plan.parents[secondId];
+  const householdKnown =
+    soloMode ||
+    (secondIncome.incomeAboveCap ?? false) ||
+    secondIncome.grossMonthlyIncome > 0;
+
+  /** Issues raised by a question the user has already been through. */
+  const issuesOn = (qid: string) =>
+    householdKnown
+      ? issues.filter(
+          (i) => i.questionId === qid && (seen(qid) || activeQ === qid),
+        )
+      : [];
 
   // Short name for the scene's name tags (first name, or the letter badge).
   const sceneName = (id: ParentId) =>
