@@ -582,6 +582,42 @@ describe("<Planner /> wizard", () => {
     expect(bSix).not.toBe(aSix);
   });
 
+  it("scales föräldralön to the pace actually being drawn, not the manual lever", () => {
+    const { container } = render(<Planner />);
+    // A goal drives A's pace to a slow crawl (a low budget floor relative to
+    // B's high salary) — the manual "Justera planen" pace stays at its
+    // default of 7 the whole time, since a goal bypasses it entirely.
+    pickBirth(container, futureIso(30));
+    next(); // → step 2
+    openQuestion(container, "a", "income");
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "31000" },
+    });
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-budget")!);
+    next(); // → step 3
+    openQuestion(container, "b", "income");
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "63000" },
+    });
+    showPlan();
+    const headers = periodHeaders(container);
+    fireEvent.click(headers[1]); // A's own block
+    // At a slow pace the top-up is a small fraction of a week's worth — not
+    // the near-full amount a pace of 7 would imply. Read straight off the
+    // block's text: "Föräldralön<netto>kr<brutto>kr".
+    const blockText = headers[1].parentElement!.textContent ?? "";
+    const suppMatch = blockText.match(
+      /Föräldralön([\d\s]+)kr([\d\s]+)kr/,
+    );
+    expect(suppMatch).not.toBeNull();
+    const suppGross = Number(suppMatch![2].replace(/\s/g, ""));
+    // A full week's employer top-up on a 31 000 kr salary is on the order of
+    // several thousand kronor; at this crawl it should be a small fraction.
+    expect(suppGross).toBeGreaterThan(0);
+    expect(suppGross).toBeLessThan(1000);
+  });
+
   it("funds a set length even when the split would starve it", () => {
     const { container } = render(<Planner />);
     // A earns more, so "maximise household income" hands every transferable
@@ -616,9 +652,11 @@ describe("<Planner /> wizard", () => {
     const headers = periodHeaders(container);
     // The birth-days block: a lump sum, not a monthly rate.
     expect(headers[0].textContent).toMatch(/≈ [\d\s]+kr · \d+ dagar/);
-    // A caregiver's own stretch: net per month, then the length — no
-    // start/end dates baked into the row itself.
-    expect(headers[1].textContent).toMatch(/≈ [\d\s]+kr\/mån · ≈ [\d,]+ mån/);
+    // A caregiver's own stretch: net per month (headline), the length, and
+    // the pace — no start/end dates baked into the row itself.
+    expect(headers[1].textContent).toMatch(/≈ [\d\s]+kr\s*\/mån/);
+    expect(headers[1].textContent).toMatch(/≈ [\d,]+ mån/);
+    expect(headers[1].textContent).toMatch(/dagar\/vecka/);
     for (const h of headers) {
       expect(h.textContent).not.toMatch(/\d{4}/); // no year → no date in the row
     }
@@ -658,6 +696,45 @@ describe("<Planner /> wizard", () => {
       .filter(Boolean);
     expect(notes.length).toBeGreaterThan(0);
     expect(notes[0]!.textContent).toMatch(/dagar/);
+  });
+
+  it("merges the birth-days into the first caregiver's overlapping start", () => {
+    const { container } = render(<Planner />);
+    // Both start at the birth by default — the two sit on top of each other
+    // for the first 10 days rather than reading as unrelated events.
+    fillToResults(container, { birth: futureIso(14) });
+    showPlan();
+    const headers = periodHeaders(container);
+    // One combined block for the shared window, not two separate ones.
+    expect(headers[0].textContent).toContain("är hemma");
+    expect(headers[0].textContent).toContain("vid födseln");
+    expect(headers[0].textContent).toMatch(/10 dagar/);
+    // Only one marker for that whole window — at the birth — not a second
+    // one immediately after it for a "gap" of zero days.
+    const markers = container.querySelectorAll("[data-period-marker]");
+    expect(markers.length).toBe(headers.length);
+
+    // The combined figure sums two numbers in the SAME unit — the leave
+    // -taker's rate prorated to the 10-day window, not their bare monthly
+    // rate added to the other parent's 10-day total (which would silently
+    // overstate it several-fold).
+    fireEvent.click(headers[0]);
+    const sources = Array.from(
+      headers[0].parentElement!.querySelectorAll("[data-income-sources] span"),
+    )
+      .map((el) => el.textContent ?? "")
+      .filter((t) => /^\d[\d\s]*kr$/.test(t))
+      .map((t) => Number(t.replace(/\D/g, "")));
+    const headline = Number(
+      (headers[0].parentElement!.textContent!.match(/≈([\d\s]+)kr/)?.[1] ??
+        "0"
+      ).replace(/\s/g, ""),
+    );
+    // Every source figure in the combined block is at most the headline —
+    // a monthly rate slipping in unscaled would dwarf a 10-day total.
+    for (const n of sources) {
+      expect(n).toBeLessThanOrEqual(headline);
+    }
   });
 
   it("solves the longest leave within a household budget from the wizard", () => {
@@ -897,12 +974,8 @@ describe("<Planner /> wizard", () => {
       target: { value: "30000" },
     });
     showPlan();
-    // Carried-over days are fine print, behind the card's detail toggle.
-    fireEvent.click(
-      screen.getAllByRole("button", {
-        name: /Visa detaljer – Vårdnadshavare A/,
-      })[0],
-    );
+    // Carried-over days are fine print, behind the block's own chevron.
+    fireEvent.click(periodHeaders(container)[1]);
     expect(
       screen.getAllByText(/sparade från tidigare barn/).length,
     ).toBeGreaterThan(0);

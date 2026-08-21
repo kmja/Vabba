@@ -401,34 +401,6 @@ export function Planner() {
         : 0;
   const householdBaseA = soloMode ? 0 : salaryB; // B works while A is on leave
   const householdBaseB = soloMode ? 0 : salaryA;
-  const supplementA = useMemo(
-    () =>
-      (form.supplementA ?? true)
-        ? computeSupplement({
-            grossMonthlySalary: plan.parents.A.grossMonthlyIncome,
-            incomeAboveCap: aboveCapA,
-            pct: form.supplementPctA ?? 90,
-            months: form.supplementMonthsA ?? 6,
-            fkDailyRate: rateA,
-            pace: paceA,
-          })
-        : null,
-    [form.supplementA, form.supplementPctA, form.supplementMonthsA, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, paceA],
-  );
-  const supplementB = useMemo(
-    () =>
-      !soloMode && (form.supplementB ?? true)
-        ? computeSupplement({
-            grossMonthlySalary: plan.parents.B.grossMonthlyIncome,
-            incomeAboveCap: aboveCapB,
-            pct: form.supplementPctB ?? 90,
-            months: form.supplementMonthsB ?? 6,
-            fkDailyRate: rateB,
-            pace: paceB,
-          })
-        : null,
-    [soloMode, form.supplementB, form.supplementPctB, form.supplementMonthsB, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, paceB],
-  );
 
   // "10-dagar vid barns födelse" — tillfällig FP on top of the 480.
   // The days belong to the parent who did not give birth — in this app's
@@ -448,14 +420,6 @@ export function Planner() {
   }, [soloMode, form.birthDaysEnabled, form.birthDaysCount, birthDaysCaregiver, plan.parents, plan.childrenInBirth]);
   const birthDaysName =
     birthDaysCaregiver === "A" ? nameA : nameB;
-
-  // Employer top-up at full-time pace, so the levers can fold it into the numbers.
-  const bonusFullA = supplementA
-    ? Math.round(supplementA.total / (form.supplementMonthsA ?? 6))
-    : 0;
-  const bonusFullB = supplementB
-    ? Math.round(supplementB.total / (form.supplementMonthsB ?? 6))
-    : 0;
 
   // Each caregiver's stretch, solved from their own goal (manual pace, a
   // target date, or a household budget floor), chained in leave order.
@@ -535,6 +499,62 @@ export function Planner() {
     }
     return solvePlan(deadlines.birth, start, specs, municipalRate);
   }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate, form.goalMonthsA, form.goalMonthsB]);
+
+  /**
+   * The pace föräldralön is actually paid at: how much of the week this
+   * caregiver draws leave for right now, at the start of their stretch.
+   * `paceA`/`paceB` are the manual "Justera planen" lever — meaningless once
+   * a goal (a date, a budget) is driving the pace instead, which is most of
+   * the time. Reading it from the solve keeps the two honest: a caregiver
+   * home 0,5 dagar/vecka gets a top-up scaled to 0,5 dagar/vecka, not one
+   * sized for a full week they are not taking.
+   */
+  const solvedPaceA =
+    planSolve?.perCaregiver.find((o) => o.name === nameA)?.paces.phase1 ??
+    paceA;
+  const solvedPaceB =
+    planSolve?.perCaregiver.find((o) => o.name === nameB)?.paces.phase1 ??
+    paceB;
+
+  const supplementA = useMemo(
+    () =>
+      (form.supplementA ?? true)
+        ? computeSupplement({
+            grossMonthlySalary: plan.parents.A.grossMonthlyIncome,
+            incomeAboveCap: aboveCapA,
+            pct: form.supplementPctA ?? 90,
+            months: form.supplementMonthsA ?? 6,
+            fkDailyRate: rateA,
+            pace: solvedPaceA,
+          })
+        : null,
+    [form.supplementA, form.supplementPctA, form.supplementMonthsA, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, solvedPaceA],
+  );
+  const supplementB = useMemo(
+    () =>
+      !soloMode && (form.supplementB ?? true)
+        ? computeSupplement({
+            grossMonthlySalary: plan.parents.B.grossMonthlyIncome,
+            incomeAboveCap: aboveCapB,
+            pct: form.supplementPctB ?? 90,
+            months: form.supplementMonthsB ?? 6,
+            fkDailyRate: rateB,
+            pace: solvedPaceB,
+          })
+        : null,
+    [soloMode, form.supplementB, form.supplementPctB, form.supplementMonthsB, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, solvedPaceB],
+  );
+
+  // Employer top-up at full-time pace, so the levers can fold it into the
+  // numbers. `.total` is the same regardless of which pace computed it (the
+  // months are what's fixed), so this is stable however supplementA/B above
+  // are derived.
+  const bonusFullA = supplementA
+    ? Math.round(supplementA.total / (form.supplementMonthsA ?? 6))
+    : 0;
+  const bonusFullB = supplementB
+    ? Math.round(supplementB.total / (form.supplementMonthsB ?? 6))
+    : 0;
 
   /**
    * Close the loop on the floor above: a stated goal that the allocation

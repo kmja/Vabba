@@ -38,6 +38,7 @@ import {
 } from "@tabler/icons-react";
 
 import {
+  type IncomeSource,
   type MonthlyRow,
   formatMonths,
   householdMonthly,
@@ -294,6 +295,42 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
 }
 
 /**
+ * Where the money in a stretch comes from, one row per source: label, netto
+ * (bold, what is actually kept), brutto (small, muted). The netto column is
+ * right-aligned and tabular so it reads straight down to the total it sums
+ * to. Shared between the plain PeriodCard and the period pager's own blocks.
+ */
+export function IncomeBreakdownTable({ sources }: { sources: IncomeSource[] }) {
+  return (
+    <div
+      data-income-sources
+      className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-3 gap-y-1"
+    >
+      <span />
+      <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
+        netto
+      </span>
+      <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
+        brutto
+      </span>
+      {sources.map((s) => (
+        <Fragment key={s.key}>
+          <span className="text-muted-foreground min-w-0 truncate text-xs">
+            {s.label}
+          </span>
+          <span className="text-right text-sm font-semibold tabular-nums">
+            {formatSek(s.net)}
+          </span>
+          <span className="text-muted-foreground text-right text-xs tabular-nums">
+            {formatSek(s.gross)}
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+/**
  * The detail for one caregiver's leave period. Collapsed: after-tax household
  * income, duration, and any conditional notes. Expanded (click chevron): fine
  * print — gross amounts, per-day rate, pace. Shared with the period pager.
@@ -363,32 +400,10 @@ export function PeriodCard({
           </span>
         </div>
 
-        {/* Where it comes from, one line each — the netto column reads down
-            to the total above it. */}
-        <div
-          data-income-sources
-          className="mt-3 grid grid-cols-[1fr_auto_auto] items-baseline gap-x-3 gap-y-1 border-t pt-2.5"
-        >
-          <span />
-          <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
-            netto
-          </span>
-          <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
-            brutto
-          </span>
-          {sources.map((s) => (
-            <Fragment key={s.key}>
-              <span className="text-muted-foreground min-w-0 truncate text-xs">
-                {s.label}
-              </span>
-              <span className="text-right text-sm font-semibold tabular-nums">
-                {formatSek(s.net)}
-              </span>
-              <span className="text-muted-foreground text-right text-xs tabular-nums">
-                {formatSek(s.gross)}
-              </span>
-            </Fragment>
-          ))}
+        {/* Where it comes from — the netto column reads down to the total
+            above it. */}
+        <div className="mt-3 border-t pt-2.5">
+          <IncomeBreakdownTable sources={sources} />
         </div>
 
         <div className="text-muted-foreground mt-3 text-xs tabular-nums">

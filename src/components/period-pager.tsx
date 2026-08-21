@@ -3,19 +3,29 @@ import { IconChevronDown, IconInfoCircle } from "@tabler/icons-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CG_BAR, PeriodCard, type LeaveProjection } from "@/components/timeline";
-import type { MonthlyRow } from "@/components/monthly-estimate";
+import {
+  CG_BAR,
+  IncomeBreakdownTable,
+  PeriodCard,
+  type LeaveProjection,
+} from "@/components/timeline";
+import {
+  formatMonths,
+  householdMonthly,
+  householdNetMonthly,
+  incomeSources,
+  type IncomeSource,
+  type MonthlyRow,
+} from "@/components/monthly-estimate";
 import { PeriodLevers, type PeriodControls } from "@/components/leave-levers";
 import type { GoalMode } from "@/lib/goal-seek";
 import type { PlanDeadlines } from "@/lib/calc";
 import type { LeaveInterval } from "@/lib/projection";
 import type { BirthDaysResult } from "@/lib/birth-days";
 import { netOfExtra } from "@/lib/tax";
-import { SGI_PROTECTION } from "@/lib/rules";
-import { formatDays, formatSek } from "@/lib/format";
+import { MONEY, SGI_PROTECTION } from "@/lib/rules";
+import { formatDate, formatDays, formatPace, formatSek } from "@/lib/format";
 import { addDays, differenceInDays, toIsoDate } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
-import { formatMonths, householdNetMonthly } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
 
 /** Callbacks that let a period's date edits drive the plan ("custom" mode). */
@@ -44,6 +54,15 @@ interface Period {
   lastOfCaregiver: boolean;
   /** When their whole run began — föräldralön is counted from there. */
   caregiverStart: Date;
+  /**
+   * This is `firstOfCaregiver`'s block, but its displayed start has been
+   * cropped past the true one — the true start is inside a combined block
+   * shown earlier. Distinct from `firstOfCaregiver` on purpose: the
+   * whole-stretch toggles (part-time, byt takt vid 1 år) still belong here,
+   * but the editable start date and the "first block" facts (grundnivå,
+   * extra days) do not — those are attributed to the combined block instead.
+   */
+  truncatedStart?: boolean;
 }
 
 function paceText(pace: number): string {
@@ -131,6 +150,14 @@ function rowForPeriod(base: MonthlyRow, p: Period): MonthlyRow {
         ) * 10,
       ) / 10
     : 0;
+  // Föräldralön scales with how much of the week is actually spent on leave.
+  // base.supplement.monthly was sized for the caregiver's first-phase pace;
+  // rescale it for blocks that draw at a different one (a pace change inside
+  // the föräldralön window, or the lägstanivå tier, pays no top-up at all).
+  const suppMonthly =
+    supp && basePace > 0 && seg.tier !== "lagsta"
+      ? Math.round((supp.monthly * seg.pace) / basePace)
+      : 0;
   return {
     ...base,
     daysPerWeek: seg.pace,
@@ -144,13 +171,117 @@ function rowForPeriod(base: MonthlyRow, p: Period): MonthlyRow {
     // next block.
     secondPhase: undefined,
     supplement:
-      supp && suppMonths > 0.1
-        ? { ...supp, months: suppMonths, total: supp.monthly * suppMonths }
+      supp && suppMonths > 0.1 && suppMonthly > 0
+        ? { ...supp, monthly: suppMonthly, months: suppMonths, total: suppMonthly * suppMonths }
         : undefined,
     // Facts about the whole stretch belong to one end of it.
-    grundnivaFirstDays: p.firstOfCaregiver ? base.grundnivaFirstDays : undefined,
-    extraDays: p.firstOfCaregiver ? base.extraDays : undefined,
+    grundnivaFirstDays:
+      p.firstOfCaregiver && !p.truncatedStart ? base.grundnivaFirstDays : undefined,
+    extraDays: p.firstOfCaregiver && !p.truncatedStart ? base.extraDays : undefined,
     savedDays: p.lastOfCaregiver ? base.savedDays : undefined,
+  };
+}
+
+/** One segment, cut down to `[from, to)`; null if it doesn't reach that far. */
+function clipSegment(
+  seg: LeaveInterval,
+  from: Date,
+  to: Date,
+): LeaveInterval | null {
+  const start = seg.startsAt.getTime() > from.getTime() ? seg.startsAt : from;
+  const end = seg.endsAt.getTime() < to.getTime() ? seg.endsAt : to;
+  return start.getTime() < end.getTime() ? { ...seg, startsAt: start, endsAt: end } : null;
+}
+
+/**
+ * The 10-dagar and a caregiver's own leave both start at the birth, but they
+ * are not the same stretch — one is tillfällig-FP for the other parent, the
+ * other draws down the 480. Rendered as two overlapping blocks they read as
+ * two things happening at once with no relation, which is confusing at the
+ * exact moment two incomes actually matter most. Where they overlap, this
+ * builds ONE combined view for that shared window: both incomes together,
+ * neither one carrying the other as a "salary" line (nobody is earning a
+ * salary those days).
+ */
+function overlapWindow(
+  birth: Period,
+  first: Period,
+  base: MonthlyRow | undefined,
+  birthDays: { result: BirthDaysResult; name: string; salary: number },
+  municipalRate: number | undefined,
+): {
+  endsAt: Date;
+  caregiver1: string;
+  caregiver2: string;
+  pace2: string;
+  sources: IncomeSource[];
+  net: number;
+  grundnivaFirstDays?: number;
+  extraDays?: number;
+} | null {
+  if (birth.caregiver === first.caregiver) return null;
+  if (birth.startsAt.getTime() !== first.startsAt.getTime()) return null;
+  if (!base) return null;
+  const overlapEnd =
+    birth.endsAt.getTime() < first.endsAt.getTime() ? birth.endsAt : first.endsAt;
+  if (overlapEnd.getTime() <= birth.startsAt.getTime()) return null;
+
+  const slice: Period = {
+    ...first,
+    startsAt: birth.startsAt,
+    endsAt: overlapEnd,
+    segments: first.segments
+      .map((s) => clipSegment(s, birth.startsAt, overlapEnd))
+      .filter((s): s is LeaveInterval => s !== null),
+  };
+  if (slice.segments.length === 0) return null;
+  const sliceRow = rowForPeriod(base, slice);
+  // Kalle isn't earning his salary the days he is on birth-days leave —
+  // don't carry it into this window as if he were at work.
+  const monthlyOwnSources = incomeSources(
+    { ...sliceRow, householdBase: 0, partnerWorking: undefined },
+    municipalRate,
+  );
+  // incomeSources() reports a MONTHLY rate — the same rate this caregiver's
+  // continuing block reports. Kalle's birth-days figure, by contrast, is
+  // already the exact total for these `windowDays` — a lump sum, not a
+  // rate. Scaling Niki's rate down to the same window before adding them is
+  // what makes the total mean anything; summing a monthly rate with a
+  // 10-day total would silently overstate her side several-fold.
+  const windowDays = differenceInDays(birth.startsAt, overlapEnd);
+  const ratio = windowDays / 30.4;
+  const ownSources = monthlyOwnSources.map((s) => ({
+    ...s,
+    net: Math.round(s.net * ratio),
+    gross: Math.round(s.gross * ratio),
+  }));
+  const birthNet = netOfExtra(
+    birthDays.result.total,
+    { salary: birthDays.salary },
+    true,
+    municipalRate,
+  );
+  return {
+    endsAt: overlapEnd,
+    caregiver1: birth.caregiver,
+    caregiver2: first.caregiver,
+    pace2: `${formatPace(slice.segments[0].pace)} dagar/vecka`,
+    sources: [
+      ...ownSources,
+      {
+        key: "birthdays",
+        label: `${birth.caregiver} vid födseln`,
+        net: birthNet,
+        gross: birthDays.result.total,
+      },
+    ],
+    net: ownSources.reduce((sum, s) => sum + s.net, 0) + birthNet,
+    // The true start of the caregiver's stretch is inside this window, so
+    // whatever applies to that start belongs here, not on the continuing
+    // block (which would otherwise repeat — or the note would go missing
+    // if neither block claimed it).
+    grundnivaFirstDays: base.grundnivaFirstDays,
+    extraDays: base.extraDays,
   };
 }
 
@@ -190,21 +321,34 @@ function DateMarker({
   );
 }
 
-/** The shell every block shares: a header you can open, and a panel. */
+/**
+ * The shell every block shares: a header you can open, and a panel.
+ *
+ * `subtitle` and `headerRight` are always visible — the header's own text.
+ * `alwaysVisible` is extra content still shown before the fold (the income
+ * breakdown, for a period block); `children` is what the chevron reveals.
+ */
 function Block({
   colorIdx,
+  colorIdx2,
   title,
   phase,
   subtitle,
+  headerRight,
+  alwaysVisible,
   open,
   onToggle,
   panelId,
   children,
 }: {
   colorIdx: number;
+  /** A second dot, for a block where two caregivers are both home. */
+  colorIdx2?: number;
   title: string;
   phase: string | null;
-  subtitle: string;
+  subtitle: ReactNode;
+  headerRight?: ReactNode;
+  alwaysVisible?: ReactNode;
   open: boolean;
   onToggle: () => void;
   panelId: string;
@@ -223,22 +367,35 @@ function Block({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={onToggle}
-        className="active:bg-secondary/40 flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left"
+        className="active:bg-secondary/40 flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left"
       >
-        <span
-          className={cn(
-            "size-2.5 shrink-0 rounded-sm",
-            CG_BAR[colorIdx % CG_BAR.length],
-          )}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
-            {title}
-            {phase && (
-              <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
-                {phase}
-              </span>
+        <span className="mt-1 flex shrink-0 gap-0.5">
+          <span
+            className={cn(
+              "size-2.5 rounded-sm",
+              CG_BAR[colorIdx % CG_BAR.length],
             )}
+          />
+          {colorIdx2 != null && (
+            <span
+              className={cn(
+                "size-2.5 rounded-sm",
+                CG_BAR[colorIdx2 % CG_BAR.length],
+              )}
+            />
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
+              {title}
+              {phase && (
+                <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
+                  {phase}
+                </span>
+              )}
+            </span>
+            {headerRight}
           </span>
           <span className="text-muted-foreground mt-0.5 block text-xs tabular-nums">
             {subtitle}
@@ -246,11 +403,13 @@ function Block({
         </span>
         <IconChevronDown
           className={cn(
-            "text-muted-foreground size-4 shrink-0 transition-transform duration-300",
+            "text-muted-foreground mt-1 size-4 shrink-0 transition-transform duration-300",
             open && "rotate-180",
           )}
         />
       </button>
+
+      {alwaysVisible && <div className="px-4 pb-3">{alwaysVisible}</div>}
 
       {/* Animated height: 0fr ↔ 1fr. The content stays mounted, and `inert`
           keeps a shut panel out of focus order. */}
@@ -395,6 +554,32 @@ export function PeriodPager({
       }
     : null;
 
+  // Where the 10-dagar overlaps the first caregiver's own leave (the usual
+  // case — both start at the birth), fold the two into one block for that
+  // shared window instead of two blocks that appear to happen side by side
+  // with no relation.
+  const overlap =
+    birth && birthDays
+      ? overlapWindow(
+          birth,
+          periods[0],
+          rows.find((r) => r.name === periods[0].caregiver),
+          birthDays,
+          municipalRate,
+        )
+      : null;
+  // The first caregiver's block, truncated past the merged window — its true
+  // start is inside the combined block above, so this one no longer owns the
+  // "first" facts (grundnivå, extra days) or an editable start date. It is
+  // still their first block for the whole-stretch toggles (part-time, byt
+  // takt vid 1 år), so `firstOfCaregiver` itself stays true.
+  const displayPeriods = overlap
+    ? [
+        { ...periods[0], startsAt: overlap.endsAt, truncatedStart: true },
+        ...periods.slice(1),
+      ]
+    : periods;
+
   const total = formatMonths(
     differenceInDays(periods[0].startsAt, periods[periods.length - 1].endsAt) /
       30.4,
@@ -410,7 +595,67 @@ export function PeriodPager({
       </div>
 
       <div className="space-y-2">
-        {birth && birthDays && (
+        {birth && birthDays && overlap && (
+          <>
+            <DateMarker date={birth.startsAt} gapDays={0} atBirth />
+            <Block
+              colorIdx={Math.max(0, cgOrder.indexOf(overlap.caregiver1))}
+              colorIdx2={Math.max(0, cgOrder.indexOf(overlap.caregiver2))}
+              title={`${overlap.caregiver1} & ${overlap.caregiver2} är hemma`}
+              phase="vid födseln"
+              subtitle={
+                <>
+                  <span className="block">
+                    {overlap.caregiver1} vid födseln · {overlap.caregiver2}{" "}
+                    {overlap.pace2}
+                  </span>
+                  <span className="block">
+                    {formatDays(birthDays.result.days)}
+                  </span>
+                </>
+              }
+              headerRight={
+                <span className="text-foreground shrink-0 text-base font-bold tabular-nums">
+                  ≈ {formatSek(overlap.net)}
+                </span>
+              }
+              alwaysVisible={
+                <div className="border-t pt-2.5">
+                  <IncomeBreakdownTable sources={overlap.sources} />
+                </div>
+              }
+              open={openIdx === BIRTH_IDX}
+              onToggle={() =>
+                setOpenIdx(openIdx === BIRTH_IDX ? null : BIRTH_IDX)
+              }
+              panelId="period-panel-birth"
+            >
+              <p className="text-muted-foreground text-xs">
+                {overlap.caregiver1}s dagar är tillfällig föräldrapenning,
+                utöver de 480 — bara {overlap.caregiver2}s sida räknas av
+                potten. ≈ {formatSek(birthDays.result.total)} av det ovan är{" "}
+                {overlap.caregiver1}s, tas ut inom 60 dagar efter
+                hemkomsten.
+                {birthDays.result.sgiCapped
+                  ? " Begränsat av taket för tillfällig föräldrapenning (7,5 prisbasbelopp)."
+                  : ""}
+              </p>
+              {overlap.grundnivaFirstDays ? (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  Första {formatDays(overlap.grundnivaFirstDays)} på
+                  grundnivå ({formatSek(MONEY.grundnivaPerDay)}/dag)
+                </p>
+              ) : null}
+              {overlap.extraDays ? (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  inkl. {formatDays(overlap.extraDays)} sparade från tidigare
+                  barn
+                </p>
+              ) : null}
+            </Block>
+          </>
+        )}
+        {birth && birthDays && !overlap && (
           <>
             <DateMarker date={birth.startsAt} gapDays={0} atBirth />
             <BirthDaysBlock
@@ -426,16 +671,20 @@ export function PeriodPager({
             />
           </>
         )}
-        {periods.map((p, i) => {
+        {displayPeriods.map((p, i) => {
           const base = rows.find((r) => r.name === p.caregiver);
           const row = base ? rowForPeriod(base, p) : undefined;
           const net = row ? householdNetMonthly(row, municipalRate) : null;
+          const sources = row ? incomeSources(row, municipalRate) : [];
           const id = editing.idByName[p.caregiver];
           const mode: GoalMode = id ? editing.modeById[id] : "manual";
           const colorIdx = Math.max(0, cgOrder.indexOf(p.caregiver));
           const months = formatMonths(
             differenceInDays(p.startsAt, p.endsAt) / 30.4,
           );
+          const paceText = `${formatPace(row?.daysPerWeek ?? p.segments[0]?.pace ?? 0)} dagar/vecka`;
+          const pace =
+            p.phase === "lägstanivå" ? `lägstanivå · ${paceText}` : paceText;
           // The stretch that begins at the first birthday is where the SGI
           // floor lifts the pace — say so there, once, instead of listing it
           // as something wrong with the plan.
@@ -447,9 +696,13 @@ export function PeriodPager({
           // The marker just above this block: the boundary with whatever
           // came before it — the birth block's end for the very first
           // period (so overlapping the 10-dagar reads as no gap at all,
-          // rather than one measured from the birth itself).
+          // rather than one measured from the birth itself). When the two
+          // were merged into one combined block above, that block's own end
+          // IS this boundary, and the two are contiguous by construction.
           const priorEnd =
-            i > 0 ? periods[i - 1].endsAt : (birth?.endsAt ?? deadlines.birth);
+            i > 0
+              ? displayPeriods[i - 1].endsAt
+              : (overlap?.endsAt ?? birth?.endsAt ?? deadlines.birth);
           const gapBefore = differenceInDays(priorEnd, p.startsAt);
 
           return (
@@ -462,11 +715,29 @@ export function PeriodPager({
               <Block
                 colorIdx={colorIdx}
                 title={`${p.caregiver} är hemma`}
-                phase={p.phase}
+                phase={row?.goalLabel ?? null}
                 subtitle={
-                  net != null
-                    ? `≈ ${formatSek(net)}/mån · ${months}`
-                    : months
+                  <>
+                    <span className="block">{months}</span>
+                    <span className="block">{pace}</span>
+                  </>
+                }
+                headerRight={
+                  net != null ? (
+                    <span className="text-foreground shrink-0 text-base font-bold tabular-nums">
+                      ≈ {formatSek(net)}
+                      <span className="text-muted-foreground text-xs font-normal">
+                        /mån
+                      </span>
+                    </span>
+                  ) : undefined
+                }
+                alwaysVisible={
+                  sources.length > 0 ? (
+                    <div className="border-t pt-2.5">
+                      <IncomeBreakdownTable sources={sources} />
+                    </div>
+                  ) : undefined
                 }
                 open={openIdx === i}
                 onToggle={() => setOpenIdx(openIdx === i ? null : i)}
@@ -482,9 +753,12 @@ export function PeriodPager({
                     id={`period-start-${i}`}
                     type="date"
                     value={toIsoDate(p.startsAt)}
-                    // A later block starts where the previous one ended — only
-                    // the start of the whole stretch can move.
-                    disabled={!p.firstOfCaregiver}
+                    // A later block starts where the previous one ended —
+                    // only the start of the whole stretch can move. A
+                    // truncated first block's TRUE start is inside the
+                    // combined block above it, so it can't move from here
+                    // either.
+                    disabled={!p.firstOfCaregiver || p.truncatedStart}
                     onChange={(e) =>
                       id &&
                       e.target.value &&
@@ -519,7 +793,10 @@ export function PeriodPager({
                     Släpp slutdatumet (automatisk längd)
                   </button>
                 )}
-                {id && p.firstOfCaregiver && editing.hasStartOverride[id] && (
+                {id &&
+                  p.firstOfCaregiver &&
+                  !p.truncatedStart &&
+                  editing.hasStartOverride[id] && (
                   <button
                     type="button"
                     onClick={() => editing.onStartDate(id, null)}
@@ -541,14 +818,39 @@ export function PeriodPager({
                 </p>
               )}
 
-              {/* The economy of this period. */}
+              {/* The fine print behind the headline numbers above. */}
               {row && (
-                <div className="mt-3">
-                  <PeriodCard
-                    row={row}
-                    colorIdx={colorIdx}
-                    municipalRate={municipalRate}
-                  />
+                <div className="text-muted-foreground mt-3 space-y-0.5 text-xs">
+                  <div className="tabular-nums">
+                    Hushåll brutto ≈ {formatSek(householdMonthly(row))}/mån ·{" "}
+                    {formatSek(row.dailyRate)}/dag föräldrapenning ·{" "}
+                    {formatDays(row.days)}
+                  </div>
+                  {row.supplement && (
+                    <div>
+                      Föräldralön i ca{" "}
+                      {String(row.supplement.months).replace(".", ",")} mån
+                      {row.aboveCap ? " · täcker även lön över taket" : ""}
+                    </div>
+                  )}
+                  {row.grundnivaFirstDays ? (
+                    <div>
+                      Första {formatDays(row.grundnivaFirstDays)} på grundnivå
+                      ({formatSek(MONEY.grundnivaPerDay)}/dag)
+                    </div>
+                  ) : null}
+                  {row.extraDays ? (
+                    <div>
+                      inkl. {formatDays(row.extraDays)} sparade från tidigare
+                      barn
+                    </div>
+                  ) : null}
+                  {row.savedDays ? (
+                    <div>
+                      sparar {formatDays(row.savedDays)} till senare
+                      (klämdagar, lov …)
+                    </div>
+                  ) : null}
                 </div>
               )}
 
