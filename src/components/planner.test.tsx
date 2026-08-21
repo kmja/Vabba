@@ -565,6 +565,33 @@ describe("<Planner /> wizard", () => {
     expect(bSix).not.toBe(aSix);
   });
 
+  it("funds a set length even when the split would starve it", () => {
+    const { container } = render(<Planner />);
+    // A earns more, so "maximise household income" hands every transferable
+    // day to B and leaves A only their 90 reserved.
+    pickBirth(container, futureIso(30));
+    next(); // → step 2 (A, the higher earner, home first)
+    openQuestion(container, "a", "income");
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "63000" },
+    });
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-budget")!); // open-ended
+    next(); // → step 3
+    openQuestion(container, "b", "income");
+    fireEvent.change(container.querySelector("#b-income")!, {
+      target: { value: "31000" },
+    });
+    openQuestion(container, "b", "goal");
+    fireEvent.click(container.querySelector("#b-goal-untilDate")!);
+    fireEvent.click(container.querySelector("#b-goal-preset-6man")!);
+    showPlan();
+    // The stated length wins: the days it needs come off the open-ended
+    // goal, rather than the plan reporting an impossible six months.
+    expect(screen.queryByText(/det fattas ungefär/)).toBeNull();
+    expect(screen.getAllByText(/Hemma i 6 månader/).length).toBeGreaterThan(0);
+  });
+
   it("solves the longest leave within a household budget from the wizard", () => {
     const { container } = render(<Planner />);
     pickBirth(container, "2025-01-15");

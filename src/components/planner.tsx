@@ -184,6 +184,30 @@ export function Planner() {
     () => (deadlines ? addYears(deadlines.birth, 1) : null),
     [deadlines],
   );
+  // Which goals this floor belongs to. Change any of them and the old floor
+  // is dropped rather than over-allocating against a target nobody set.
+  const goalKey = [
+    form.goalModeA,
+    form.goalModeB,
+    form.goalDateA,
+    form.goalDateB,
+    form.goalMonthsA,
+    form.goalMonthsB,
+    form.firstCaregiver,
+    form.saveDaysA,
+    form.saveDaysB,
+  ].join("|");
+
+  // A caregiver who asked to be home for a set time needs the days for it.
+  // The split heuristic doesn't know that, so it is told: solve, see who
+  // falls short, raise their floor by the shortfall, solve again. Held in
+  // state because the shortfall only becomes visible after a solve.
+  const [dayFloor, setDayFloor] = useState<{
+    /** The goals this floor was derived for; a stale one is ignored. */
+    key: string;
+    min: Partial<Record<"A" | "B", number>>;
+    rounds: number;
+  }>({ key: "", min: {}, rounds: 0 });
   const twoParent = useMemo(
     () =>
       valid && asOf && !soloMode
@@ -193,9 +217,10 @@ export function Planner() {
             doubleDays,
             customSplitA,
             includeLagsta,
+            minSjukpenning: dayFloor.key === goalKey ? dayFloor.min : {},
           })
         : null,
-    [effectivePlan, valid, asOf, objective, soloMode, doubleDays, customSplitA, includeLagsta],
+    [effectivePlan, valid, asOf, objective, soloMode, doubleDays, customSplitA, includeLagsta, dayFloor, goalKey],
   );
   const solo = useMemo(
     () =>
@@ -462,6 +487,10 @@ export function Planner() {
             }
           : null,
         targetDate: mode === "untilDate" ? (isA ? goalTargetA : goalTargetB) : null,
+        targetMonths:
+          mode === "untilDate"
+            ? (isA ? form.goalMonthsA : form.goalMonthsB) ?? null
+            : null,
         budgetFloor: isA ? goalBudgetA : goalBudgetB,
         saveDays: isA ? saveDaysA : saveDaysB,
         startAt: isA ? periodStartA : periodStartB,
@@ -499,7 +528,51 @@ export function Planner() {
       return null;
     }
     return solvePlan(deadlines.birth, start, specs, municipalRate);
-  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate]);
+  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate, form.goalMonthsA, form.goalMonthsB]);
+
+  /**
+   * Close the loop on the floor above: a stated goal that the allocation
+   * cannot cover reports its shortfall, which becomes that caregiver's floor
+   * for the next solve. The days come off whoever has an open-ended goal —
+   * they simply end up home for less of the calendar.
+   *
+   * Bounded: the floor only ever rises, and four rounds is plenty to converge
+   * (usually one). Past that the days genuinely are not there, and the wizard
+   * says so rather than the plan silently drifting.
+   */
+  useEffect(() => {
+    if (!planSolve || !twoParent) return;
+    const current = dayFloor.key === goalKey ? dayFloor : { min: {}, rounds: 0 };
+    if (current.rounds >= 4) return;
+    const order: ("A" | "B")[] =
+      firstCaregiver === "B" ? ["B", "A"] : ["A", "B"];
+    const next: Partial<Record<"A" | "B", number>> = { ...current.min };
+    let raised = false;
+    planSolve.perCaregiver.forEach((o, i) => {
+      const id = order[i];
+      if (!id) return;
+      const mode = id === "A" ? goalModeA : goalModeB;
+      if (mode !== "untilDate" || o.targetMet || o.shortfallDays <= 0) return;
+      const want =
+        twoParent.recommended.allocation[id].sjukpenning +
+        Math.ceil(o.shortfallDays);
+      if ((next[id] ?? 0) < want) {
+        next[id] = want;
+        raised = true;
+      }
+    });
+    if (!raised) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the shortfall only exists after a solve; this feeds it back and settles in a round or two
+    setDayFloor({ key: goalKey, min: next, rounds: current.rounds + 1 });
+  }, [
+    planSolve,
+    twoParent,
+    dayFloor,
+    goalKey,
+    firstCaregiver,
+    goalModeA,
+    goalModeB,
+  ]);
 
   const projection: LeaveProjection | null = useMemo(
     () =>
@@ -796,18 +869,22 @@ export function Planner() {
 
   // Short per-caregiver goal descriptions for the Justera section (null when
   // the caregiver is on manual paces and the sliders apply).
-  const goalTextA =
-    goalModeA === "untilDate" && goalTargetA
-      ? `Hemma till ${formatDate(goalTargetA)}`
-      : goalModeA === "budget"
-        ? `Inom budget (minst ${formatSek(goalBudgetA)}/mån)`
-        : null;
-  const goalTextB =
-    goalModeB === "untilDate" && goalTargetB
-      ? `Hemma till ${formatDate(goalTargetB)}`
-      : goalModeB === "budget"
-        ? `Inom budget (minst ${formatSek(goalBudgetB)}/mån)`
-        : null;
+  // A length goal describes itself as a length; the date it lands on comes
+  // from the solve and is shown on the period block.
+  const goalText = (id: "A" | "B"): string | null => {
+    const mode = id === "A" ? goalModeA : goalModeB;
+    const target = id === "A" ? goalTargetA : goalTargetB;
+    const months = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
+    const floor = id === "A" ? goalBudgetA : goalBudgetB;
+    if (mode === "untilDate" && months > 0) {
+      return months === 12 ? "Hemma i 1 år" : `Hemma i ${months} månader`;
+    }
+    if (mode === "untilDate" && target) return `Hemma till ${formatDate(target)}`;
+    if (mode === "budget") return `Inom budget (minst ${formatSek(floor)}/mån)`;
+    return null;
+  };
+  const goalTextA = goalText("A");
+  const goalTextB = goalText("B");
 
   const share = async () => {
     const encoded = encodeState(form);

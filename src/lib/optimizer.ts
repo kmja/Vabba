@@ -144,6 +144,14 @@ export interface OptimizeOptions {
    * to true.
    */
   includeLagsta?: boolean;
+  /**
+   * A floor on each parent's income-based days, honoured before the objective
+   * splits what is left. This is how a stated goal outranks the default
+   * heuristic: someone who asked to be home six months needs the days for it,
+   * even though "maximise household income" would otherwise hand every
+   * transferable day to the lower earner.
+   */
+  minSjukpenning?: Partial<Record<ParentId, number>>;
 }
 
 export interface OptimizeResult {
@@ -207,6 +215,8 @@ function chooseSjukpenningSplitForA(
   customSplitA: number,
   salaryA: number,
   salaryB: number,
+  minA = 0,
+  minB = 0,
 ): number {
   // Not enough income-based days to honour both reserved blocks: split them
   // proportionally so the unavoidable forfeiture is shared fairly.
@@ -215,8 +225,18 @@ function chooseSjukpenningSplitForA(
     return clamp(Math.round((S * rA) / (rA + rB)), 0, S);
   }
 
-  const lo = rA; // A must take at least its reserved
-  const hi = S - rB; // …and must leave B's reserved for B
+  // A must take at least its reserved days and whatever its own goal needs;
+  // it must leave B the same. When the two floors cannot both be met, they
+  // are scaled back proportionally rather than one of them winning outright.
+  let lo = Math.max(rA, Math.min(minA, S - rB));
+  let hi = Math.min(S - rB, S - Math.max(rB, minB));
+  if (lo > hi) {
+    const wantA = Math.max(rA, minA);
+    const wantB = Math.max(rB, minB);
+    const share = clamp(Math.round((S * wantA) / (wantA + wantB)), rA, S - rB);
+    lo = share;
+    hi = share;
+  }
 
   if (objective === "custom") {
     // The user picks the share of the income-based days for A.
@@ -271,6 +291,7 @@ function buildPlan(
   doubleDays = 0,
   customSplitA = 0.5,
   includeLagsta = true,
+  minSjukpenning: Partial<Record<ParentId, number>> = {},
 ): OptimizedPlan {
   const S = remaining.remaining.sjukpenning;
   // Lägstanivå days are optional — when not taken, the leave ends as the
@@ -316,6 +337,8 @@ function buildPlan(
     customSplitA,
     salaryA,
     salaryB,
+    minSjukpenning.A ?? 0,
+    minSjukpenning.B ?? 0,
   );
   const sB = S2 - sA;
   const lA =
@@ -542,6 +565,7 @@ export function optimize(
     doubleDays,
     customSplitA,
     includeLagsta,
+    options.minSjukpenning,
   );
   const alternatives = OBJECTIVES.filter((o) => o !== objective).map((o) =>
     buildPlan(plan, o, remaining, asOf, doubleDays, customSplitA, includeLagsta),

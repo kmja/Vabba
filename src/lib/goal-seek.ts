@@ -26,7 +26,7 @@ import {
   type LeaveInterval,
   type PaceBreak,
 } from "@/lib/projection";
-import { addYears, differenceInDays } from "@/lib/dates";
+import { addMonths, addYears, differenceInDays } from "@/lib/dates";
 import { SGI_PROTECTION } from "@/lib/rules";
 import { DEFAULT_MUNICIPAL_RATE, householdNet } from "@/lib/tax";
 
@@ -58,6 +58,15 @@ export interface CaregiverPlanSpec {
   switchPhases?: { phase1: number; phase2: number } | null;
   /** untilDate: stay home until this date. */
   targetDate?: Date | null;
+  /**
+   * untilDate, as a length rather than a date: stay home this many months
+   * from wherever THIS caregiver's stretch begins. Someone who asked for
+   * "6 månader" meant six months of leave, not the calendar date that
+   * happened to be six months out when they picked it — so it has to be
+   * resolved against the cursor, after the caregivers before them are known.
+   * Takes precedence over `targetDate`.
+   */
+  targetMonths?: number | null;
   /** budget: household net floor in kr/month. */
   budgetFloor?: number;
   /** Days to deliberately leave unused (drawn from lägsta first). */
@@ -512,16 +521,17 @@ export function solvePlan(
       cursor = spec.startAt;
     }
     const pools = applySaveDays(spec);
+    // A length goal only becomes a date once we know where this caregiver
+    // starts, which is where the one before them ended.
+    const target =
+      spec.mode === "untilDate"
+        ? spec.targetMonths != null && spec.targetMonths > 0
+          ? addMonths(cursor, spec.targetMonths)
+          : (spec.targetDate ?? null)
+        : null;
     const one =
-      spec.mode === "untilDate" && spec.targetDate
-        ? solveUntilDate(
-            spec,
-            pools,
-            cursor,
-            oneYear,
-            spec.targetDate,
-            municipalRate,
-          )
+      target
+        ? solveUntilDate(spec, pools, cursor, oneYear, target, municipalRate)
         : spec.mode === "budget"
           ? solveBudget(
               spec,

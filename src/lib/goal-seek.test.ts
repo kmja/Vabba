@@ -102,6 +102,65 @@ describe("solvePlan — untilDate", () => {
   });
 });
 
+describe("solvePlan — a length rather than a date", () => {
+  it("measures the months from where that caregiver starts", () => {
+    // Anna is home first at full pace; Bea asked for six months of her own,
+    // which must be six months from where Anna leaves off — not six months
+    // from the birth.
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 90, manualPace: 7 }),
+      cg({
+        name: "Bea",
+        incomeDays: 300,
+        mode: "untilDate",
+        targetMonths: 6,
+      }),
+    ]);
+    const [anna, bea] = res.perCaregiver;
+    expect(bea.targetMet).toBe(true);
+    expect(bea.startsAt?.getTime()).toBe(anna.endsAt?.getTime());
+    const months =
+      differenceInDays(bea.startsAt!, bea.endsAt!) / 30.4;
+    expect(months).toBeGreaterThan(5.8);
+    expect(months).toBeLessThan(6.2);
+  });
+
+  it("moves with the caregiver before it", () => {
+    // The same length, but Anna is home longer — Bea's six months slide
+    // along rather than staying pinned to a date chosen earlier.
+    const short = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 40, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 300, mode: "untilDate", targetMonths: 6 }),
+    ]);
+    const long = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 180, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 300, mode: "untilDate", targetMonths: 6 }),
+    ]);
+    expect(long.perCaregiver[1].startsAt!.getTime()).toBeGreaterThan(
+      short.perCaregiver[1].startsAt!.getTime(),
+    );
+    // Both are still six months long.
+    for (const res of [short, long]) {
+      const bea = res.perCaregiver[1];
+      const months = differenceInDays(bea.startsAt!, bea.endsAt!) / 30.4;
+      expect(months).toBeGreaterThan(5.8);
+      expect(months).toBeLessThan(6.2);
+    }
+  });
+
+  it("reports the days missing when the length cannot be covered", () => {
+    // Only her reserved days: six months at the post-1-year SGI floor needs
+    // far more than 70, and the shortfall is what the allocation must close.
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 300, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 70, mode: "untilDate", targetMonths: 6 }),
+    ]);
+    const bea = res.perCaregiver[1];
+    expect(bea.targetMet).toBe(false);
+    expect(bea.shortfallDays).toBeGreaterThan(0);
+  });
+});
+
 describe("solvePlan — budget", () => {
   it("finds the slowest pace that clears the household floor", () => {
     const res = solvePlan(birth, birth, [

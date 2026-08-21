@@ -127,6 +127,12 @@ interface DatePreset {
   key: string;
   label: string;
   date: Date;
+  /**
+   * Set on the "så länge" shortcuts: what the user actually chose is a
+   * length, so it is stored as one and re-resolved against wherever their
+   * stretch ends up starting.
+   */
+  months?: number;
 }
 
 /**
@@ -167,6 +173,7 @@ function datePresetGroups(
       key: `${m}man`,
       label: m === 12 ? "1 år" : `${m} månader`,
       date: addMonths(from, m),
+      months: m,
     }))
     // A caregiver starting at the birth would see "1 år" and "barnet fyller
     // 1" as two buttons doing the same thing; the landmark says it better.
@@ -750,6 +757,7 @@ export function Wizard({
     const supplement = id === "A" ? supplementA : supplementB;
     const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
     const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
+    const goalMonths = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
     const budget = (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
     const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
     const extraDays = id === "A" ? extraDaysA : extraDaysB;
@@ -766,6 +774,8 @@ export function Wizard({
     const setGoal = (patch: {
       mode?: GoalMode;
       dateStr?: string;
+      /** A length rather than a date; 0 clears it back to the date. */
+      months?: number;
       budget?: number;
     }) =>
       setForm((f) =>
@@ -776,6 +786,9 @@ export function Wizard({
               ...(patch.dateStr !== undefined
                 ? { goalDateA: patch.dateStr }
                 : {}),
+              ...(patch.months !== undefined
+                ? { goalMonthsA: patch.months || undefined }
+                : {}),
               ...(patch.budget !== undefined
                 ? { goalBudgetA: patch.budget }
                 : {}),
@@ -785,6 +798,9 @@ export function Wizard({
               ...(patch.mode !== undefined ? { goalModeB: patch.mode } : {}),
               ...(patch.dateStr !== undefined
                 ? { goalDateB: patch.dateStr }
+                : {}),
+              ...(patch.months !== undefined
+                ? { goalMonthsB: patch.months || undefined }
                 : {}),
               ...(patch.budget !== undefined
                 ? { goalBudgetB: patch.budget }
@@ -1016,15 +1032,23 @@ export function Wizard({
             }
             value={
               mode === "untilDate"
-                ? dateStr && isValidIsoDate(dateStr)
-                  ? formatDate(parseIsoDate(dateStr))
-                  : null
+                ? goalMonths > 0
+                  ? // A length was chosen, so say the length — the date it
+                    // lands on moves with the rest of the plan.
+                    goalMonths === 12
+                    ? "1 år"
+                    : `${goalMonths} månader`
+                  : dateStr && isValidIsoDate(dateStr)
+                    ? formatDate(parseIsoDate(dateStr))
+                    : null
                 : `${formatSek(budget)}/mån`
             }
             hero={!reopened}
             open={activeQ === `${prefix}-q-goaldetail`}
             answered={
-              mode === "untilDate" ? isValidIsoDate(dateStr) : true
+              mode === "untilDate"
+                ? goalMonths > 0 || isValidIsoDate(dateStr)
+                : true
             }
             visited={seen(`${prefix}-q-goaldetail`)}
             attention={issuesOn(`${prefix}-q-goaldetail`).length > 0}
@@ -1039,7 +1063,8 @@ export function Wizard({
                   yearsForward={3}
                   minDate={ownStart}
                   onPick={(iso) => {
-                    setGoal({ dateStr: iso });
+                    // Picking a day means that day, not a length.
+                    setGoal({ dateStr: iso, months: 0 });
                     advanceQ(`${prefix}-q-goaldetail`);
                   }}
                 />
@@ -1059,7 +1084,10 @@ export function Wizard({
                             label={p.label}
                             desc={formatDate(p.date)}
                             onSelect={() => {
-                              setGoal({ dateStr: toIsoDate(p.date) });
+                              setGoal({
+                                dateStr: toIsoDate(p.date),
+                                months: p.months ?? 0,
+                              });
                               advanceQ(`${prefix}-q-goaldetail`);
                             }}
                           />

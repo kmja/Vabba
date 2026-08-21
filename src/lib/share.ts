@@ -62,6 +62,13 @@ export interface ShareableState {
   goalModeB?: GoalMode;
   /** ISO date (yyyy-mm-dd) for the "hemma till ett datum" goal. */
   goalDateA?: string;
+  /**
+   * untilDate as a length instead: this many months from where that
+   * caregiver's own stretch begins. Takes precedence over the date, and
+   * survives the plan shifting around it.
+   */
+  goalMonthsA?: number;
+  goalMonthsB?: number;
   goalDateB?: string;
   /** Net kr/month floor for the "längsta ledighet inom budget" goal. */
   goalBudgetA?: number;
