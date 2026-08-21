@@ -42,7 +42,7 @@ import {
   formatMonths,
   householdMonthly,
   householdNetMonthly,
-  ownMonthly,
+  incomeSources,
 } from "@/components/monthly-estimate";
 import { cn } from "@/lib/utils";
 import type { PlanDeadlines } from "@/lib/calc";
@@ -55,14 +55,12 @@ import {
 } from "@/lib/dates";
 import {
   approxLeaveMonths,
-  approxMonthlyGross,
   formatDate,
   formatDays,
   formatPace,
   formatSek,
 } from "@/lib/format";
 import { MONEY } from "@/lib/rules";
-import { monthlyNet } from "@/lib/tax";
 import type { LeaveInterval } from "@/lib/projection";
 
 export interface LeaveProjection {
@@ -313,10 +311,9 @@ export function PeriodCard({
   municipalRate?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const gross = approxMonthlyGross(row.dailyRate, row.daysPerWeek);
-  const own = ownMonthly(row);
   const hasHousehold = (row.householdBase ?? 0) > 0;
   const household = householdMonthly(row);
+  const sources = incomeSources(row, municipalRate);
   const months =
     row.leaveMonths != null
       ? formatMonths(row.leaveMonths)
@@ -346,6 +343,7 @@ export function PeriodCard({
             type="button"
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
+            aria-label={`Visa detaljer – ${row.name}`}
             className="text-muted-foreground hover:text-foreground mt-0.5 shrink-0 transition-colors"
           >
             <IconChevronDown
@@ -365,70 +363,62 @@ export function PeriodCard({
           </span>
         </div>
 
-        {/* Duration */}
-        <div className="mt-1 text-xs tabular-nums">
-          <span className="font-medium">{months}</span> · {formatDays(row.days)}
-          {row.secondPhase ? " första året" : ""}
+        {/* Where it comes from: one column per source, net over gross. */}
+        <div
+          data-income-sources
+          className="mt-3 flex flex-wrap items-start gap-x-3 gap-y-2 border-t pt-2.5"
+        >
+          {sources.map((s) => (
+            // A fourth source (part-time pay) wraps rather than squeezing the
+            // labels down to ellipses.
+            <div key={s.key} className="min-w-22 flex-1">
+              <div className="text-muted-foreground truncate text-[11px]">
+                {s.label}
+              </div>
+              <div className="text-sm font-semibold tabular-nums">
+                ≈ {formatSek(s.net)}
+              </div>
+              <div className="text-muted-foreground text-[11px] tabular-nums">
+                {formatSek(s.gross)} brutto
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Household breakdown — always rendered so tests can find the text */}
-        {hasHousehold && (
-          <div className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-            {row.name} ≈ {formatSek(own)}
-            {row.partTimeSalary
-              ? ` + deltidslön ≈ ${formatSek(row.partTimeSalary)}`
-              : ""}
-            {row.partnerWorking
-              ? ` + ${row.partnerWorking}s lön ≈ ${formatSek(row.householdBase ?? 0)}`
-              : ""}
-          </div>
-        )}
-
-        {/* Conditional notes — always visible */}
-        {row.secondPhase && (
-          <div className="mt-0.5 text-xs tabular-nums">
-            Efter 1 år: ≈ {formatSek(row.secondPhase.monthly)}/mån vid{" "}
-            {formatPace(row.secondPhase.daysPerWeek)} dagar/vecka
-          </div>
-        )}
-        {row.supplement && (
-          <div className="mt-0.5 text-xs">
-            + Föräldralön (arbetsgivaren) ≈ {formatSek(row.supplement.monthly)}/mån i
-            ca {String(row.supplement.months).replace(".", ",")} mån
-            {row.aboveCap ? " · täcker även lön över taket" : ""}
-          </div>
-        )}
-        {row.grundnivaFirstDays ? (
-          <div className="mt-0.5 text-xs">
-            Första {formatDays(row.grundnivaFirstDays)} på grundnivå (
-            {formatSek(MONEY.grundnivaPerDay)}/dag)
-          </div>
-        ) : null}
-        {row.extraDays ? (
-          <div className="text-muted-foreground mt-0.5 text-xs">
-            inkl. {formatDays(row.extraDays)} sparade från tidigare barn
-          </div>
-        ) : null}
-        {row.savedDays ? (
-          <div className="mt-0.5 text-xs">
-            sparar {formatDays(row.savedDays)} till senare (klämdagar, lov …)
-          </div>
-        ) : null}
+        <div className="text-muted-foreground mt-2 text-xs tabular-nums">
+          <span className="text-foreground font-medium">{months}</span> ·{" "}
+          {formatDays(row.days)} · {formatPace(row.daysPerWeek)} dagar/vecka
+        </div>
       </div>
 
-      {/* Fine print: gross amounts, per-day rate, pace — shown on demand */}
+      {/* Fine print: the terms behind those numbers — shown on demand */}
       {open && (
-        <div className="text-muted-foreground space-y-0.5 border-t px-3 pb-3 pt-2 text-xs">
-          {hasHousehold && (
-            <div className="tabular-nums">
-              Hushåll brutto ≈ {formatSek(household)}/mån
+        <div className="text-muted-foreground space-y-0.5 border-t px-3 pt-2 pb-3 text-xs">
+          <div className="tabular-nums">
+            Hushåll brutto ≈ {formatSek(household)}/mån ·{" "}
+            {formatSek(row.dailyRate)}/dag föräldrapenning
+          </div>
+          {row.supplement && (
+            <div>
+              Föräldralön i ca{" "}
+              {String(row.supplement.months).replace(".", ",")} mån
+              {row.aboveCap ? " · täcker även lön över taket" : ""}
             </div>
           )}
-          <div className="tabular-nums">
-            {formatSek(gross)}/mån föräldrapenning · {formatSek(row.dailyRate)}/dag ·
-            ≈ {formatSek(monthlyNet({ benefit: gross }, municipalRate))} efter skatt
-          </div>
-          <div className="tabular-nums">{formatPace(row.daysPerWeek)} dagar/vecka</div>
+          {row.grundnivaFirstDays ? (
+            <div>
+              Första {formatDays(row.grundnivaFirstDays)} på grundnivå (
+              {formatSek(MONEY.grundnivaPerDay)}/dag)
+            </div>
+          ) : null}
+          {row.extraDays ? (
+            <div>inkl. {formatDays(row.extraDays)} sparade från tidigare barn</div>
+          ) : null}
+          {row.savedDays ? (
+            <div>
+              sparar {formatDays(row.savedDays)} till senare (klämdagar, lov …)
+            </div>
+          ) : null}
         </div>
       )}
     </div>

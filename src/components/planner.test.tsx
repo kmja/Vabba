@@ -316,10 +316,9 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     fillToResults(container);
     showPlan();
-    // Föräldralön is assumed (most collective agreements have it).
-    expect(
-      screen.getAllByText(/Föräldralön \(arbetsgivaren\)/).length,
-    ).toBeGreaterThan(0);
+    // Föräldralön is assumed (most collective agreements have it), and shows
+    // as its own column in the period card's breakdown.
+    expect(screen.getAllByText("Föräldralön").length).toBeGreaterThan(0);
     // Opt out for both caregivers → it disappears.
     fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
     next(); // → step 2
@@ -329,7 +328,7 @@ describe("<Planner /> wizard", () => {
     openQuestion(container, "b", "supplement");
     fireEvent.click(container.querySelector("#b-supplement-no")!);
     showPlan();
-    expect(screen.queryByText(/Föräldralön \(arbetsgivaren\)/)).toBeNull();
+    expect(screen.queryByText("Föräldralön")).toBeNull();
   });
 
   it("advances with the Enter key and moves focus to the next field", () => {
@@ -693,9 +692,12 @@ describe("<Planner /> wizard", () => {
     const { container } = render(<Planner />);
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     showPlan();
-    // Each period card combines both incomes — the leave-taker's
-    // föräldrapenning plus the working partner's salary.
-    expect(screen.getAllByText(/s lön ≈/).length).toBeGreaterThan(0);
+    // Each period card breaks the month down by source — the leave-taker's
+    // föräldrapenning beside the working partner's salary.
+    expect(screen.getAllByText("Föräldrapenning").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Vårdnadshavare [AB]s lön/).length,
+    ).toBeGreaterThan(0);
   });
 
   it("only counts part-time work in household income when opted in", () => {
@@ -709,14 +711,14 @@ describe("<Planner /> wizard", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
     );
-    expect(screen.queryByText(/deltidslön/)).toBeNull();
+    expect(screen.queryByText(/deltidslön/i)).toBeNull();
     // Opt in to part-time work → their salary for the worked days shows up.
     fireEvent.click(
       screen.getByRole("checkbox", {
         name: /Jobbar deltid under ledigheten – Vårdnadshavare A/,
       }),
     );
-    expect(screen.getAllByText(/deltidslön/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/deltidslön/i).length).toBeGreaterThan(0);
   });
 
   it("saves the lägstanivå days by default", () => {
@@ -800,6 +802,12 @@ describe("<Planner /> wizard", () => {
       target: { value: "30000" },
     });
     showPlan();
+    // Carried-over days are fine print, behind the card's detail toggle.
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: /Visa detaljer – Vårdnadshavare A/,
+      })[0],
+    );
     expect(
       screen.getAllByText(/sparade från tidigare barn/).length,
     ).toBeGreaterThan(0);

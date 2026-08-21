@@ -1,5 +1,5 @@
 import { approxMonthlyGross } from "@/lib/format";
-import { householdNet } from "@/lib/tax";
+import { householdNet, monthlyNet } from "@/lib/tax";
 
 /**
  * One caregiver's leave, as the results page models it. The timeline renders a
@@ -61,6 +61,69 @@ export function householdMonthly(r: MonthlyRow): number {
  * the employer's föräldralön and any part-time work are salary, as is the
  * partner's pay.
  */
+/** One stream of money into the household during this stretch. */
+export interface IncomeSource {
+  key: string;
+  label: string;
+  gross: number;
+  /** This stream's share of what the household keeps. */
+  net: number;
+}
+
+/**
+ * The month broken down by where the money comes from, gross and net.
+ *
+ * Tax is per person, not per stream, so each person's tax is shared across
+ * their own streams in proportion to size. That keeps the parts summing to
+ * the headline, which is what a breakdown has to do — at the cost of not
+ * showing that the employer's föräldralön is taxed a little more kindly than
+ * the föräldrapenning beside it.
+ */
+export function incomeSources(
+  r: MonthlyRow,
+  municipalRate?: number,
+): IncomeSource[] {
+  const fp = approxMonthlyGross(r.dailyRate, r.daysPerWeek);
+  const supplement = r.supplement?.monthly ?? 0;
+  const partTime = r.partTimeSalary ?? 0;
+  const partner = r.householdBase ?? 0;
+
+  // The person on leave: benefit plus anything they earn beside it.
+  const own: { key: string; label: string; gross: number }[] = [
+    { key: "fp", label: "Föräldrapenning", gross: fp },
+    { key: "supplement", label: "Föräldralön", gross: supplement },
+    { key: "parttime", label: "Deltidslön", gross: partTime },
+  ].filter((x) => x.gross > 0);
+  const ownNet = monthlyNet(
+    { salary: supplement + partTime, benefit: fp },
+    municipalRate,
+  );
+  const ownGross = fp + supplement + partTime;
+
+  const out: IncomeSource[] = [];
+  let apportioned = 0;
+  own.forEach((x, i) => {
+    // Round as we go and give the last stream the remainder, so the parts
+    // add up to the person's net exactly.
+    const net =
+      i === own.length - 1
+        ? ownNet - apportioned
+        : Math.round((ownNet * x.gross) / ownGross);
+    apportioned += net;
+    out.push({ ...x, net });
+  });
+
+  if (partner > 0) {
+    out.push({
+      key: "partner",
+      label: r.partnerWorking ? `${r.partnerWorking}s lön` : "Partnerns lön",
+      gross: partner,
+      net: monthlyNet({ salary: partner }, municipalRate),
+    });
+  }
+  return out;
+}
+
 export function householdNetMonthly(
   r: MonthlyRow,
   municipalRate?: number,
