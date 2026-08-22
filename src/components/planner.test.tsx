@@ -429,6 +429,22 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("#a-supp-pct")).not.toBeNull();
   });
 
+  it("collapses föräldralön into a single row once the terms are known", () => {
+    const { container } = renderPlanner();
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2
+    openQuestion(container, "a", "supplement");
+    fireEvent.click(container.querySelector("#a-supplement-yes")!);
+    // Answer the terms question (defaults are fine) and move past it.
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    // Its own row is gone — repeating "Ja" and the terms as two separate
+    // lines once both are known would just say the same thing twice.
+    expect(container.querySelector("#a-q-suppdetail")).toBeNull();
+    const suppRow = container.querySelector("#a-q-supplement")!;
+    expect(suppRow.textContent).toContain("90 % i 6 mån");
+    expect(suppRow.textContent).not.toMatch(/\bJa\b/);
+  });
+
   it("skips the föräldralön terms when there is none", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");

@@ -1017,8 +1017,15 @@ export function Wizard({
         <FlowQuestion
           id={`${prefix}-q-supplement`}
           label="Föräldralön"
-          // Just the answer — the terms are the next question's summary.
-          value={supplement.enabled ? "Ja" : "Nej"}
+          // Once the terms are known, they say more than "Ja" would — no
+          // need for a second row repeating the same yes right below it.
+          value={
+            supplement.enabled
+              ? seen(`${prefix}-q-suppdetail`)
+                ? `${supplement.pct} % i ${supplement.months} mån`
+                : "Ja"
+              : "Nej"
+          }
           hero={!reopened}
           open={activeQ === `${prefix}-q-supplement`}
           answered={!supplement.enabled || seen(`${prefix}-q-supplement`)}
@@ -1051,8 +1058,14 @@ export function Wizard({
           </div>
         </FlowQuestion>
 
-        {/* Saying yes asks how generous the agreement is, right away. */}
-        {supplement.enabled && (
+        {/* Saying yes asks how generous the agreement is, right away. Once
+            answered and collapsed, its own row would just repeat what the
+            question above it now says — so it only renders while it's
+            still being reached (the first time through) or being edited;
+            editing it again means reopening "Föräldralön" above. */}
+        {supplement.enabled &&
+          (activeQ === `${prefix}-q-suppdetail` ||
+            !seen(`${prefix}-q-suppdetail`)) && (
           <FlowQuestion
             id={`${prefix}-q-suppdetail`}
             label="Hur mycket föräldralön?"
