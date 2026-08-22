@@ -475,16 +475,14 @@ function Block({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm font-semibold">
-              {title}
-              {phase && (
-                <span className="text-muted-foreground bg-secondary rounded-full px-2 py-0.5 text-xs font-medium">
-                  {phase}
-                </span>
-              )}
-            </span>
+            <span className="text-sm font-semibold">{title}</span>
             {headerRight}
           </span>
+          {phase && (
+            <span className="text-muted-foreground bg-secondary mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium">
+              {phase}
+            </span>
+          )}
           <span className="text-muted-foreground mt-0.5 block text-xs tabular-nums">
             {subtitle}
           </span>
