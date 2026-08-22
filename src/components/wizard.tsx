@@ -88,19 +88,14 @@ const BIRTH_COUNTS = [
 
 const GOAL_MODES: { value: GoalMode; label: string; desc: string }[] = [
   {
-    value: "manual",
-    label: "Justera själv",
-    desc: "Full takt som utgångsläge — finjustera med reglagen på resultatsidan.",
-  },
-  {
     value: "untilDate",
-    label: "Hemma till ett datum",
-    desc: "Räkna baklänges från t.ex. förskolestarten — dagar som blir över sparas.",
+    label: "Bestämd längd",
+    desc: "Välj ett datum eller en längd, t.ex. 6 månader — vi räknar ut takten som krävs.",
   },
   {
     value: "budget",
-    label: "Så länge budgeten tillåter",
-    desc: "Längsta möjliga ledighet där hushållet ändå klarar sin månadsbudget.",
+    label: "Så länge som möjligt",
+    desc: "Dagarna sträcks ut i den långsammaste takt reglerna tillåter, så ledigheten räcker längst.",
   },
 ];
 
@@ -509,7 +504,7 @@ export function Wizard({
   /** The ordered question ids of a caregiver's flow. */
   const cgFlow = (id: ParentId): string[] => {
     const p = id.toLowerCase();
-    const goal = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
+    const goal = (id === "A" ? form.goalModeA : form.goalModeB) ?? "budget";
     const supp = id === "A" ? supplementA : supplementB;
     return [
       `${p}-q-name`,
@@ -517,7 +512,7 @@ export function Wizard({
       `${p}-q-supplement`,
       ...(supp.enabled ? [`${p}-q-suppdetail`] : []),
       `${p}-q-goal`,
-      ...(goal !== "manual" ? [`${p}-q-goaldetail`] : []),
+      ...(goal === "untilDate" ? [`${p}-q-goaldetail`] : []),
       `${p}-q-save`,
       ...(childNumber >= 2 ? [`${p}-q-extra`] : []),
     ];
@@ -888,10 +883,9 @@ export function Wizard({
     const aboveCap = value.incomeAboveCap ?? false;
     const rate = sjukpenningnivaDailyAmount(income);
     const supplement = id === "A" ? supplementA : supplementB;
-    const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "manual";
+    const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "budget";
     const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
     const goalMonths = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
-    const budget = (id === "A" ? form.goalBudgetA : form.goalBudgetB) ?? 25000;
     const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
     const extraDays = id === "A" ? extraDaysA : extraDaysB;
     const displayName =
@@ -909,7 +903,6 @@ export function Wizard({
       dateStr?: string;
       /** A length rather than a date; 0 clears it back to the date. */
       months?: number;
-      budget?: number;
     }) =>
       setForm((f) =>
         id === "A"
@@ -922,9 +915,6 @@ export function Wizard({
               ...(patch.months !== undefined
                 ? { goalMonthsA: patch.months || undefined }
                 : {}),
-              ...(patch.budget !== undefined
-                ? { goalBudgetA: patch.budget }
-                : {}),
             }
           : {
               ...f,
@@ -934,9 +924,6 @@ export function Wizard({
                 : {}),
               ...(patch.months !== undefined
                 ? { goalMonthsB: patch.months || undefined }
-                : {}),
-              ...(patch.budget !== undefined
-                ? { goalBudgetB: patch.budget }
                 : {}),
             },
       );
@@ -1128,7 +1115,7 @@ export function Wizard({
           value={GOAL_MODES.find((m) => m.value === mode)?.label ?? null}
           hero={!reopened}
           open={activeQ === `${prefix}-q-goal`}
-          answered={mode !== "manual" || seen(`${prefix}-q-goal`)}
+          answered={seen(`${prefix}-q-goal`)}
           visited={seen(`${prefix}-q-goal`)}
           onOpen={() => openQ(`${prefix}-q-goal`, true)}
         >
@@ -1142,14 +1129,15 @@ export function Wizard({
                 desc={m.desc}
                 onSelect={() => {
                   setGoal({ mode: m.value });
-                  // "Justera själv" needs nothing further; the other two get
-                  // their own substep. The next id is passed explicitly —
-                  // the flow list still reflects the previous mode here.
+                  // "Så länge som möjligt" needs nothing further; a fixed
+                  // length gets its own substep. The next id is passed
+                  // explicitly — the flow list still reflects the previous
+                  // mode here.
                   advanceQ(
                     `${prefix}-q-goal`,
-                    m.value === "manual"
-                      ? `${prefix}-q-save`
-                      : `${prefix}-q-goaldetail`,
+                    m.value === "untilDate"
+                      ? `${prefix}-q-goaldetail`
+                      : `${prefix}-q-save`,
                   );
                 }}
               />
@@ -1157,104 +1145,81 @@ export function Wizard({
           </div>
         </FlowQuestion>
 
-        {mode !== "manual" && (
+        {mode === "untilDate" && (
           <FlowQuestion
             id={`${prefix}-q-goaldetail`}
-            label={
-              mode === "untilDate" ? "Hemma till och med" : "Hushållets golv"
-            }
+            label="Hemma till och med"
             value={
-              mode === "untilDate"
-                ? goalMonths > 0
-                  ? // A length was chosen, so say the length — the date it
-                    // lands on moves with the rest of the plan.
-                    goalMonths === 12
-                    ? "1 år"
-                    : `${goalMonths} månader`
-                  : dateStr && isValidIsoDate(dateStr)
-                    ? formatDate(parseIsoDate(dateStr))
-                    : null
-                : `${formatSek(budget)}/mån`
+              goalMonths > 0
+                ? // A length was chosen, so say the length — the date it
+                  // lands on moves with the rest of the plan.
+                  goalMonths === 12
+                  ? "1 år"
+                  : `${goalMonths} månader`
+                : dateStr && isValidIsoDate(dateStr)
+                  ? formatDate(parseIsoDate(dateStr))
+                  : null
             }
             hero={!reopened}
             open={activeQ === `${prefix}-q-goaldetail`}
-            answered={
-              mode === "untilDate"
-                ? goalMonths > 0 || isValidIsoDate(dateStr)
-                : true
-            }
+            answered={goalMonths > 0 || isValidIsoDate(dateStr)}
             visited={seen(`${prefix}-q-goaldetail`)}
             attention={issuesOn(`${prefix}-q-goaldetail`).length > 0}
             onOpen={() => openQ(`${prefix}-q-goaldetail`, true)}
           >
-            {mode === "untilDate" ? (
-              showCalendar ? (
-                <InlineCalendar
-                  value={dateStr}
-                  inputId={`${prefix}-goal-date`}
-                  yearsBack={0}
-                  yearsForward={3}
-                  minDate={ownStart}
-                  onPick={(iso) => {
-                    // Picking a day means that day, not a length.
-                    setGoal({ dateStr: iso, months: 0 });
-                    advanceQ(`${prefix}-q-goaldetail`);
-                  }}
-                />
-              ) : (
-                <div className="space-y-3">
-                  {groups.map((g) => (
-                    <div key={g.title} className="space-y-1.5">
-                      <p className="text-muted-foreground text-xs font-medium">
-                        {g.title}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {g.items.map((p) => (
-                          <OptionCard
-                            key={p.key}
-                            id={`${prefix}-goal-preset-${p.key}`}
-                            selected={dateStr === toIsoDate(p.date)}
-                            label={p.label}
-                            desc={formatDate(p.date)}
-                            onSelect={() => {
-                              setGoal({
-                                dateStr: toIsoDate(p.date),
-                                months: p.months ?? 0,
-                              });
-                              advanceQ(`${prefix}-q-goaldetail`);
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  <OptionCard
-                    id={`${prefix}-goal-date-custom`}
-                    selected={false}
-                    label="Välj datum"
-                    desc="Öppna kalendern och peka ut en dag."
-                    onSelect={() =>
-                      setCalendarFor((c) => ({
-                        ...c,
-                        [`${prefix}-q-goaldetail`]: true,
-                      }))
-                    }
-                  />
-                </div>
-              )
-            ) : (
-              <NumberField
-                id={`${prefix}-goal-budget-floor`}
-                label="Lägsta inkomst efter skatt (kr/mån)"
-                value={budget}
-                step={1000}
-                slider
-                sliderMax={60000}
-                onChange={(kr) =>
-                  setGoal({ budget: Math.max(0, Math.round(kr)) })
-                }
-                hint="Perioden tas i den långsammaste takt som ändå klarar golvet — så räcker ledigheten så länge som möjligt."
+            {showCalendar ? (
+              <InlineCalendar
+                value={dateStr}
+                inputId={`${prefix}-goal-date`}
+                yearsBack={0}
+                yearsForward={3}
+                minDate={ownStart}
+                onPick={(iso) => {
+                  // Picking a day means that day, not a length.
+                  setGoal({ dateStr: iso, months: 0 });
+                  advanceQ(`${prefix}-q-goaldetail`);
+                }}
               />
+            ) : (
+              <div className="space-y-3">
+                {groups.map((g) => (
+                  <div key={g.title} className="space-y-1.5">
+                    <p className="text-muted-foreground text-xs font-medium">
+                      {g.title}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {g.items.map((p) => (
+                        <OptionCard
+                          key={p.key}
+                          id={`${prefix}-goal-preset-${p.key}`}
+                          selected={dateStr === toIsoDate(p.date)}
+                          label={p.label}
+                          desc={formatDate(p.date)}
+                          onSelect={() => {
+                            setGoal({
+                              dateStr: toIsoDate(p.date),
+                              months: p.months ?? 0,
+                            });
+                            advanceQ(`${prefix}-q-goaldetail`);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <OptionCard
+                  id={`${prefix}-goal-date-custom`}
+                  selected={false}
+                  label="Välj datum"
+                  desc="Öppna kalendern och peka ut en dag."
+                  onSelect={() =>
+                    setCalendarFor((c) => ({
+                      ...c,
+                      [`${prefix}-q-goaldetail`]: true,
+                    }))
+                  }
+                />
+              </div>
             )}
           </FlowQuestion>
         )}

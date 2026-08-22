@@ -78,12 +78,15 @@ const DEFAULT_STATE: ShareableState = {
   worksPartTimeA: false,
   worksPartTimeB: false,
   childNumber: 1,
-  goalModeA: "manual",
-  goalModeB: "manual",
+  // "Så länge som möjligt" — needs no follow-up, so it's the friction-free
+  // default (a floor of 0 always holds, spreading the days as far as the
+  // rules allow). "Justera själv" is no longer offered in the wizard.
+  goalModeA: "budget",
+  goalModeB: "budget",
   goalDateA: "",
   goalDateB: "",
-  goalBudgetA: 25000,
-  goalBudgetB: 25000,
+  goalBudgetA: 0,
+  goalBudgetB: 0,
   saveDaysA: DEFAULT_SAVE_DAYS,
   saveDaysB: DEFAULT_SAVE_DAYS,
   customSplitA: 0.5,
@@ -305,16 +308,17 @@ export function Planner() {
   const worksPartTimeA = form.worksPartTimeA ?? false;
   const worksPartTimeB = form.worksPartTimeB ?? false;
 
-  // Per-caregiver goal: manual paces, "hemma till ett datum", or a household
-  // budget floor. Legacy links carried ONE global goal — migrate it: a global
+  // Per-caregiver goal: a fixed length/date, or as long as possible (budget
+  // floor 0). Legacy links carried ONE global goal — migrate it: a global
   // date goal targeted the end of the whole leave (the last caregiver), a
-  // budget goal applied to everyone.
+  // budget goal applied to everyone. Anything else defaults to "budget" —
+  // "manual" (unconstrained pace) is no longer offered by the wizard.
   const lastId: "A" | "B" = soloMode || firstCaregiver === "B" ? "A" : "B";
   const migrated = (id: "A" | "B"): GoalMode => {
     const legacy = form.goalMode;
     if (legacy === "budget") return "budget";
     if (legacy === "untilDate" && id === lastId) return "untilDate";
-    return "manual";
+    return "budget";
   };
   const goalModeA = form.goalModeA ?? migrated("A");
   const goalModeB = form.goalModeB ?? migrated("B");
@@ -940,7 +944,14 @@ export function Planner() {
       return months === 12 ? "Hemma i 1 år" : `Hemma i ${months} månader`;
     }
     if (mode === "untilDate" && target) return `Hemma till ${formatDate(target)}`;
-    if (mode === "budget") return `Inom budget (minst ${formatSek(floor)}/mån)`;
+    if (mode === "budget") {
+      // A real floor is legacy data (the wizard no longer asks for one) —
+      // still worth stating. The new default (0) just means "as long as
+      // possible", which is the mode's whole point and needs no number.
+      return floor > 0
+        ? `Inom budget (minst ${formatSek(floor)}/mån)`
+        : "Så länge som möjligt";
+    }
     return null;
   };
   const goalTextA = goalText("A");
@@ -1092,8 +1103,8 @@ export function Planner() {
           onClearEnd: (id) =>
             setForm((f) =>
               id === "A"
-                ? { ...f, goalModeA: "manual" }
-                : { ...f, goalModeB: "manual" },
+                ? { ...f, goalModeA: "budget" }
+                : { ...f, goalModeB: "budget" },
             ),
           onStartDate: (id, iso) =>
             setForm((f) =>

@@ -102,7 +102,18 @@ function pickBirth(container: HTMLElement, iso: string) {
 /** Fill the wizard to the LAST step (both incomes set), without submitting. */
 function fillToResults(
   container: HTMLElement,
-  opts: { incomeA?: string; incomeB?: string; birth?: string } = {},
+  opts: {
+    incomeA?: string;
+    incomeB?: string;
+    birth?: string;
+    /**
+     * A defaults to "as long as possible" (no follow-up). Pass a preset key
+     * (e.g. "3man") to give A a fixed, predictable length instead — for
+     * tests whose scenario depends on A's own stretch not running on
+     * indefinitely.
+     */
+    goalPresetA?: string;
+  } = {},
 ) {
   pickBirth(container, opts.birth ?? "2025-01-15");
   next(); // → step 2: the caregiver going first (A by default)
@@ -110,6 +121,13 @@ function fillToResults(
   fireEvent.change(container.querySelector("#a-income")!, {
     target: { value: opts.incomeA ?? "45000" },
   });
+  if (opts.goalPresetA) {
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-untilDate")!);
+    fireEvent.click(
+      container.querySelector(`#a-goal-preset-${opts.goalPresetA}`)!,
+    );
+  }
   next(); // → step 3: the other caregiver
   openQuestion(container, "b", "income");
   fireEvent.change(container.querySelector("#b-income")!, {
@@ -494,11 +512,12 @@ describe("<Planner /> wizard", () => {
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "goal");
-    // Substep 1: only the three goal choices — no date or budget input yet.
+    // Substep 1: only the two goal choices — no date input yet.
     expect(container.querySelector("#a-goal-untilDate")).not.toBeNull();
+    expect(container.querySelector("#a-goal-budget")).not.toBeNull();
     expect(container.querySelector("[data-calendar-grid]")).toBeNull();
-    expect(container.querySelector("#a-goal-budget-floor")).toBeNull();
-    // Choosing one collapses the choices and opens its own follow-up.
+    // Choosing "fixed duration" collapses the choices and opens its own
+    // follow-up.
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
     expect(
       container.querySelector("#a-q-goal")?.getAttribute("aria-expanded"),
@@ -512,14 +531,9 @@ describe("<Planner /> wizard", () => {
     expect(container.querySelector("[data-calendar-grid]")).toBeNull();
     fireEvent.click(container.querySelector("#a-goal-date-custom")!);
     expect(container.querySelector("[data-calendar-grid]")).not.toBeNull();
-    // Switching to the budget goal swaps the follow-up, not the choices.
+    // "Så länge som möjligt" needs no follow-up at all — it is skipped.
     fireEvent.click(container.querySelector("#a-q-goal")!);
     fireEvent.click(container.querySelector("#a-goal-budget")!);
-    expect(container.querySelector("#a-goal-budget-floor")).not.toBeNull();
-    expect(container.querySelector("[data-calendar-grid]")).toBeNull();
-    // "Justera själv" needs no follow-up at all — it is skipped.
-    fireEvent.click(container.querySelector("#a-q-goal")!);
-    fireEvent.click(container.querySelector("#a-goal-manual")!);
     expect(container.querySelector("#a-q-goaldetail")).toBeNull();
     expect(
       container.querySelector("#a-q-save")?.getAttribute("aria-expanded"),
@@ -702,7 +716,9 @@ describe("<Planner /> wizard", () => {
 
   it("notes a real gap between periods, only where the dates actually leave one", () => {
     const { container } = renderPlanner();
-    fillToResults(container, { birth: futureIso(14) });
+    // A short, fixed length for A keeps their natural end predictable, so
+    // pushing B's start well past it is unambiguously a gap.
+    fillToResults(container, { birth: futureIso(14), goalPresetA: "3man" });
     showPlan();
     // Open B's block and push its start out — a real gap where both work.
     const headers = () => periodHeaders(container);
@@ -722,8 +738,9 @@ describe("<Planner /> wizard", () => {
   it("merges the birth-days into the first caregiver's overlapping start", () => {
     const { container } = renderPlanner();
     // Both start at the birth by default — the two sit on top of each other
-    // for the first 10 days rather than reading as unrelated events.
-    fillToResults(container, { birth: futureIso(14) });
+    // for the first 10 days rather than reading as unrelated events. A short,
+    // fixed length for A keeps its solved pace predictable.
+    fillToResults(container, { birth: futureIso(14), goalPresetA: "3man" });
     showPlan();
     const headers = periodHeaders(container);
     // One combined block for the shared window, not two separate ones.
@@ -758,24 +775,36 @@ describe("<Planner /> wizard", () => {
     }
   });
 
-  it("solves the longest leave within a household budget from the wizard", () => {
+  it("stretches a caregiver's leave as long as possible from the wizard", () => {
     const { container } = renderPlanner();
-    pickBirth(container, "2025-01-15");
+    // A birth far enough out that A's own (first) block is unambiguously
+    // before the child's 1st birthday — the pace floor is lowest there.
+    pickBirth(container, futureIso(30));
     next(); // → step 2
     openQuestion(container, "a", "income");
     fireEvent.change(container.querySelector("#a-income")!, {
       target: { value: "45000" },
     });
+    openQuestion(container, "a", "goal");
+    fireEvent.click(container.querySelector("#a-goal-budget")!);
+    // No floor to fill in — it goes straight to the next question.
+    expect(container.querySelector("#a-q-goaldetail")).toBeNull();
+    expect(
+      container.querySelector("#a-q-save")?.getAttribute("aria-expanded"),
+    ).toBe("true");
     next(); // → step 3
     openQuestion(container, "b", "income");
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
-    openQuestion(container, "b", "goal");
-    fireEvent.click(container.querySelector("#b-goal-budget")!);
-    expect(container.querySelector("#b-goal-budget-floor")).not.toBeNull();
     showPlan();
-    expect(screen.getAllByText(/Inom budget/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Så länge som möjligt/).length).toBeGreaterThan(
+      0,
+    );
+    // The solver has no floor to satisfy, so it draws A's days at the
+    // slowest pace the rules allow — that's the whole point of the mode.
+    fireEvent.click(periodHeaders(container)[1]); // A's own (first) block
+    expect(screen.getAllByText(/0,5 dagar\/vecka/).length).toBeGreaterThan(0);
   });
 
   it("saves the days a caregiver sets aside in the wizard", () => {
@@ -817,68 +846,27 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/293 dagar/).length).toBeGreaterThan(0);
   });
 
-  it("stretches one caregiver's leave with the per-person lever", () => {
-    const { container } = renderPlanner();
-    fillToResults(container, { incomeA: "45000", incomeB: "30000" });
-    showPlan();
-    // Both caregivers start on full pace.
-    expect(screen.queryByText("Förläng ledigheten")).toBeNull();
-    // Open the collapsible "Justera" controls to reach the per-person levers.
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    // Use caregiver A's "Längst" lever button to stretch their leave.
-    fireEvent.click(
-      screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
-    );
-    expect(screen.getAllByText("Förläng ledigheten").length).toBeGreaterThan(0);
-  });
-
-  it("splits a caregiver's leave where the pace changes at 1 year", () => {
-    const { container } = renderPlanner();
-    // A birth still ahead, so the leave actually crosses the 1-year mark.
-    fillToResults(container, {
-      incomeA: "45000",
-      incomeB: "30000",
-      birth: futureIso(30),
-    });
-    showPlan();
-    // The 10-dagar block plus one per caregiver to start with.
-    expect(periodHeaders(container).length).toBe(3);
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    fireEvent.click(
-      screen.getByRole("checkbox", {
-        name: /Byt takt vid 1 år – Vårdnadshavare B/,
-      }),
-    );
-    // B now runs at one pace before the 1-year mark and another after, which
-    // is two periods — not one card whose headline income is true for half
-    // of it.
-    expect(periodHeaders(container).length).toBe(4);
-    expect(screen.queryByText(/Efter 1 år:/)).toBeNull();
-  });
-
   it("does not offer pace dials on a stretch the solver drives", () => {
     const { container } = renderPlanner();
     fillToResults(container, { birth: futureIso(30) });
-    openQuestion(container, "b", "goal");
-    fireEvent.click(container.querySelector("#b-goal-budget")!);
     showPlan();
-    // B's stretch is shaped by the budget goal, so the pace dials — which
-    // write to settings the solver overrides — are not offered at all. They
-    // would show a number computed from a pace the plan does not use.
+    // Both caregivers default to a goal now — the solver drives the pace for
+    // both, so neither offers the manual pace dials. They'd write to
+    // settings the solver overrides.
+    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     expect(
       screen.queryByRole("checkbox", {
         name: /Byt takt vid 1 år – Vårdnadshavare B/,
       }),
     ).toBeNull();
     expect(
-      screen.queryByRole("slider", { name: /Takt.*Vårdnadshavare B/ }),
-    ).toBeNull();
-    // A has no goal, so A keeps theirs.
-    expect(
-      screen.getByRole("checkbox", {
+      screen.queryByRole("checkbox", {
         name: /Byt takt vid 1 år – Vårdnadshavare A/,
       }),
-    ).toBeTruthy();
+    ).toBeNull();
+    expect(
+      screen.queryByRole("slider", { name: /Takt.*Vårdnadshavare/ }),
+    ).toBeNull();
   });
 
   it("shows combined household income while one caregiver is on leave", () => {
@@ -899,11 +887,9 @@ describe("<Planner /> wizard", () => {
     showPlan();
     // Open the collapsible "Justera" controls to reach the per-person levers.
     fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    // Extend caregiver A's leave. By default we do NOT assume they work, so the
-    // longer leave just spreads föräldrapenningen thinner — no deltidslön.
-    fireEvent.click(
-      screen.getByRole("button", { name: /Längst ledighet – Vårdnadshavare A/ }),
-    );
+    // A defaults to "as long as possible" — a slow pace that just spreads
+    // föräldrapenningen thinner. By default we do NOT assume they work, so
+    // no deltidslön shows up.
     expect(screen.queryByText(/deltidslön/i)).toBeNull();
     // Opt in to part-time work → their salary for the worked days shows up.
     fireEvent.click(

@@ -36,7 +36,7 @@ export interface PeriodEditing {
   hasStartOverride: Record<"A" | "B", boolean>;
   /** Editing a period's end sets that caregiver's "hemma till" date goal. */
   onEndDate: (id: "A" | "B", iso: string) => void;
-  /** Back to the automatic length (manual mode). */
+  /** Back to the automatic length (as long as possible). */
   onClearEnd: (id: "A" | "B") => void;
   /** Editing a period's start delays it (a gap where both work). */
   onStartDate: (id: "A" | "B", iso: string | null) => void;
@@ -677,7 +677,7 @@ export function PeriodPager({
           const net = row ? householdNetMonthly(row, municipalRate) : null;
           const sources = row ? incomeSources(row, municipalRate) : [];
           const id = editing.idByName[p.caregiver];
-          const mode: GoalMode = id ? editing.modeById[id] : "manual";
+          const mode: GoalMode = id ? editing.modeById[id] : "budget";
           const colorIdx = Math.max(0, cgOrder.indexOf(p.caregiver));
           const months = formatMonths(
             differenceInDays(p.startsAt, p.endsAt) / 30.4,
