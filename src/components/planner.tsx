@@ -48,6 +48,14 @@ import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { decodeState, encodeState, type ShareableState } from "@/lib/share";
+import {
+  ACTIVE_SAVED_PLAN_KEY,
+  SAVED_PLANS_KEY,
+  newPlanId,
+  planLabel,
+  type SavedPlan,
+} from "@/lib/saved-plans";
+import { Landing } from "@/components/landing";
 
 const DEFAULT_STATE: ShareableState = {
   plan: defaultPlanInput(""),
@@ -110,6 +118,19 @@ export function Planner() {
   // back to their own.
   const [editStep, setEditStep] = useState(1);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
+  // The landing page is always the entry point; a shared link (#p=…) skips
+  // straight past it below.
+  const [view, setView] = useState<"landing" | "plan">("landing");
+  const [savedPlans, setSavedPlans] = useLocalStorage<SavedPlan[]>(
+    SAVED_PLANS_KEY,
+    [],
+  );
+  // Which saved plan (if any) "Spara" updates in place, rather than adding a
+  // duplicate. Cleared whenever the working plan stops being that saved plan.
+  const [activeSavedPlanId, setActiveSavedPlanId] = useLocalStorage<
+    string | null
+  >(ACTIVE_SAVED_PLAN_KEY, null);
 
   // "Today" is read on the client only (avoids SSR/timezone hydration mismatch).
   useEffect(() => {
@@ -119,7 +140,8 @@ export function Planner() {
 
   // While the wizard is showing, phones get the app-shell layout: fixed
   // header/nav chrome and a single scrollable question area (see globals.css).
-  const wizardVisible = !(form.submitted ?? false);
+  // Landing and results are ordinary scrollable pages, so they opt out.
+  const wizardVisible = view === "plan" && !(form.submitted ?? false);
   useEffect(() => {
     document.body.classList.toggle("app-shell", wizardVisible);
     return () => document.body.classList.remove("app-shell");
@@ -131,13 +153,19 @@ export function Planner() {
     if (!hash.startsWith("#p=")) return;
     const shared = decodeState(hash.slice(3));
     if (!shared) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time sync from the URL on mount, mirroring the existing setForm(shared) above */
     setForm(shared);
+    setView("plan");
+    // A shared plan is its own thing until explicitly saved — it shouldn't
+    // silently overwrite whatever saved plan the working slot last pointed at.
+    setActiveSavedPlanId(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
     try {
       window.history.replaceState(null, "", window.location.pathname);
     } catch {
       // ignore (e.g. sandboxed history)
     }
-  }, [setForm]);
+  }, [setForm, setActiveSavedPlanId]);
 
   const { plan, objective, soloMode, hasUsedDays } = form;
   const daysPerWeek = form.daysPerWeek ?? 7;
@@ -935,6 +963,71 @@ export function Planner() {
     window.setTimeout(() => setCopied(false), 2000);
   };
 
+  // Any real answer means there's something worth offering to resume — the
+  // birth date is the first thing step 1 asks for.
+  const hasProgress = plan.birthDate !== "";
+  const progressLabel = planLabel(form);
+
+  const resetPlan = () => {
+    setForm(DEFAULT_STATE);
+    setActiveSavedPlanId(null);
+  };
+
+  const startNewPlan = () => {
+    resetPlan();
+    setEditStep(1);
+    setView("plan");
+  };
+
+  const openSavedPlan = (id: string) => {
+    const found = savedPlans.find((p) => p.id === id);
+    if (!found) return;
+    setForm(found.state);
+    setActiveSavedPlanId(found.id);
+    setEditStep(1);
+    setView("plan");
+  };
+
+  const deleteSavedPlan = (id: string) => {
+    setSavedPlans((list) => list.filter((p) => p.id !== id));
+    if (activeSavedPlanId === id) setActiveSavedPlanId(null);
+  };
+
+  const savePlan = () => {
+    const id = activeSavedPlanId ?? newPlanId();
+    const entry: SavedPlan = {
+      id,
+      name: planLabel(form),
+      savedAt: new Date().toISOString(),
+      state: form,
+    };
+    setSavedPlans((list) => {
+      const idx = list.findIndex((p) => p.id === id);
+      if (idx === -1) return [entry, ...list];
+      const updated = [...list];
+      updated[idx] = entry;
+      return updated;
+    });
+    setActiveSavedPlanId(id);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 2000);
+  };
+
+  if (view === "landing") {
+    return (
+      <Landing
+        savedPlans={savedPlans}
+        hasProgress={hasProgress}
+        progressLabel={progressLabel}
+        progressDone={submitted}
+        onCreate={startNewPlan}
+        onContinue={() => setView("plan")}
+        onOpen={openSavedPlan}
+        onDelete={deleteSavedPlan}
+      />
+    );
+  }
+
   if (submitted && valid) {
     if (!asOf || !remaining || !deadlines) {
       return (
@@ -1024,9 +1117,12 @@ export function Planner() {
           setEditStep(step);
           setForm((f) => ({ ...f, submitted: false }));
         }}
-        onReset={() => setForm(DEFAULT_STATE)}
+        onReset={resetPlan}
         onShare={share}
         copied={copied}
+        onSave={savePlan}
+        saved={saved}
+        onHome={() => setView("landing")}
       />
     );
   }
@@ -1043,7 +1139,7 @@ export function Planner() {
         window.scrollTo(0, 0);
         setForm((f) => ({ ...f, submitted: true }));
       }}
-      onReset={() => setForm(DEFAULT_STATE)}
+      onReset={resetPlan}
     />
   );
 }

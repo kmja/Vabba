@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Planner } from "@/components/planner";
@@ -112,9 +112,19 @@ function futureIso(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Render the app and dismiss the landing page via "Skapa ny plan" — every
+ * wizard/results test starts from a blank plan and doesn't care about it.
+ */
+function renderPlanner() {
+  const rendered = render(<Planner />);
+  fireEvent.click(rendered.container.querySelector("#create-plan")!);
+  return rendered;
+}
+
 describe("<Planner /> wizard", () => {
   it("walks the steps and lands on a results page with period blocks", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
 
@@ -131,7 +141,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("expands one period block at a time", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     // [0] is the 10-dagar block, then the two caregivers in leave order.
@@ -152,7 +162,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("puts the step-2 caregiver first on the timeline", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2: whoever is described here goes first
     fireEvent.change(container.querySelector("#a-name")!, {
@@ -172,7 +182,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("keeps the family scene mounted across steps (animated stage)", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     const scene = () => container.querySelector("[data-family-scene]");
     expect(scene()).not.toBeNull();
     const el = scene();
@@ -188,7 +198,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("reopens an answered question as an accordion, not the hero view", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     openQ(container, "q-date");
     // First pass: the active question is the hero — no card chrome.
     const dateBox = () => container.querySelector("#q-date")!.parentElement!;
@@ -208,7 +218,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("swipes between months in the calendar", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     openQ(container, "q-date");
     const grid = container.querySelector("[data-calendar-grid]")!;
     const month = () =>
@@ -222,7 +232,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("collapses an answered question and opens the next one", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // Step 1 opens on the number of babies; answering it opens the date.
     fireEvent.click(container.querySelector("#birth-count-1")!);
     expect(
@@ -244,7 +254,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("supports planning alone via the step-3 opt-out", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2: the one going on leave first
     openQuestion(container, "a", "income");
@@ -261,7 +271,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("includes the birth-days for the other parent by default", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     // On without being asked, and first in the list — they are the earliest
@@ -274,7 +284,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("gives the birth-days per child, so twins double them", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fireEvent.click(container.querySelector("#birth-count-2")!);
     fillToResults(container);
     showPlan();
@@ -282,7 +292,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("can turn the birth-days off", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container); // → last step
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#birth-days-enabled")!);
@@ -293,7 +303,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("drops the first 180 days to grundnivå when the 240-day rule isn't met", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2 (caregiver A)
     openQuestion(container, "a", "income");
@@ -313,7 +323,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("includes employer föräldralön by default and lets you opt out", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     // Föräldralön is assumed (most collective agreements have it), and shows
@@ -332,7 +342,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("advances with the Enter key and moves focus to the next field", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // Tap the babies count, pick a date, tap the child order — each answer
     // auto-advances, and the LAST one flows straight into step 2 with the
     // name field focused.
@@ -352,7 +362,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("walks the questions with Nästa and explains a missing date", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     const nextBtn = () => screen.getByRole("button", { name: "Nästa" });
     // Nothing is flagged before the user has tried to move on.
     expect(screen.queryByText(/Välj ett datum/)).toBeNull();
@@ -376,7 +386,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("asks how much föräldralön right after saying yes", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "supplement");
@@ -391,7 +401,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("skips the föräldralön terms when there is none", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "supplement");
@@ -403,7 +413,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("returns to the waiting question after editing an earlier answer", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2, the name question in focus
     fireEvent.change(container.querySelector("#a-name")!, {
@@ -427,7 +437,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("can reopen the inputs from the results page", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
@@ -435,7 +445,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("includes vab on the results page when enabled", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { incomeA: "40000" });
     fireEvent.click(container.querySelector("#advanced-options")!);
     fireEvent.click(container.querySelector("#vab-enabled")!);
@@ -444,7 +454,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("asks each caregiver's goal and solves a date goal from the wizard", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "income");
@@ -469,7 +479,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("asks the goal and its settings as separate substeps", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "goal");
@@ -506,7 +516,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("answers the date goal from a shortcut without opening the calendar", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "goal");
@@ -522,7 +532,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("says nothing about a goal until the household is known", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, futureIso(30));
     next(); // → step 2
     openQuestion(container, "a", "income");
@@ -540,7 +550,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("flags a date goal the days can't reach and offers the reachable one", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { birth: futureIso(30) });
     fireEvent.click(screen.getByRole("button", { name: /Bakåt/ })); // → step 2
     openQuestion(container, "a", "goal");
@@ -559,7 +569,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("measures the second caregiver's dates from where the first one ends", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, futureIso(30));
     next(); // → step 2
     openQuestion(container, "a", "income");
@@ -583,7 +593,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("scales föräldralön to the pace actually being drawn, not the manual lever", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // A goal drives A's pace to a slow crawl (a low budget floor relative to
     // B's high salary) — the manual "Justera planen" pace stays at its
     // default of 7 the whole time, since a goal bypasses it entirely.
@@ -619,7 +629,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("funds a set length even when the split would starve it", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // A earns more, so "maximise household income" hands every transferable
     // day to B and leaves A only their 90 reserved.
     pickBirth(container, futureIso(30));
@@ -646,7 +656,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("shows net income and duration in a collapsed period row, no dates", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     const headers = periodHeaders(container);
@@ -663,7 +673,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("puts a dated marker between each period instead of inside it", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // A birth still ahead, so the leave starts right on the birth date
     // rather than being pulled forward to "today" by a past one.
     fillToResults(container, { birth: futureIso(14) });
@@ -680,7 +690,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("notes a real gap between periods, only where the dates actually leave one", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { birth: futureIso(14) });
     showPlan();
     // Open B's block and push its start out — a real gap where both work.
@@ -699,7 +709,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("merges the birth-days into the first caregiver's overlapping start", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // Both start at the birth by default — the two sit on top of each other
     // for the first 10 days rather than reading as unrelated events.
     fillToResults(container, { birth: futureIso(14) });
@@ -738,7 +748,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("solves the longest leave within a household budget from the wizard", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "income");
@@ -758,7 +768,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("saves the days a caregiver sets aside in the wizard", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     // Second caregiver (B) saves 30 days for later.
     openQuestion(container, "b", "save");
@@ -770,7 +780,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("editing a period's end date flips that caregiver to a date goal", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     fireEvent.change(container.querySelector("#period-end-0")!, {
@@ -782,7 +792,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("has a live split slider on the results page that updates the numbers", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { incomeA: "50000", incomeB: "50000" });
     showPlan();
     // The day-split slider lives in the expanded "Justera" controls.
@@ -797,7 +807,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("stretches one caregiver's leave with the per-person lever", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     showPlan();
     // Both caregivers start on full pace.
@@ -812,7 +822,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("splits a caregiver's leave where the pace changes at 1 year", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // A birth still ahead, so the leave actually crosses the 1-year mark.
     fillToResults(container, {
       incomeA: "45000",
@@ -836,7 +846,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("does not offer pace dials on a stretch the solver drives", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { birth: futureIso(30) });
     openQuestion(container, "b", "goal");
     fireEvent.click(container.querySelector("#b-goal-budget")!);
@@ -861,7 +871,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("shows combined household income while one caregiver is on leave", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     showPlan();
     // Each period card breaks the month down by source — the leave-taker's
@@ -873,7 +883,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("only counts part-time work in household income when opted in", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     showPlan();
     // Open the collapsible "Justera" controls to reach the per-person levers.
@@ -894,7 +904,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("saves the lägstanivå days by default", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
     // B's 300 income-based days (less the 20 saved) and no flat days — the 90
@@ -905,7 +915,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("includes the lägstanivå days when the step-1 toggle is on", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     // The lägstanivå toggle lives under step 1's advanced settings.
     fireEvent.click(container.querySelector("#advanced-options")!);
@@ -928,7 +938,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("adds extra days for twins", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     // Twins live in the birth-count question (icon targets), which now opens
     // step 1.
     fireEvent.click(container.querySelector("#birth-count-2")!);
@@ -950,7 +960,7 @@ describe("<Planner /> wizard", () => {
   });
 
   it("asks about days from previous children from the second child on", () => {
-    const { container } = render(<Planner />);
+    const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     // First child: the carried-over question is not in the flow.
     next();
@@ -979,5 +989,81 @@ describe("<Planner /> wizard", () => {
     expect(
       screen.getAllByText(/sparade från tidigare barn/).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("<Planner /> landing & saved plans", () => {
+  it("launches into a landing page with a create-plan button", () => {
+    render(<Planner />);
+    expect(
+      screen.getByRole("button", { name: /Skapa ny plan/ }),
+    ).toBeTruthy();
+    expect(screen.queryByText("Sparade planer")).toBeNull();
+  });
+
+  it("Skapa ny plan reaches the wizard", () => {
+    const { container } = render(<Planner />);
+    fireEvent.click(container.querySelector("#create-plan")!);
+    expect(container.querySelector("#birth-count-1")).toBeTruthy();
+  });
+
+  it("saves a plan from results and reopens it from the landing page", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    expect(screen.getByText("Sparad!")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    expect(screen.getByText("Sparade planer")).toBeTruthy();
+    expect(screen.getByText("Namnlös plan")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Namnlös plan"));
+    expect(screen.getByText("Justera planen")).toBeTruthy();
+    expect(periodHeaders(container).length).toBe(3);
+  });
+
+  it("re-saving an opened plan updates it instead of duplicating", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    fireEvent.click(screen.getByText("Namnlös plan"));
+
+    // Back on results for the same plan — saving again should not duplicate it.
+    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    expect(screen.getAllByText("Namnlös plan").length).toBe(1);
+  });
+
+  it("deletes a saved plan from the landing page", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    expect(screen.getByText("Namnlös plan")).toBeTruthy();
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: /Ta bort/ }));
+    expect(screen.queryByText("Namnlös plan")).toBeNull();
+    expect(screen.queryByText("Sparade planer")).toBeNull();
+  });
+
+  it("offers to continue an in-progress plan after a reload", () => {
+    const { container } = renderPlanner();
+    pickBirth(container, "2025-01-15");
+    cleanup();
+
+    render(<Planner />);
+    expect(screen.getByText("Påbörjad, inte klar")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Fortsätt/ }));
+    expect(
+      screen.queryByRole("button", { name: /Skapa ny plan/ }),
+    ).toBeNull();
+    expect(document.querySelector("[data-wizard-step]")).toBeTruthy();
   });
 });

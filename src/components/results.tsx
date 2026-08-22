@@ -1,6 +1,13 @@
 "use client";
 
-import { IconCheck, IconPencil, IconRefresh, IconShare2 } from "@tabler/icons-react";
+import {
+  IconCheck,
+  IconDeviceFloppy,
+  IconHome2,
+  IconPencil,
+  IconRefresh,
+  IconShare2,
+} from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
 import { CaregiverSummary } from "@/components/caregiver-summary";
@@ -68,6 +75,9 @@ export function Results({
   onReset,
   onShare,
   copied,
+  onSave,
+  saved,
+  onHome,
 }: {
   soloMode: boolean;
   objective: Objective;
@@ -117,6 +127,11 @@ export function Results({
   onReset: () => void;
   onShare: () => void;
   copied: boolean;
+  /** Save (or update) this plan in the saved-plans list. */
+  onSave: () => void;
+  saved: boolean;
+  /** Back to the landing page, plan untouched. */
+  onHome: () => void;
 }) {
   // The dials each period block drives, keyed by caregiver.
   const rowFor = (id: "A" | "B") => {
@@ -148,9 +163,16 @@ export function Results({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Er plan</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={onHome}>
+            <IconHome2 /> Startsidan
+          </Button>
           <Button type="button" size="sm" onClick={() => onEdit(1)}>
             <IconPencil /> Ändra uppgifter
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onSave}>
+            {saved ? <IconCheck /> : <IconDeviceFloppy />}
+            {saved ? "Sparad!" : "Spara"}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onShare}>
             {copied ? <IconCheck /> : <IconShare2 />}
