@@ -1050,6 +1050,22 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Sammanfattning")).toBeTruthy();
     expect(container.querySelector("#municipal-rate")).toBeNull();
   });
+
+  it("saves and closes the advanced-settings page from its Spara button", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    openAdvanced(container);
+    fireEvent.click(container.querySelector("#include-lagsta")!);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+    // Back on the summary — the change is a plain form field, already
+    // written to the plan as it was toggled, so nothing more to commit.
+    expect(screen.getByText("Sammanfattning")).toBeTruthy();
+    openAdvanced(container);
+    expect(
+      container.querySelector<HTMLInputElement>("#include-lagsta")?.checked,
+    ).toBe(true);
+  });
 });
 
 describe("<Planner /> landing & saved plans", () => {

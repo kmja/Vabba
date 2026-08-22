@@ -14,6 +14,7 @@ import {
   IconArrowLeft,
   IconArrowRight,
   IconBabyCarriage,
+  IconDeviceFloppy,
   IconRefresh,
 } from "@tabler/icons-react";
 
@@ -1580,13 +1581,20 @@ export function Wizard({
             <div aria-hidden style={{ height: kbInset }} />
           </div>
 
-          <div className="bg-card/95 sticky bottom-0 z-30 flex items-center border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6">
+          <div className="bg-card/95 sticky bottom-0 z-30 flex items-center justify-between gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6">
             <Button
               type="button"
               variant="ghost"
               onClick={() => setPage("wizard")}
             >
               <IconArrowLeft /> Tillbaka
+            </Button>
+            {/* Every field already writes straight to the plan as it's
+                changed — this doesn't commit anything extra, it just closes
+                the page, but "Spara" is the clearer, more final-feeling
+                way to say "done here" than "Tillbaka" is. */}
+            <Button type="button" onClick={() => setPage("wizard")}>
+              <IconDeviceFloppy /> Spara
             </Button>
           </div>
         </form>
