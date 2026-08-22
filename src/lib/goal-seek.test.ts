@@ -207,3 +207,71 @@ describe("solvePlan — budget", () => {
     expect(res.perCaregiver[0].paces.phase1).toBe(7);
   });
 });
+
+describe("solvePlan — dubbeldagar", () => {
+  it("gives the second caregiver a dated overlap at the very start, on top of their own later stretch", () => {
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 90, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 300, manualPace: 7, doubleDays: 20 }),
+    ]);
+    const overlap = res.intervals.filter(
+      (s) => s.caregiver === "Bea" && s.startsAt.getTime() === birth.getTime(),
+    );
+    expect(overlap.length).toBeGreaterThan(0);
+    // 20 days at pace 7 (every day counts) is 20 calendar days.
+    const overlapEnd = overlap[overlap.length - 1].endsAt;
+    expect(differenceInDays(birth, overlapEnd)).toBe(20);
+    expect(overlap.every((s) => Math.abs(s.pace - 7) < 1e-9)).toBe(true);
+
+    // Bea's own sequential stretch still starts where Anna's ends — the
+    // overlap is additional, not a delay to her own turn — and only draws
+    // what's left of her pool after the 20 spent on the overlap: 280 days
+    // at pace 7 is 280 calendar days, not the 300 she'd get without it.
+    const [anna, bea] = res.perCaregiver;
+    expect(bea.startsAt?.getTime()).toBe(anna.endsAt?.getTime());
+    expect(differenceInDays(bea.startsAt!, bea.endsAt!)).toBe(280);
+    // Anna is unaffected — the days come out of Bea's own pool.
+    expect(anna.usedDays).toBe(90);
+    // Bea's total draw is still her full 300 — 20 spent concurrently with
+    // Anna at the start, 280 in her own stretch after. Dubbeldagar aren't a
+    // bonus on top of the allocated pool, just a different shape for it.
+    expect(bea.usedDays).toBe(300);
+  });
+
+  it("is meaningless for the first caregiver — there's no one to overlap with yet", () => {
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 90, manualPace: 7, doubleDays: 20 }),
+    ]);
+    expect(res.intervals.length).toBe(1);
+    expect(res.perCaregiver[0].usedDays).toBe(90);
+  });
+
+  it("cannot draw more dubbeldagar than the caregiver's own pool holds", () => {
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 90, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 10, manualPace: 7, doubleDays: 20 }),
+    ]);
+    const overlap = res.intervals.filter(
+      (s) => s.caregiver === "Bea" && s.startsAt.getTime() === birth.getTime(),
+    );
+    const overlapEnd = overlap[overlap.length - 1].endsAt;
+    expect(differenceInDays(birth, overlapEnd)).toBe(10);
+    expect(res.perCaregiver[1].usedDays).toBe(10);
+  });
+
+  it("starts after a delay — e.g. a birth-days window that comes first", () => {
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 90, manualPace: 7 }),
+      cg({
+        name: "Bea",
+        incomeDays: 300,
+        manualPace: 7,
+        doubleDays: 20,
+        doubleDaysDelay: 10,
+      }),
+    ]);
+    const bea = res.intervals.filter((s) => s.caregiver === "Bea");
+    expect(bea[0].startsAt.getTime()).toBe(addDays(birth, 10).getTime());
+    expect(differenceInDays(bea[0].startsAt, bea[0].endsAt)).toBe(20);
+  });
+});

@@ -295,10 +295,11 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
 }
 
 /**
- * Where the money in a stretch comes from, one row per source: label, netto
- * (bold, what is actually kept), brutto (small, muted). The netto column is
- * right-aligned and tabular so it reads straight down to the total it sums
- * to. Shared between the plain PeriodCard and the period pager's own blocks.
+ * Where the money in a stretch comes from, one row per source: label, brutto
+ * (small, muted), netto (bold, what is actually kept — the rightmost column,
+ * closest to the eye). Both are right-aligned and tabular so each reads
+ * straight down to the total it sums to. Shared between the plain PeriodCard
+ * and the period pager's own blocks.
  */
 export function IncomeBreakdownTable({ sources }: { sources: IncomeSource[] }) {
   return (
@@ -308,21 +309,21 @@ export function IncomeBreakdownTable({ sources }: { sources: IncomeSource[] }) {
     >
       <span />
       <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
-        netto
+        brutto
       </span>
       <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
-        brutto
+        netto
       </span>
       {sources.map((s) => (
         <Fragment key={s.key}>
           <span className="text-muted-foreground min-w-0 truncate text-xs">
             {s.label}
           </span>
-          <span className="text-right text-sm font-semibold tabular-nums">
-            {formatSek(s.net)}
-          </span>
           <span className="text-muted-foreground text-right text-xs tabular-nums">
             {formatSek(s.gross)}
+          </span>
+          <span className="text-right text-sm font-semibold tabular-nums">
+            {formatSek(s.net)}
           </span>
         </Fragment>
       ))}

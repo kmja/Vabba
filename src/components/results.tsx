@@ -23,6 +23,7 @@ import type { MonthlyRow } from "@/components/monthly-estimate";
 import { VabResultCard } from "@/components/vab-result-card";
 import { WarningsList } from "@/components/warnings-list";
 import type { LeaveProjection } from "@/components/timeline";
+import type { PlanSolve } from "@/lib/goal-seek";
 import type { PlanDeadlines, PlanInput } from "@/lib/calc";
 import type {
   Objective,
@@ -66,6 +67,7 @@ export function Results({
   vabResult,
   birthDays,
   birthDaysName,
+  doubleDaysWindow,
   firstCaregiver,
   municipalRate,
   oneYear,
@@ -113,6 +115,8 @@ export function Results({
   vabResult: VabResult | null;
   birthDays?: BirthDaysResult;
   birthDaysName: string;
+  /** Dubbeldagar: the second caregiver's overlap with the first, if any. */
+  doubleDaysWindow?: PlanSolve["doubleDaysWindow"];
   /** Which caregiver is home first — decides the order of the sections. */
   firstCaregiver: "A" | "B";
   /** The household's kommunalskatt, as a fraction — every net uses it. */
@@ -262,6 +266,7 @@ export function Results({
                 }
               : undefined
           }
+          doubleDaysWindow={doubleDaysWindow ?? undefined}
         />
       </div>
 

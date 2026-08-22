@@ -496,6 +496,13 @@ export function Planner() {
         budgetFloor: isA ? goalBudgetA : goalBudgetB,
         saveDays: isA ? saveDaysA : saveDaysB,
         startAt: isA ? periodStartA : periodStartB,
+        // The optimizer's own (statute- and deadline-clamped) figure — it
+        // already folded this into both allocations above, so the solver
+        // below carves the same amount back out into a real, dated overlap.
+        doubleDays: twoParent?.recommended.doubleDays ?? 0,
+        // The dubbeldagar overlap follows the birth-days window (a
+        // different benefit, taken first), not the very start of the leave.
+        doubleDaysDelay: birthDays?.days ?? 0,
       };
     };
 
@@ -530,7 +537,7 @@ export function Planner() {
       return null;
     }
     return solvePlan(deadlines.birth, start, specs, municipalRate);
-  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate, form.goalMonthsA, form.goalMonthsB]);
+  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate, form.goalMonthsA, form.goalMonthsB, birthDays]);
 
   /**
    * The pace föräldralön is actually paid at: how much of the week this
@@ -1123,6 +1130,7 @@ export function Planner() {
         vabResult={vabResult}
         birthDays={birthDays ?? undefined}
         birthDaysName={birthDaysName}
+        doubleDaysWindow={planSolve?.doubleDaysWindow ?? undefined}
         firstCaregiver={firstCaregiver}
         municipalRate={municipalRate}
         oneYear={oneYear ?? undefined}

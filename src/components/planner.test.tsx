@@ -183,8 +183,8 @@ describe("<Planner /> wizard", () => {
     // [0] is the 10-dagar block, then the two caregivers in leave order.
     const headers = () => periodHeaders(container);
     expect(headers()[0].textContent).toContain("vid födseln");
-    expect(headers()[1].textContent).toContain("Vårdnadshavare A är hemma");
-    expect(headers()[2].textContent).toContain("Vårdnadshavare B är hemma");
+    expect(headers()[1].textContent).toContain("Vårdnadshavare A");
+    expect(headers()[2].textContent).toContain("Vårdnadshavare B");
     // The topmost block starts open.
     expect(headers()[0].getAttribute("aria-expanded")).toBe("true");
     expect(headers()[2].getAttribute("aria-expanded")).toBe("false");
@@ -214,7 +214,8 @@ describe("<Planner /> wizard", () => {
       target: { value: "30000" },
     });
     showPlan();
-    expect(screen.getByText(/Kim är hemma/)).toBeTruthy();
+    // [0] is the 10-dagar block, [1] the first caregiver's own — Kim's.
+    expect(periodHeaders(container)[1].textContent).toContain("Kim");
   });
 
   it("keeps the family scene mounted across steps (animated stage)", () => {
@@ -744,7 +745,6 @@ describe("<Planner /> wizard", () => {
     showPlan();
     const headers = periodHeaders(container);
     // One combined block for the shared window, not two separate ones.
-    expect(headers[0].textContent).toContain("är hemma");
     expect(headers[0].textContent).toContain("vid födseln");
     expect(headers[0].textContent).toMatch(/10 dagar/);
     // Only one marker for that whole window — at the birth — not a second
@@ -922,6 +922,38 @@ describe("<Planner /> wizard", () => {
     // are their own block at the end of B's leave.
     const last = periodHeaders(container).at(-1)!;
     expect(last.textContent).toContain("lägstanivå");
+  });
+
+  it("shows a combined dubbeldagar block right after the birth block", () => {
+    const { container } = renderPlanner();
+    fillToResults(container, { birth: futureIso(30) });
+    openAdvanced(container);
+    fireEvent.change(container.querySelector("#double-days")!, {
+      target: { value: "20" },
+    });
+    closeAdvanced();
+    showPlan();
+
+    const headers = periodHeaders(container);
+    expect(headers[0].textContent).toContain("vid födseln");
+    expect(headers[1].textContent).toContain("dubbeldagar");
+    expect(headers[1].textContent).toMatch(/20 dagar/);
+    // Both caregivers show up in the combined header — this is the whole
+    // point of dubbeldagar, both home at once.
+    expect(headers[1].textContent).toContain("Vårdnadshavare A");
+    expect(headers[1].textContent).toContain("Vårdnadshavare B");
+    // It isn't shown again as a second, oddly-timed standalone block later
+    // in the list.
+    expect(
+      headers.filter((h) => h.textContent?.includes("dubbeldagar")).length,
+    ).toBe(1);
+
+    // Contiguous with what comes right after it — not a gap where both are
+    // back at work.
+    const markers = Array.from(
+      container.querySelectorAll("[data-period-marker]"),
+    );
+    expect(markers[2]!.querySelector("[data-gap-note]")).toBeNull();
   });
 
   it("adds extra days for twins", () => {

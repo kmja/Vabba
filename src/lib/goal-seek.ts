@@ -26,7 +26,7 @@ import {
   type LeaveInterval,
   type PaceBreak,
 } from "@/lib/projection";
-import { addMonths, addYears, differenceInDays } from "@/lib/dates";
+import { addDays, addMonths, addYears, differenceInDays } from "@/lib/dates";
 import { SGI_PROTECTION } from "@/lib/rules";
 import { DEFAULT_MUNICIPAL_RATE, householdNet } from "@/lib/tax";
 
@@ -73,6 +73,17 @@ export interface CaregiverPlanSpec {
   saveDays?: number;
   /** Start this caregiver's stretch later (a gap where both work). */
   startAt?: Date | null;
+  /**
+   * Dubbeldagar: this caregiver ALSO draws income-based days concurrently
+   * with the start of the leave — both caregivers home at once — spent
+   * from their own pool before their sequential stretch (below) continues
+   * with what's left of it. Meaningless for the first caregiver, who is
+   * already there from the start.
+   */
+  doubleDays?: number;
+  /** Calendar days after the very start of the leave before the dubbeldagar
+   *  overlap begins — e.g. a birth-days window, which comes first. */
+  doubleDaysDelay?: number;
 }
 
 export interface CaregiverOutcome {
@@ -99,13 +110,26 @@ export interface CaregiverOutcome {
 }
 
 export interface PlanSolve {
-  /** All caregivers' dated segments, in leave order. */
+  /** All caregivers' dated segments, in leave order — includes the
+   *  dubbeldagar overlap below, so day totals and net-floor checks see it. */
   intervals: LeaveInterval[];
   perCaregiver: CaregiverOutcome[];
   endsAt: Date | null;
   savedTotal: number;
   /** Lowest household net (benefit + partner salary + part-time salary). */
   minHouseholdNet: number | null;
+  /**
+   * Dubbeldagar: the second caregiver's concurrent overlap with the first,
+   * called out separately (rather than left for the UI to find inside
+   * `intervals`, where it sits out of chronological order — it was pushed
+   * in alongside that caregiver's own later, sequential stretch).
+   */
+  doubleDaysWindow: {
+    caregiver: string;
+    startsAt: Date;
+    endsAt: Date;
+    rate: number;
+  } | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -515,12 +539,52 @@ export function solvePlan(
   const intervals: LeaveInterval[] = [];
   const perCaregiver: CaregiverOutcome[] = [];
   let cursor = start;
+  // Where the very first caregiver actually begins (their own startAt can
+  // push this later) — dubbeldagar overlap that, not wherever a later
+  // caregiver's own sequential turn happens to start.
+  let openingStart = start;
+  let doubleDaysWindow: PlanSolve["doubleDaysWindow"] = null;
 
-  for (const spec of caregivers) {
+  for (const [i, spec] of caregivers.entries()) {
     if (spec.startAt && spec.startAt.getTime() > cursor.getTime()) {
       cursor = spec.startAt;
     }
-    const pools = applySaveDays(spec);
+    if (i === 0) openingStart = cursor;
+    let pools = applySaveDays(spec);
+
+    // Dubbeldagar: on top of their own later stretch, this caregiver ALSO
+    // draws benefit right alongside the first caregiver's opening days —
+    // both home at once. Spent from their own pool, so it comes off what's
+    // left for the sequential solve below. Kept in `intervals` (so day
+    // totals and net-floor checks see it) but ALSO called out on its own —
+    // pushed here, it lands out of chronological order relative to the
+    // first caregiver's still-ongoing stretch, which the UI needs to know
+    // to merge the two into one "both home" block instead.
+    const dd =
+      i > 0 ? Math.max(0, Math.min(spec.doubleDays ?? 0, pools.income)) : 0;
+    if (dd > 0) {
+      const ddStart = addDays(openingStart, spec.doubleDaysDelay ?? 0);
+      const ddIntervals = buildLeaveIntervals(ddStart, [
+        {
+          caregiver: spec.name,
+          tier: "income",
+          days: dd,
+          rate: spec.incomeRate,
+          schedule: [{ until: null, pace: 7 }],
+        },
+      ]);
+      intervals.push(...ddIntervals);
+      if (ddIntervals.length > 0) {
+        doubleDaysWindow = {
+          caregiver: spec.name,
+          startsAt: ddIntervals[0].startsAt,
+          endsAt: ddIntervals[ddIntervals.length - 1].endsAt,
+          rate: spec.incomeRate,
+        };
+      }
+      pools = { ...pools, income: pools.income - dd };
+    }
+
     // A length goal only becomes a date once we know where this caregiver
     // starts, which is where the one before them ended.
     const target =
@@ -561,5 +625,6 @@ export function solvePlan(
     endsAt: intervals.length > 0 ? intervals[intervals.length - 1].endsAt : null,
     savedTotal: perCaregiver.reduce((a, o) => a + o.savedDays, 0),
     minHouseholdNet: minNet,
+    doubleDaysWindow,
   };
 }

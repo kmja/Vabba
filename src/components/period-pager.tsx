@@ -84,6 +84,10 @@ function toPeriods(segments: LeaveInterval[]): Period[] {
     const same =
       last &&
       last.caregiver === cg &&
+      // Adjacent in time, not just matching pace/tier — a dubbeldagar
+      // overlap and a caregiver's later sequential stretch can share both
+      // without being the same stretch of the calendar.
+      last.endsAt.getTime() === seg.startsAt.getTime() &&
       Math.abs(last.segments[0].pace - seg.pace) < 0.05 &&
       last.segments[0].tier === seg.tier;
     if (same) {
@@ -285,8 +289,86 @@ function overlapWindow(
   };
 }
 
+/**
+ * Where dubbeldagar overlap the first caregiver's ongoing leave — both
+ * drawing regular föräldrapenning at once — fold the two into one block,
+ * the same idea as the birth-days merge above. Unlike that one, both sides
+ * are ordinary monthly-rate income (no TFP lump sum to reconcile), so both
+ * get the same "scale to this window" treatment.
+ *
+ * `second` is dubbeldagar's own already-built Period (from `toPeriods`) —
+ * it exists as a real, dated entry in the caregiver's segment list, just in
+ * the wrong place: pushed in alongside that caregiver's own LATER
+ * sequential stretch, so array order puts it after the first caregiver's
+ * still-ongoing block rather than beside it. This merge is what actually
+ * displays it; the caller filters the standalone entry out.
+ */
+function doubleDaysOverlap(
+  first: Period,
+  second: Period,
+  firstBase: MonthlyRow | undefined,
+  secondBase: MonthlyRow | undefined,
+  municipalRate: number | undefined,
+): {
+  startsAt: Date;
+  endsAt: Date;
+  caregiver1: string;
+  caregiver2: string;
+  pace1: string;
+  sources: IncomeSource[];
+  net: number;
+} | null {
+  if (!firstBase || !secondBase) return null;
+  if (second.endsAt.getTime() <= second.startsAt.getTime()) return null;
+
+  const firstSlice: Period = {
+    ...first,
+    startsAt: second.startsAt,
+    endsAt: second.endsAt,
+    segments: first.segments
+      .map((s) => clipSegment(s, second.startsAt, second.endsAt))
+      .filter((s): s is LeaveInterval => s !== null),
+  };
+  if (firstSlice.segments.length === 0) return null;
+
+  // incomeSources() reports a MONTHLY rate for both sides — scale each down
+  // to this window before adding them, the same reasoning as the birth-days
+  // merge (a monthly rate slipping in unscaled would dwarf a short window).
+  // Both sides use the same generic keys ("fp", "supplement", ...) — prefix
+  // them per side so React (and anything else keying off `key`) sees two
+  // distinct rows instead of one overwriting the other.
+  const windowDays = differenceInDays(second.startsAt, second.endsAt);
+  const ratio = windowDays / 30.4;
+  const scaled = (row: MonthlyRow, prefix: string) =>
+    incomeSources(
+      { ...row, householdBase: 0, partnerWorking: undefined },
+      municipalRate,
+    ).map((s) => ({
+      ...s,
+      key: `${prefix}-${s.key}`,
+      net: Math.round(s.net * ratio),
+      gross: Math.round(s.gross * ratio),
+    }));
+
+  const sources = [
+    ...scaled(rowForPeriod(firstBase, firstSlice), "first"),
+    ...scaled(rowForPeriod(secondBase, second), "second"),
+  ];
+  return {
+    startsAt: second.startsAt,
+    endsAt: second.endsAt,
+    caregiver1: first.caregiver,
+    caregiver2: second.caregiver,
+    pace1: `${formatPace(firstSlice.segments[0].pace)} dagar/vecka`,
+    sources,
+    net: sources.reduce((sum, s) => sum + s.net, 0),
+  };
+}
+
 /** The birth-days block's slot in the accordion's single-open state. */
 const BIRTH_IDX = -1;
+/** The dubbeldagar-merge block's slot in the accordion's single-open state. */
+const DOUBLE_IDX = -2;
 
 /**
  * A dated line between two blocks — where one stretch ends and the next
@@ -450,7 +532,7 @@ function BirthDaysBlock({
   return (
     <Block
       colorIdx={colorIdx}
-      title={`${period.caregiver} är hemma`}
+      title={period.caregiver}
       phase={period.phase}
       subtitle={`≈ ${formatSek(net)} · ${formatDays(result.days)}`}
       open={open}
@@ -494,6 +576,7 @@ export function PeriodPager({
   oneYear,
   sgiLiftedNames,
   birthDays,
+  doubleDaysWindow,
 }: {
   projection?: LeaveProjection;
   rows?: MonthlyRow[];
@@ -508,6 +591,13 @@ export function PeriodPager({
     salary: number;
     municipalRate: number;
   };
+  /** Dubbeldagar: the second caregiver's overlap with the first, if any. */
+  doubleDaysWindow?: {
+    caregiver: string;
+    startsAt: Date;
+    endsAt: Date;
+    rate: number;
+  } | null;
   /** The household's kommunalskatt — used for every net in a block. */
   municipalRate?: number;
   /** The child's first birthday, where the SGI pace floor starts to bite. */
@@ -568,21 +658,49 @@ export function PeriodPager({
           municipalRate,
         )
       : null;
-  // The first caregiver's block, truncated past the merged window — its true
-  // start is inside the combined block above, so this one no longer owns the
-  // "first" facts (grundnivå, extra days) or an editable start date. It is
-  // still their first block for the whole-stretch toggles (part-time, byt
-  // takt vid 1 år), so `firstOfCaregiver` itself stays true.
-  const displayPeriods = overlap
-    ? [
-        { ...periods[0], startsAt: overlap.endsAt, truncatedStart: true },
-        ...periods.slice(1),
-      ]
+
+  // Dubbeldagar: the second caregiver's own period (pushed in by the solver
+  // alongside their later sequential stretch, so it landed out of order —
+  // see the comment on doubleDaysOverlap). Find it, merge it into a second
+  // combined block, and drop the standalone entry so it isn't shown twice.
+  const doubleDaysPeriod = doubleDaysWindow
+    ? (periods.find(
+        (p) =>
+          p.caregiver === doubleDaysWindow.caregiver &&
+          p.startsAt.getTime() === doubleDaysWindow.startsAt.getTime(),
+      ) ?? null)
+    : null;
+  const doubleDaysMerge = doubleDaysPeriod
+    ? doubleDaysOverlap(
+        periods[0],
+        doubleDaysPeriod,
+        rows.find((r) => r.name === periods[0].caregiver),
+        rows.find((r) => r.name === doubleDaysPeriod.caregiver),
+        municipalRate,
+      )
+    : null;
+  const periodsShown = doubleDaysPeriod
+    ? periods.filter((p) => p !== doubleDaysPeriod)
     : periods;
 
+  // The first caregiver's block, truncated past whichever combined window
+  // above reaches furthest — its true start is inside that block, so this
+  // one no longer owns the "first" facts (grundnivå, extra days) or an
+  // editable start date. It is still their first block for the whole-stretch
+  // toggles (part-time, byt takt vid 1 år), so `firstOfCaregiver` stays true.
+  const croppedStart = doubleDaysMerge?.endsAt ?? overlap?.endsAt;
+  const displayPeriods = croppedStart
+    ? [
+        { ...periodsShown[0], startsAt: croppedStart, truncatedStart: true },
+        ...periodsShown.slice(1),
+      ]
+    : periodsShown;
+
   const total = formatMonths(
-    differenceInDays(periods[0].startsAt, periods[periods.length - 1].endsAt) /
-      30.4,
+    differenceInDays(
+      periodsShown[0].startsAt,
+      periodsShown[periodsShown.length - 1].endsAt,
+    ) / 30.4,
   );
 
   return (
@@ -601,7 +719,7 @@ export function PeriodPager({
             <Block
               colorIdx={Math.max(0, cgOrder.indexOf(overlap.caregiver1))}
               colorIdx2={Math.max(0, cgOrder.indexOf(overlap.caregiver2))}
-              title={`${overlap.caregiver1} & ${overlap.caregiver2} är hemma`}
+              title={`${overlap.caregiver1} & ${overlap.caregiver2}`}
               phase="vid födseln"
               subtitle={
                 <>
@@ -671,6 +789,64 @@ export function PeriodPager({
             />
           </>
         )}
+        {doubleDaysMerge && (
+          <>
+            <DateMarker
+              date={doubleDaysMerge.startsAt}
+              gapDays={0}
+              atBirth={!overlap && !birth}
+            />
+            <Block
+              colorIdx={Math.max(
+                0,
+                cgOrder.indexOf(doubleDaysMerge.caregiver1),
+              )}
+              colorIdx2={Math.max(
+                0,
+                cgOrder.indexOf(doubleDaysMerge.caregiver2),
+              )}
+              title={`${doubleDaysMerge.caregiver1} & ${doubleDaysMerge.caregiver2}`}
+              phase="dubbeldagar"
+              subtitle={
+                <>
+                  <span className="block">
+                    {doubleDaysMerge.caregiver1} {doubleDaysMerge.pace1} ·{" "}
+                    {doubleDaysMerge.caregiver2} dubbeldagar
+                  </span>
+                  <span className="block">
+                    {formatDays(
+                      differenceInDays(
+                        doubleDaysMerge.startsAt,
+                        doubleDaysMerge.endsAt,
+                      ),
+                    )}
+                  </span>
+                </>
+              }
+              headerRight={
+                <span className="text-foreground shrink-0 text-base font-bold tabular-nums">
+                  ≈ {formatSek(doubleDaysMerge.net)}
+                </span>
+              }
+              alwaysVisible={
+                <div className="border-t pt-2.5">
+                  <IncomeBreakdownTable sources={doubleDaysMerge.sources} />
+                </div>
+              }
+              open={openIdx === DOUBLE_IDX}
+              onToggle={() =>
+                setOpenIdx(openIdx === DOUBLE_IDX ? null : DOUBLE_IDX)
+              }
+              panelId="period-panel-double"
+            >
+              <p className="text-muted-foreground text-xs">
+                {doubleDaysMerge.caregiver2} tar dubbeldagar — dagar båda
+                vårdnadshavarna är hemma samtidigt, en dag ur var och ens egen
+                pott. Kan bara tas innan barnet fyllt 15 månader.
+              </p>
+            </Block>
+          </>
+        )}
         {displayPeriods.map((p, i) => {
           const base = rows.find((r) => r.name === p.caregiver);
           const row = base ? rowForPeriod(base, p) : undefined;
@@ -702,7 +878,10 @@ export function PeriodPager({
           const priorEnd =
             i > 0
               ? displayPeriods[i - 1].endsAt
-              : (overlap?.endsAt ?? birth?.endsAt ?? deadlines.birth);
+              : (doubleDaysMerge?.endsAt ??
+                overlap?.endsAt ??
+                birth?.endsAt ??
+                deadlines.birth);
           const gapBefore = differenceInDays(priorEnd, p.startsAt);
 
           return (
@@ -714,8 +893,8 @@ export function PeriodPager({
               />
               <Block
                 colorIdx={colorIdx}
-                title={`${p.caregiver} är hemma`}
-                phase={row?.goalLabel ?? null}
+                title={p.caregiver}
+                phase={null}
                 subtitle={
                   <>
                     <span className="block">{months}</span>
