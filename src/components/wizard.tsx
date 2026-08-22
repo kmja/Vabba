@@ -250,6 +250,7 @@ export function Wizard({
   initialStep = 1,
   onSubmit,
   onReset,
+  onStepChange,
 }: {
   form: ShareableState;
   setForm: Dispatch<SetStateAction<ShareableState>>;
@@ -263,6 +264,8 @@ export function Wizard({
   initialStep?: number;
   onSubmit: () => void;
   onReset: () => void;
+  /** Called whenever the step changes, so resuming later can pick it up. */
+  onStepChange?: (step: number) => void;
 }) {
   const [step, setStep] = useState(initialStep);
   // The wizard's three question steps, or the standalone advanced-settings
@@ -407,6 +410,7 @@ export function Wizard({
       setReopened(false);
       setHoldSceneUntil(Date.now() + 900);
     });
+    onStepChange?.(s);
     // A step change always starts at the top so the family scene — and its
     // zoom/handover animation — is on screen. The first field still takes
     // focus (keyboard up), but without scrolling the stage away.

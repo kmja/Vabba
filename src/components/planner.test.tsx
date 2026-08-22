@@ -1078,4 +1078,19 @@ describe("<Planner /> landing & saved plans", () => {
     ).toBeNull();
     expect(document.querySelector("[data-wizard-step]")).toBeTruthy();
   });
+
+  it("resumes at the step it was on, not the start, after a reload", () => {
+    const { container } = renderPlanner();
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2
+    cleanup();
+
+    render(<Planner />);
+    fireEvent.click(screen.getByRole("button", { name: /Fortsätt/ }));
+    expect(
+      document
+        .querySelector("[data-wizard-step]")
+        ?.getAttribute("data-wizard-step"),
+    ).toBe("2");
+  });
 });

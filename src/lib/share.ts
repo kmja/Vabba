@@ -126,6 +126,9 @@ export interface ShareableState {
   vabDaysUsedThisYear?: number;
   /** Wizard finished → land on the results view (vs. editing inputs). */
   submitted?: boolean;
+  /** Which wizard step to reopen on — so resuming an unfinished plan picks
+   *  up where it was left, not back at the start. */
+  wizardStep?: number;
 }
 
 function toBase64Url(text: string): string {

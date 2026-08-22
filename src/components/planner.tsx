@@ -1032,7 +1032,12 @@ export function Planner() {
         progressLabel={progressLabel}
         progressDone={submitted}
         onCreate={startNewPlan}
-        onContinue={() => setView("plan")}
+        onContinue={() => {
+          // Resume wherever the wizard's own step tracking last left off —
+          // not back at the start.
+          setEditStep(form.wizardStep ?? 1);
+          setView("plan");
+        }}
         onOpen={openSavedPlan}
         onDelete={deleteSavedPlan}
       />
@@ -1151,6 +1156,9 @@ export function Planner() {
         setForm((f) => ({ ...f, submitted: true }));
       }}
       onReset={resetPlan}
+      onStepChange={(s) =>
+        setForm((f) => (f.wizardStep === s ? f : { ...f, wizardStep: s }))
+      }
     />
   );
 }
