@@ -254,10 +254,14 @@ function overlapWindow(
   // 10-day total would silently overstate her side several-fold.
   const windowDays = differenceInDays(birth.startsAt, overlapEnd);
   const ratio = windowDays / 30.4;
+  // Grouped by whose row it is — otherwise two people's sources read as one
+  // unexplained list (and, when both have the same kind of income, as
+  // duplicate rows with no way to tell whose is whose).
   const ownSources = monthlyOwnSources.map((s) => ({
     ...s,
     net: Math.round(s.net * ratio),
     gross: Math.round(s.gross * ratio),
+    group: first.caregiver,
   }));
   const birthNet = netOfExtra(
     birthDays.result.total,
@@ -274,9 +278,10 @@ function overlapWindow(
       ...ownSources,
       {
         key: "birthdays",
-        label: `${birth.caregiver} vid födseln`,
+        label: "Vid födseln",
         net: birthNet,
         gross: birthDays.result.total,
+        group: birth.caregiver,
       },
     ],
     net: ownSources.reduce((sum, s) => sum + s.net, 0) + birthNet,
@@ -334,12 +339,14 @@ function doubleDaysOverlap(
   // incomeSources() reports a MONTHLY rate for both sides — scale each down
   // to this window before adding them, the same reasoning as the birth-days
   // merge (a monthly rate slipping in unscaled would dwarf a short window).
-  // Both sides use the same generic keys ("fp", "supplement", ...) — prefix
-  // them per side so React (and anything else keying off `key`) sees two
-  // distinct rows instead of one overwriting the other.
+  // Both sides use the same generic keys ("fp", "supplement", ...) and the
+  // same labels ("Föräldrapenning", ...) — prefix the key so React sees two
+  // distinct rows instead of one overwriting the other, and group by whose
+  // row it is so e.g. two "Föräldrapenning" rows read as two different
+  // people's, not a duplicate.
   const windowDays = differenceInDays(second.startsAt, second.endsAt);
   const ratio = windowDays / 30.4;
-  const scaled = (row: MonthlyRow, prefix: string) =>
+  const scaled = (row: MonthlyRow, prefix: string, group: string) =>
     incomeSources(
       { ...row, householdBase: 0, partnerWorking: undefined },
       municipalRate,
@@ -348,11 +355,12 @@ function doubleDaysOverlap(
       key: `${prefix}-${s.key}`,
       net: Math.round(s.net * ratio),
       gross: Math.round(s.gross * ratio),
+      group,
     }));
 
   const sources = [
-    ...scaled(rowForPeriod(firstBase, firstSlice), "first"),
-    ...scaled(rowForPeriod(secondBase, second), "second"),
+    ...scaled(rowForPeriod(firstBase, firstSlice), "first", first.caregiver),
+    ...scaled(rowForPeriod(secondBase, second), "second", second.caregiver),
   ];
   return {
     startsAt: second.startsAt,

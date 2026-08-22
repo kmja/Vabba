@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -16,6 +17,7 @@ import {
   IconBabyCarriage,
   IconDeviceFloppy,
   IconRefresh,
+  IconX,
 } from "@tabler/icons-react";
 
 import { Card } from "@/components/ui/card";
@@ -272,6 +274,10 @@ export function Wizard({
   // The wizard's three question steps, or the standalone advanced-settings
   // page reached from the summary at the end of step 3.
   const [page, setPage] = useState<"wizard" | "advanced">("wizard");
+  // The plan as it was the moment the advanced-settings page was opened —
+  // every field there writes straight to the plan as it's changed, so
+  // "Avbryt" restores this rather than undoing anything itself.
+  const formOnAdvancedOpen = useRef<ShareableState | null>(null);
   // The question currently in focus (its FlowQuestion id); "" = none.
   const [activeQ, setActiveQ] = useState(() => {
     if (initialStep === 1) return "q-count";
@@ -1582,17 +1588,21 @@ export function Wizard({
           </div>
 
           <div className="bg-card/95 sticky bottom-0 z-30 flex items-center justify-between gap-2 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6">
+            {/* Every field here writes straight to the plan as it's
+                changed, so cancelling has to actively put it back — there's
+                no pending draft to just walk away from. */}
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setPage("wizard")}
+              onClick={() => {
+                if (formOnAdvancedOpen.current) {
+                  setForm(formOnAdvancedOpen.current);
+                }
+                setPage("wizard");
+              }}
             >
-              <IconArrowLeft /> Tillbaka
+              <IconX /> Avbryt
             </Button>
-            {/* Every field already writes straight to the plan as it's
-                changed — this doesn't commit anything extra, it just closes
-                the page, but "Spara" is the clearer, more final-feeling
-                way to say "done here" than "Tillbaka" is. */}
             <Button type="button" onClick={() => setPage("wizard")}>
               <IconDeviceFloppy /> Spara
             </Button>
@@ -1669,7 +1679,10 @@ export function Wizard({
                 size="lg"
                 variant="outline"
                 className="w-full"
-                onClick={() => setPage("advanced")}
+                onClick={() => {
+                  formOnAdvancedOpen.current = form;
+                  setPage("advanced");
+                }}
               >
                 <IconAdjustments /> Avancerade inställningar
               </Button>

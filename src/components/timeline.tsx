@@ -300,6 +300,11 @@ function MilestoneLabel({ m, asOf }: { m: Milestone; asOf: Date }) {
  * closest to the eye). Both are right-aligned and tabular so each reads
  * straight down to the total it sums to. Shared between the plain PeriodCard
  * and the period pager's own blocks.
+ *
+ * Where more than one caregiver's sources are mixed together (both on leave
+ * at once), each source carries a `group` — the caregiver it belongs to —
+ * and a heading row for it precedes their first source, so e.g. two
+ * "Föräldrapenning" rows read as two different people's, not a duplicate.
  */
 export function IncomeBreakdownTable({ sources }: { sources: IncomeSource[] }) {
   return (
@@ -314,19 +319,27 @@ export function IncomeBreakdownTable({ sources }: { sources: IncomeSource[] }) {
       <span className="text-muted-foreground text-right text-[10px] tracking-wide uppercase">
         netto
       </span>
-      {sources.map((s) => (
-        <Fragment key={s.key}>
-          <span className="text-muted-foreground min-w-0 truncate text-xs">
-            {s.label}
-          </span>
-          <span className="text-muted-foreground text-right text-xs tabular-nums">
-            {formatSek(s.gross)}
-          </span>
-          <span className="text-right text-sm font-semibold tabular-nums">
-            {formatSek(s.net)}
-          </span>
-        </Fragment>
-      ))}
+      {sources.map((s, i) => {
+        const newGroup = s.group !== undefined && s.group !== sources[i - 1]?.group;
+        return (
+          <Fragment key={s.key}>
+            {newGroup && (
+              <span className="col-span-3 mt-1.5 text-xs font-medium first:mt-0">
+                {s.group}
+              </span>
+            )}
+            <span className="text-muted-foreground min-w-0 truncate text-xs">
+              {s.label}
+            </span>
+            <span className="text-muted-foreground text-right text-xs tabular-nums">
+              {formatSek(s.gross)}
+            </span>
+            <span className="text-right text-sm font-semibold tabular-nums">
+              {formatSek(s.net)}
+            </span>
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

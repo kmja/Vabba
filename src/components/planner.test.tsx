@@ -61,9 +61,14 @@ function openAdvanced(container: HTMLElement) {
   return container;
 }
 
-/** Back from the advanced-settings page to the summary. */
+/** Save and close the advanced-settings page, back to the summary. */
 function closeAdvanced() {
-  fireEvent.click(screen.getByRole("button", { name: /Tillbaka/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+}
+
+/** Cancel out of the advanced-settings page, discarding its changes. */
+function cancelAdvanced() {
+  fireEvent.click(screen.getByRole("button", { name: /Avbryt/ }));
 }
 
 /**
@@ -1065,6 +1070,27 @@ describe("<Planner /> wizard", () => {
     expect(
       container.querySelector<HTMLInputElement>("#include-lagsta")?.checked,
     ).toBe(true);
+  });
+
+  it("discards changes when cancelling out of advanced settings", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    openAdvanced(container);
+    fireEvent.click(container.querySelector("#include-lagsta")!);
+    expect(
+      container.querySelector<HTMLInputElement>("#include-lagsta")?.checked,
+    ).toBe(true);
+
+    cancelAdvanced();
+    expect(screen.getByText("Sammanfattning")).toBeTruthy();
+
+    // The plan is back to what it was before the change — Avbryt actively
+    // restores it, since every field writes straight to the plan as it's
+    // changed rather than to some separate, discardable draft.
+    openAdvanced(container);
+    expect(
+      container.querySelector<HTMLInputElement>("#include-lagsta")?.checked,
+    ).toBe(false);
   });
 });
 

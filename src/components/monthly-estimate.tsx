@@ -68,6 +68,13 @@ export interface IncomeSource {
   gross: number;
   /** This stream's share of what the household keeps. */
   net: number;
+  /**
+   * Whose row this is — only set where a breakdown mixes more than one
+   * caregiver's sources (both on leave at once), so the table can group
+   * them instead of listing e.g. two identical "Föräldrapenning" rows with
+   * no way to tell whose is whose.
+   */
+  group?: string;
 }
 
 /**
