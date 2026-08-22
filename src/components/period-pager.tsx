@@ -414,9 +414,9 @@ function DateMarker({
 /**
  * The shell every block shares: a header you can open, and a panel.
  *
- * `subtitle` and `headerRight` are always visible — the header's own text.
- * `alwaysVisible` is extra content still shown before the fold (the income
- * breakdown, for a period block); `children` is what the chevron reveals.
+ * `subtitle` and `headerRight` are the collapsed state's own text — the
+ * header carries the headline net figure, but the itemized breakdown only
+ * exists inside `children`, which is what the chevron reveals.
  */
 function Block({
   colorIdx,
@@ -425,7 +425,6 @@ function Block({
   phase,
   subtitle,
   headerRight,
-  alwaysVisible,
   open,
   onToggle,
   panelId,
@@ -438,7 +437,6 @@ function Block({
   phase: string | null;
   subtitle: ReactNode;
   headerRight?: ReactNode;
-  alwaysVisible?: ReactNode;
   open: boolean;
   onToggle: () => void;
   panelId: string;
@@ -498,8 +496,6 @@ function Block({
           )}
         />
       </button>
-
-      {alwaysVisible && <div className="px-4 pb-3">{alwaysVisible}</div>}
 
       {/* Animated height: 0fr ↔ 1fr. The content stays mounted, and `inert`
           keeps a shut panel out of focus order. */}
@@ -745,17 +741,15 @@ export function PeriodPager({
                   ≈ {formatSek(overlap.net)}
                 </span>
               }
-              alwaysVisible={
-                <div className="border-t pt-2.5">
-                  <IncomeBreakdownTable sources={overlap.sources} />
-                </div>
-              }
               open={openIdx === BIRTH_IDX}
               onToggle={() =>
                 setOpenIdx(openIdx === BIRTH_IDX ? null : BIRTH_IDX)
               }
               panelId="period-panel-birth"
             >
+              <div className="border-t pt-2.5 pb-3">
+                <IncomeBreakdownTable sources={overlap.sources} />
+              </div>
               <p className="text-muted-foreground text-xs">
                 {overlap.caregiver1}s dagar är tillfällig föräldrapenning,
                 utöver de 480 — bara {overlap.caregiver2}s sida räknas av
@@ -836,17 +830,15 @@ export function PeriodPager({
                   ≈ {formatSek(doubleDaysMerge.net)}
                 </span>
               }
-              alwaysVisible={
-                <div className="border-t pt-2.5">
-                  <IncomeBreakdownTable sources={doubleDaysMerge.sources} />
-                </div>
-              }
               open={openIdx === DOUBLE_IDX}
               onToggle={() =>
                 setOpenIdx(openIdx === DOUBLE_IDX ? null : DOUBLE_IDX)
               }
               panelId="period-panel-double"
             >
+              <div className="border-t pt-2.5 pb-3">
+                <IncomeBreakdownTable sources={doubleDaysMerge.sources} />
+              </div>
               <p className="text-muted-foreground text-xs">
                 {doubleDaysMerge.caregiver2} tar dubbeldagar — dagar båda
                 vårdnadshavarna är hemma samtidigt, en dag ur var och ens egen
@@ -919,17 +911,15 @@ export function PeriodPager({
                     </span>
                   ) : undefined
                 }
-                alwaysVisible={
-                  sources.length > 0 ? (
-                    <div className="border-t pt-2.5">
-                      <IncomeBreakdownTable sources={sources} />
-                    </div>
-                  ) : undefined
-                }
                 open={openIdx === i}
                 onToggle={() => setOpenIdx(openIdx === i ? null : i)}
                 panelId={`period-panel-${i}`}
               >
+              {sources.length > 0 && (
+                <div className="border-t pt-2.5 pb-3">
+                  <IncomeBreakdownTable sources={sources} />
+                </div>
+              )}
               {/* Editable span — edits become goals ("custom" planning). */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
