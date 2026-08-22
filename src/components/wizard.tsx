@@ -14,7 +14,6 @@ import {
   IconArrowLeft,
   IconArrowRight,
   IconBabyCarriage,
-  IconChevronDown,
   IconRefresh,
 } from "@tabler/icons-react";
 
@@ -271,7 +270,9 @@ export function Wizard({
   onReset: () => void;
 }) {
   const [step, setStep] = useState(initialStep);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // The wizard's three question steps, or the standalone advanced-settings
+  // page reached from the summary at the end of step 3.
+  const [page, setPage] = useState<"wizard" | "advanced">("wizard");
   // The question currently in focus (its FlowQuestion id); "" = none.
   const [activeQ, setActiveQ] = useState(() => {
     if (initialStep === 1) return "q-count";
@@ -407,7 +408,6 @@ export function Wizard({
   const goTo = (s: number, focus = false) => {
     flushSync(() => {
       setStep(s);
-      setAdvancedOpen(false);
       setActiveQ(firstQuestionOf(s));
       setReopened(false);
       setHoldSceneUntil(Date.now() + 900);
@@ -634,27 +634,118 @@ export function Wizard({
           },
     );
 
-  /** Collapsed "Avancerade inställningar" section at the bottom of a step. */
-  const advanced = (children: ReactNode) => (
-    <div className="space-y-4">
-      <button
-        type="button"
-        id="advanced-options"
-        onClick={() => setAdvancedOpen((o) => !o)}
-        aria-expanded={advancedOpen}
-        className="text-muted-foreground hover:text-foreground active:text-foreground flex min-h-11 items-center gap-1.5 text-sm font-medium sm:min-h-0"
-      >
-        <IconAdjustments className="size-4" />
-        Avancerade inställningar
-        <IconChevronDown
-          className={cn(
-            "size-4 transition-transform",
-            advancedOpen && "rotate-180",
-          )}
-        />
-      </button>
-      {advancedOpen && <div className="space-y-4">{children}</div>}
-    </div>
+  /** General advanced settings — not tied to a caregiver. Shown only on the
+   *  standalone advanced-settings page reached from the end-of-wizard summary. */
+  const generalAdvanced = (
+    <>
+      <div className="space-y-3">
+        <CheckRow
+          id="has-used"
+          checked={hasUsedDays}
+          onChange={(b) => setForm((f) => ({ ...f, hasUsedDays: b }))}
+        >
+          {soloMode
+            ? "Jag har redan tagit ut dagar för det här barnet"
+            : "Vi har redan tagit ut dagar för det här barnet"}
+        </CheckRow>
+
+        {hasUsedDays && (
+          <div className="space-y-3">
+            <CheckRow
+              id="detailed-used"
+              checked={detailedUsed}
+              onChange={(b) => setForm((f) => ({ ...f, detailedUsed: b }))}
+            >
+              <span className="text-muted-foreground font-normal">
+                Ange nivåer separat (sjukpenning/lägsta)
+              </span>
+            </CheckRow>
+
+            {visibleIds.map((id) => {
+              const p = plan.parents[id];
+              const who =
+                p.name?.trim() || (soloMode ? "dig" : `Vårdnadshavare ${id}`);
+              const suffix = visibleIds.length > 1 ? ` – ${who}` : "";
+              return detailedUsed ? (
+                <div key={id} className="grid grid-cols-2 gap-3">
+                  <NumberField
+                    id={`${id.toLowerCase()}-used-sjuk`}
+                    label={`Sjukpenningdagar${suffix}`}
+                    value={p.daysUsed.sjukpenning}
+                    stepper
+                    slider
+                    sliderMax={390}
+                    onChange={(n) =>
+                      setParentDays(id, {
+                        sjukpenning: n,
+                        lagsta: p.daysUsed.lagsta,
+                      })
+                    }
+                  />
+                  <NumberField
+                    id={`${id.toLowerCase()}-used-lagsta`}
+                    label={`Lägstanivådagar${suffix}`}
+                    value={p.daysUsed.lagsta}
+                    stepper
+                    slider
+                    sliderMax={90}
+                    onChange={(n) =>
+                      setParentDays(id, {
+                        sjukpenning: p.daysUsed.sjukpenning,
+                        lagsta: n,
+                      })
+                    }
+                  />
+                </div>
+              ) : (
+                <NumberField
+                  key={id}
+                  id={`${id.toLowerCase()}-used`}
+                  label={`Uttagna dagar${suffix}`}
+                  value={p.daysUsed.sjukpenning + p.daysUsed.lagsta}
+                  stepper
+                  slider
+                  sliderMax={480}
+                  onChange={(n) =>
+                    setParentDays(id, { sjukpenning: n, lagsta: 0 })
+                  }
+                />
+              );
+            })}
+            <FkSourceHint what="Uttagna dagar" />
+          </div>
+        )}
+      </div>
+
+      <NumberField
+        id="municipal-rate"
+        label="Kommunalskatt (%)"
+        value={
+          form.municipalRatePct ??
+          Math.round(DEFAULT_MUNICIPAL_RATE * 100 * 100) / 100
+        }
+        min={25}
+        max={40}
+        step={0.01}
+        onChange={(n) => setForm((f) => ({ ...f, municipalRatePct: n }))}
+        hint="Där ni bor — den avgör alla nettobelopp i planen. Riksgenomsnittet är 32,38 %, men satserna går från 28,93 % till drygt 35 %; vid 63 000 kr i lön skiljer det runt 3 300 kr i månaden."
+      />
+
+      <div className="space-y-2">
+        <CheckRow
+          id="include-lagsta"
+          checked={includeLagsta}
+          onChange={(b) => setForm((f) => ({ ...f, includeLagsta: b }))}
+        >
+          Ta ut lägstanivådagarna (90 dagar à 180 kr)
+        </CheckRow>
+        <p className="text-muted-foreground text-xs">
+          {includeLagsta
+            ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
+            : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
+        </p>
+      </div>
+    </>
   );
 
   // ---------------------------------------------------------------------------
@@ -1329,6 +1420,63 @@ export function Wizard({
     </div>
   );
 
+  // Step 3's flow is exhausted (or there was never one, in solo mode) — the
+  // wizard has reached its end and shows the summary + "Visa plan" instead of
+  // another question.
+  const reachedEnd =
+    current === stepCount &&
+    !(activeQ !== "" && flowOf(current).includes(activeQ));
+
+  /** A plain recap of what's been entered, shown once the flow is done —
+   *  the advanced settings (a separate page from here on) aren't part of it. */
+  const summaryRows: { label: string; value: string }[] = [];
+  if (birth) {
+    const count = BIRTH_COUNTS.find(
+      (c) => c.value === plan.childrenInBirth,
+    )?.label;
+    summaryRows.push({
+      label: plan.childrenInBirth > 1 ? "Barnen" : "Barnet",
+      value: [
+        plan.childrenInBirth > 1 ? count : null,
+        `föds ${formatDate(birth)}`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    });
+  }
+  for (const id of visibleIds) {
+    const p = plan.parents[id];
+    const supp = id === "A" ? supplementA : supplementB;
+    const save =
+      (id === "A" ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
+    const income =
+      p.grossMonthlyIncome > 0
+        ? `${formatSek(p.grossMonthlyIncome)}/mån`
+        : p.incomeAboveCap
+          ? "över SGI-taket"
+          : null;
+    summaryRows.push({
+      label: p.name?.trim() || (soloMode ? "Du" : `Vårdnadshavare ${id}`),
+      value:
+        [income, supp.enabled && "föräldralön", save > 0 && `sparar ${save} dagar`]
+          .filter(Boolean)
+          .join(" · ") || "—",
+    });
+  }
+  const summary = reachedEnd && (
+    <div className="bg-secondary/40 animate-flow-in space-y-2 rounded-xl border p-3">
+      <p className="text-sm font-medium">Sammanfattning</p>
+      <dl className="space-y-1.5 text-sm">
+        {summaryRows.map((r) => (
+          <div key={r.label} className="flex justify-between gap-3">
+            <dt className="text-muted-foreground shrink-0">{r.label}</dt>
+            <dd className="text-right font-medium">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+
   /**
    * What's wrong with this step's answers, and how to put it right. Shown
    * under the question in focus so a choice that can't work is caught here
@@ -1372,6 +1520,69 @@ export function Wizard({
       ))}
     </div>
   );
+
+  if (page === "advanced") {
+    return (
+      <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
+        <form
+          className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col"
+          onSubmit={(e) => e.preventDefault()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.preventDefault();
+          }}
+          onFocus={(e) => {
+            const t = e.target as HTMLElement;
+            if (t.matches?.(FIELD_SELECTOR)) revealField(t);
+          }}
+        >
+          <div
+            data-wizard-scroll
+            style={{ scrollPaddingBottom: kbInset }}
+            className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5"
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <IconAdjustments className="text-muted-foreground size-5" />
+              <h2 className="text-lg font-semibold">
+                Avancerade inställningar
+              </h2>
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-4">{generalAdvanced}</div>
+
+              {visibleIds.map((id) => (
+                <div key={id} className="space-y-3">
+                  <Separator />
+                  <p className="text-sm font-medium">
+                    {plan.parents[id].name?.trim() ||
+                      (soloMode ? "Du" : `Vårdnadshavare ${id}`)}
+                  </p>
+                  {caregiverAdvanced(id)}
+                </div>
+              ))}
+
+              <Separator />
+              <div className="space-y-4">
+                <p className="text-sm font-medium">Övrigt</p>
+                {extrasAdvanced}
+              </div>
+            </div>
+            <div aria-hidden style={{ height: kbInset }} />
+          </div>
+
+          <div className="bg-card/95 sticky bottom-0 z-30 flex items-center border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:rounded-b-xl sm:px-6">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setPage("wizard")}
+            >
+              <IconArrowLeft /> Tillbaka
+            </Button>
+          </div>
+        </form>
+      </Card>
+    );
+  }
 
   /** The step's questions, rendered into whichever slot is being drawn. */
   const stepQuestions =
@@ -1444,130 +1655,6 @@ export function Wizard({
                   </p>
                 )}
 
-                <Separator />
-                {advanced(
-                  <>
-                    <div className="space-y-3">
-                      <CheckRow
-                        id="has-used"
-                        checked={hasUsedDays}
-                        onChange={(b) =>
-                          setForm((f) => ({ ...f, hasUsedDays: b }))
-                        }
-                      >
-                        {soloMode
-                          ? "Jag har redan tagit ut dagar för det här barnet"
-                          : "Vi har redan tagit ut dagar för det här barnet"}
-                      </CheckRow>
-
-                      {hasUsedDays && (
-                        <div className="space-y-3">
-                          <CheckRow
-                            id="detailed-used"
-                            checked={detailedUsed}
-                            onChange={(b) =>
-                              setForm((f) => ({ ...f, detailedUsed: b }))
-                            }
-                          >
-                            <span className="text-muted-foreground font-normal">
-                              Ange nivåer separat (sjukpenning/lägsta)
-                            </span>
-                          </CheckRow>
-
-                          {visibleIds.map((id) => {
-                            const p = plan.parents[id];
-                            const who =
-                              p.name?.trim() ||
-                              (soloMode ? "dig" : `Vårdnadshavare ${id}`);
-                            const suffix =
-                              visibleIds.length > 1 ? ` – ${who}` : "";
-                            return detailedUsed ? (
-                              <div key={id} className="grid grid-cols-2 gap-3">
-                                <NumberField
-                                  id={`${id.toLowerCase()}-used-sjuk`}
-                                  label={`Sjukpenningdagar${suffix}`}
-                                  value={p.daysUsed.sjukpenning}
-                                  stepper
-                                  slider
-                                  sliderMax={390}
-                                  onChange={(n) =>
-                                    setParentDays(id, {
-                                      sjukpenning: n,
-                                      lagsta: p.daysUsed.lagsta,
-                                    })
-                                  }
-                                />
-                                <NumberField
-                                  id={`${id.toLowerCase()}-used-lagsta`}
-                                  label={`Lägstanivådagar${suffix}`}
-                                  value={p.daysUsed.lagsta}
-                                  stepper
-                                  slider
-                                  sliderMax={90}
-                                  onChange={(n) =>
-                                    setParentDays(id, {
-                                      sjukpenning: p.daysUsed.sjukpenning,
-                                      lagsta: n,
-                                    })
-                                  }
-                                />
-                              </div>
-                            ) : (
-                              <NumberField
-                                key={id}
-                                id={`${id.toLowerCase()}-used`}
-                                label={`Uttagna dagar${suffix}`}
-                                value={
-                                  p.daysUsed.sjukpenning + p.daysUsed.lagsta
-                                }
-                                stepper
-                                slider
-                                sliderMax={480}
-                                onChange={(n) =>
-                                  setParentDays(id, {
-                                    sjukpenning: n,
-                                    lagsta: 0,
-                                  })
-                                }
-                              />
-                            );
-                          })}
-                          <FkSourceHint what="Uttagna dagar" />
-                        </div>
-                      )}
-                    </div>
-
-                    <NumberField
-                      id="municipal-rate"
-                      label="Kommunalskatt (%)"
-                      value={form.municipalRatePct ?? DEFAULT_MUNICIPAL_RATE * 100}
-                      min={25}
-                      max={40}
-                      step={0.01}
-                      onChange={(n) =>
-                        setForm((f) => ({ ...f, municipalRatePct: n }))
-                      }
-                      hint="Där ni bor — den avgör alla nettobelopp i planen. Riksgenomsnittet är 32,38 %, men satserna går från 28,93 % till drygt 35 %; vid 63 000 kr i lön skiljer det runt 3 300 kr i månaden."
-                    />
-
-                    <div className="space-y-2">
-                      <CheckRow
-                        id="include-lagsta"
-                        checked={includeLagsta}
-                        onChange={(b) =>
-                          setForm((f) => ({ ...f, includeLagsta: b }))
-                        }
-                      >
-                        Ta ut lägstanivådagarna (90 dagar à 180 kr)
-                      </CheckRow>
-                      <p className="text-muted-foreground text-xs">
-                        {includeLagsta
-                          ? "Lägstanivådagarna läggs till sist och förlänger ledigheten, men ger bara 180 kr/dag."
-                          : "Ledigheten slutar när de inkomstbaserade dagarna tar slut. De 90 lägstanivådagarna sparas — de kan tas ut senare (180 kr/dag) eller sparas tills barnet fyller 12."}
-                      </p>
-                    </div>
-                  </>,
-                )}
               </>
             )}
 
@@ -1575,9 +1662,6 @@ export function Wizard({
               <>
                 {/* No lead-in here — stepIntro already says whose step this is. */}
                 <FlowSlot slot="active">{caregiverFlow(firstId)}</FlowSlot>
-
-                <Separator />
-                {advanced(caregiverAdvanced(firstId))}
               </>
             )}
 
@@ -1609,12 +1693,11 @@ export function Wizard({
                   <FlowSlot slot="active">{caregiverFlow(secondId)}</FlowSlot>
                 )}
 
-                <Separator />
-                {advanced(
+                {reachedEnd && (
                   <>
-                    {!soloMode && caregiverAdvanced(secondId)}
-                    {extrasAdvanced}
-                  </>,
+                    <Separator />
+                    {summary}
+                  </>
                 )}
               </>
             )}
@@ -1642,22 +1725,25 @@ export function Wizard({
 
           {/* Flow-aware: while a question is open, Nästa advances THROUGH the
               step's questions (same as Enter); only when the flow is walked
-              does it change step — and become "Visa plan" on the last one. */}
-          {(() => {
-            const inFlow = activeQ !== "" && flowOf(current).includes(activeQ);
-            if (current === stepCount && !inFlow) {
-              return (
-                <Button type="button" onClick={primaryAction}>
-                  Visa plan <IconArrowRight />
-                </Button>
-              );
-            }
-            return (
-              <Button type="button" onClick={primaryAction}>
-                Nästa <IconArrowRight />
+              does it change step — and the summary's two actions replace it. */}
+          {reachedEnd ? (
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPage("advanced")}
+              >
+                <IconAdjustments /> Avancerat
               </Button>
-            );
-          })()}
+              <Button type="button" onClick={primaryAction}>
+                Visa plan <IconArrowRight />
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" onClick={primaryAction}>
+              Nästa <IconArrowRight />
+            </Button>
+          )}
         </div>
       </form>
     </Card>

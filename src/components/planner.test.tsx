@@ -37,15 +37,33 @@ function next() {
 
 /** Walk the last step's remaining questions until "Visa plan" appears. */
 function showPlan() {
+  reachSummary();
+  fireEvent.click(screen.getByRole("button", { name: /Visa plan/ }));
+}
+
+/**
+ * Walk the wizard to its end-of-flow summary — where "Visa plan" and
+ * "Avancerat" both appear — without submitting. That's the only place the
+ * advanced-settings page is reachable from.
+ */
+function reachSummary() {
   for (let i = 0; i < 10; i++) {
-    const visa = screen.queryByRole("button", { name: /Visa plan/ });
-    if (visa) {
-      fireEvent.click(visa);
-      return;
-    }
+    if (screen.queryByRole("button", { name: /Visa plan/ })) return;
     fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
   }
-  throw new Error("Visa plan never appeared");
+  throw new Error("summary screen never appeared");
+}
+
+/** Open the advanced-settings page from the end-of-wizard summary. */
+function openAdvanced(container: HTMLElement) {
+  reachSummary();
+  fireEvent.click(screen.getByRole("button", { name: /Avancerat/ }));
+  return container;
+}
+
+/** Back from the advanced-settings page to the summary. */
+function closeAdvanced() {
+  fireEvent.click(screen.getByRole("button", { name: /Tillbaka/ }));
 }
 
 /**
@@ -294,8 +312,9 @@ describe("<Planner /> wizard", () => {
   it("can turn the birth-days off", () => {
     const { container } = renderPlanner();
     fillToResults(container); // → last step
-    fireEvent.click(container.querySelector("#advanced-options")!);
+    openAdvanced(container);
     fireEvent.click(container.querySelector("#birth-days-enabled")!);
+    closeAdvanced();
     showPlan();
     // Only the two caregivers' own stretches are left.
     expect(periodHeaders(container).length).toBe(2);
@@ -304,20 +323,11 @@ describe("<Planner /> wizard", () => {
 
   it("drops the first 180 days to grundnivå when the 240-day rule isn't met", () => {
     const { container } = renderPlanner();
-    pickBirth(container, "2025-01-15");
-    next(); // → step 2 (caregiver A)
-    openQuestion(container, "a", "income");
-    fireEvent.change(container.querySelector("#a-income")!, {
-      target: { value: "45000" },
-    });
-    // The 240-day rule lives under the advanced settings (default: qualifies).
-    fireEvent.click(container.querySelector("#advanced-options")!);
+    fillToResults(container);
+    // The 240-day rule lives on the advanced-settings page (default: qualifies).
+    openAdvanced(container);
     fireEvent.click(container.querySelector("#a-240")!); // A no longer qualifies
-    next(); // → step 3
-    openQuestion(container, "b", "income");
-    fireEvent.change(container.querySelector("#b-income")!, {
-      target: { value: "30000" },
-    });
+    closeAdvanced();
     showPlan();
     expect(screen.getAllByText(/grundnivå/).length).toBeGreaterThan(0);
   });
@@ -447,8 +457,9 @@ describe("<Planner /> wizard", () => {
   it("includes vab on the results page when enabled", () => {
     const { container } = renderPlanner();
     fillToResults(container, { incomeA: "40000" });
-    fireEvent.click(container.querySelector("#advanced-options")!);
+    openAdvanced(container);
     fireEvent.click(container.querySelector("#vab-enabled")!);
+    closeAdvanced();
     showPlan();
     expect(screen.getByText("Vab – vård av sjukt barn")).toBeTruthy();
   });
@@ -914,22 +925,12 @@ describe("<Planner /> wizard", () => {
     expect(screen.queryByText("lägstanivå")).toBeNull();
   });
 
-  it("includes the lägstanivå days when the step-1 toggle is on", () => {
+  it("includes the lägstanivå days when the advanced toggle is on", () => {
     const { container } = renderPlanner();
-    pickBirth(container, "2025-01-15");
-    // The lägstanivå toggle lives under step 1's advanced settings.
-    fireEvent.click(container.querySelector("#advanced-options")!);
+    fillToResults(container);
+    openAdvanced(container);
     fireEvent.click(container.querySelector("#include-lagsta")!);
-    next(); // → step 2
-    openQuestion(container, "a", "income");
-    fireEvent.change(container.querySelector("#a-income")!, {
-      target: { value: "45000" },
-    });
-    next(); // → step 3
-    openQuestion(container, "b", "income");
-    fireEvent.change(container.querySelector("#b-income")!, {
-      target: { value: "30000" },
-    });
+    closeAdvanced();
     showPlan();
     // The 90 flat days are taken — and since they pay a different rate they
     // are their own block at the end of B's leave.
@@ -989,6 +990,31 @@ describe("<Planner /> wizard", () => {
     expect(
       screen.getAllByText(/sparade från tidigare barn/).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("only offers advanced settings once the wizard reaches its summary", () => {
+    const { container } = renderPlanner();
+    // Mid-flow: no advanced-settings entry point yet.
+    expect(screen.queryByRole("button", { name: /Avancerat/ })).toBeNull();
+    fillToResults(container);
+    expect(screen.queryByRole("button", { name: /Avancerat/ })).toBeNull();
+
+    reachSummary();
+    expect(screen.getByText("Sammanfattning")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Avancerat/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Visa plan/ })).toBeTruthy();
+  });
+
+  it("returns from the advanced-settings page to the same summary", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    openAdvanced(container);
+    expect(screen.getByText("Avancerade inställningar")).toBeTruthy();
+    expect(container.querySelector("#municipal-rate")).toBeTruthy();
+
+    closeAdvanced();
+    expect(screen.getByText("Sammanfattning")).toBeTruthy();
+    expect(container.querySelector("#municipal-rate")).toBeNull();
   });
 });
 
