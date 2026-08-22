@@ -43,7 +43,7 @@ function showPlan() {
 
 /**
  * Walk the wizard to its end-of-flow summary — where "Visa plan" and
- * "Avancerat" both appear — without submitting. That's the only place the
+ * "Avancerade" both appear — without submitting. That's the only place the
  * advanced-settings page is reachable from.
  */
 function reachSummary() {
@@ -57,7 +57,7 @@ function reachSummary() {
 /** Open the advanced-settings page from the end-of-wizard summary. */
 function openAdvanced(container: HTMLElement) {
   reachSummary();
-  fireEvent.click(screen.getByRole("button", { name: /Avancerat/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Avancerade/ }));
   return container;
 }
 
@@ -995,13 +995,13 @@ describe("<Planner /> wizard", () => {
   it("only offers advanced settings once the wizard reaches its summary", () => {
     const { container } = renderPlanner();
     // Mid-flow: no advanced-settings entry point yet.
-    expect(screen.queryByRole("button", { name: /Avancerat/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Avancerade/ })).toBeNull();
     fillToResults(container);
-    expect(screen.queryByRole("button", { name: /Avancerat/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Avancerade/ })).toBeNull();
 
     reachSummary();
     expect(screen.getByText("Sammanfattning")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Avancerat/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Avancerade/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Visa plan/ })).toBeTruthy();
   });
 
