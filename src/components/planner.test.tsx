@@ -321,6 +321,37 @@ describe("<Planner /> wizard", () => {
     expect(dateRow.textContent).not.toContain("Födelsedatum");
   });
 
+  it("skips a fully-answered step on Nästa after going back, instead of reopening it", () => {
+    const { container } = renderPlanner();
+    const stepLabel = () =>
+      container
+        .querySelector("[data-wizard-step]")
+        ?.getAttribute("data-wizard-step");
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2, opens on a-q-name
+    fireEvent.change(container.querySelector("#a-name")!, {
+      target: { value: "Kim" },
+    });
+    openQuestion(container, "a", "income");
+    fireEvent.change(container.querySelector("#a-income")!, {
+      target: { value: "45000" },
+    });
+    next(); // walks A's remaining (defaulted) questions into step 3
+    expect(stepLabel()).toBe("3");
+
+    // Back to caregiver A — every one of their questions is now answered.
+    fireEvent.click(screen.getByRole("button", { name: /Bakåt/ }));
+    expect(stepLabel()).toBe("2");
+    // Nothing reopens as the hero question — the whole step sits collapsed.
+    expect(
+      container.querySelector("#a-q-name")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    // So a single Nästa moves straight on to step 3, not back through A's
+    // already-answered questions one at a time.
+    fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    expect(stepLabel()).toBe("3");
+  });
+
   it("supports planning alone via the step-3 opt-out", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");

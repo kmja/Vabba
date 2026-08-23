@@ -280,12 +280,28 @@ export function Wizard({
   // "Avbryt" restores this rather than undoing anything itself.
   const formOnAdvancedOpen = useRef<ShareableState | null>(null);
   // The question currently in focus (its FlowQuestion id); "" = none.
+  //
+  // Landing on a step fresh — "Fortsätt" resuming a saved plan straight onto
+  // step 2 or 3 — should open whatever's still unanswered, not always the
+  // step's first question (mirrors `isAnswered`/`goTo` below, but this runs
+  // before those are in scope, and `visited` — everything `isAnswered` can't
+  // otherwise resolve from data alone — is necessarily still empty this
+  // early, so nothing is lost by shortcutting straight past it here).
   const [activeQ, setActiveQ] = useState(() => {
-    if (initialStep === 1) return "q-date";
+    if (initialStep === 1) {
+      return isValidIsoDate(form.plan.birthDate) ? "q-order" : "q-date";
+    }
     // Step 2 is whoever is home first, step 3 the other one.
     const first = form.soloMode ? "A" : (form.firstCaregiver ?? "A");
     const id = initialStep === 2 ? first : first === "A" ? "B" : "A";
-    return `${id.toLowerCase()}-q-name`;
+    const p = id.toLowerCase();
+    const value = form.plan.parents[id];
+    if (!value.name?.trim()) return `${p}-q-name`;
+    if (!(value.incomeAboveCap ?? false) && value.grossMonthlyIncome <= 0)
+      return `${p}-q-income`;
+    const supplementEnabled =
+      (id === "A" ? form.supplementA : form.supplementB) ?? true;
+    return supplementEnabled ? `${p}-q-supplement` : `${p}-q-goal`;
   });
   // Whether the open question was REOPENED to edit an existing answer (an
   // in-place accordion) rather than reached in the forward flow (the
@@ -414,7 +430,7 @@ export function Wizard({
   const goTo = (s: number, focus = false) => {
     flushSync(() => {
       setStep(s);
-      setActiveQ(firstQuestionOf(s));
+      setActiveQ(firstUnansweredOf(s));
       setReopened(false);
       setHoldSceneUntil(Date.now() + 900);
     });
@@ -536,7 +552,38 @@ export function Wizard({
     return soloMode ? [] : cgFlow(secondId);
   };
 
-  const firstQuestionOf = (s: number): string => flowOf(s)[0] ?? "";
+  /**
+   * Whether a question already has a real answer — mirrors each
+   * FlowQuestion's own `answered` prop below. Lets a step reopen on
+   * whatever's still unanswered instead of always its first question,
+   * whether landing on it mid-session (`goTo`) or fresh on mount (the
+   * effect just below).
+   */
+  const isAnswered = (qid: string): boolean => {
+    if (qid === "q-date") return birth != null;
+    if (qid === "q-order") return childNumber >= 2 || seen("q-order");
+    const id: ParentId = qid.startsWith("a-") ? "A" : "B";
+    const value = plan.parents[id];
+    const supplement = id === "A" ? supplementA : supplementB;
+    const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
+    const goalMonths = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
+    const extraDays = id === "A" ? extraDaysA : extraDaysB;
+    const suffix = qid.slice(2);
+    if (suffix === "q-name") return !!value.name?.trim();
+    if (suffix === "q-income")
+      return (value.incomeAboveCap ?? false) || value.grossMonthlyIncome > 0;
+    if (suffix === "q-goaldetail")
+      return goalMonths > 0 || isValidIsoDate(dateStr);
+    if (suffix === "q-extra") return extraDays > 0;
+    if (suffix === "q-supplement") return !supplement.enabled || seen(qid);
+    // q-suppdetail, q-goal and q-save all default to a real (non-empty)
+    // value, so only actually having been shown counts as an answer.
+    return seen(qid);
+  };
+
+  /** The first unanswered question of a step, or "" once it's all done. */
+  const firstUnansweredOf = (s: number): string =>
+    flowOf(s).find((q) => !isAnswered(q)) ?? "";
 
   /**
    * Collapse the answered question and bring the next one into focus.
@@ -560,7 +607,7 @@ export function Wizard({
         // follow-up the edit just created still comes first.)
         nextOverride && !done.has(nextOverride)
         ? nextOverride
-        : flow.find((q) => !done.has(q))
+        : flow.find((q) => !done.has(q) && !isAnswered(q))
       : (nextOverride ?? flow[flow.indexOf(qid) + 1]);
     if (next) {
       openQ(next);
