@@ -30,11 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
-import {
-  FamilyScene,
-  heroOverlapMargin,
-  sceneAspect,
-} from "@/components/family-scene";
+import { FamilyScene, sceneAspect } from "@/components/family-scene";
 import { FlowQuestion, FlowSlot } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
@@ -428,9 +424,16 @@ export function Wizard({
     const panel = document.getElementById(`${qid}-panel`);
     const field = visibleFields(panel)[0];
     if (!field) return;
-    field.focus({ preventScroll: true });
-    // Re-check once the scroll above has settled, so the keyboard check
-    // measures the final position rather than a mid-animation one.
+    // Focusing WITHOUT suppressing the browser's own scroll-into-view: it
+    // already knows exactly when the keyboard opens and how tall it is,
+    // which a hand-rolled replacement (checking again after a fixed delay)
+    // can only guess at — and on a real keyboard, guessed wrong often
+    // enough that the field stayed hidden behind it. The custom scroll
+    // above already put the field in view for the pre-keyboard layout, so
+    // this mostly confirms that; `revealField` below is a backstop for
+    // whatever the native behaviour doesn't quite catch, not the mechanism
+    // doing the work.
+    field.focus();
     window.setTimeout(() => {
       if (document.activeElement === field) revealField(field);
     }, 400);
@@ -445,12 +448,13 @@ export function Wizard({
     });
     onStepChange?.(s);
     // A step change always starts at the top so the family scene — and its
-    // zoom/handover animation — is on screen. The first field still takes
-    // focus (keyboard up), but without scrolling the stage away.
+    // zoom/handover animation — is on screen; the first field then takes
+    // focus, and the browser's own scroll-into-view follows the keyboard
+    // as it opens (see the comment on the equivalent call in openQ).
     scrollArea()?.scrollTo?.(0, 0);
     window.scrollTo(0, 0);
     if (focus) {
-      visibleFields(scrollArea())[0]?.focus({ preventScroll: true });
+      visibleFields(scrollArea())[0]?.focus();
     }
   };
 
@@ -1834,12 +1838,7 @@ export function Wizard({
 
           <div
             key={current}
-            data-questions-block
-            style={heroStage ? { marginTop: heroOverlapMargin(current) } : undefined}
-            className={cn(
-              "animate-flow-in space-y-5 [@media(max-height:740px)]:space-y-3",
-              !heroStage && "mt-4 [@media(max-height:740px)]:mt-2",
-            )}
+            className="animate-flow-in mt-4 space-y-5 [@media(max-height:740px)]:mt-2 [@media(max-height:740px)]:space-y-3"
           >
             {current === 1 && (
               <>
