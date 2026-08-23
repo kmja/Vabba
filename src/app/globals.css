@@ -141,8 +141,9 @@
 /* App-shell (phones, while the wizard is showing): the page as a whole never
    scrolls — the site header and the wizard's progress/nav bars are fixed
    chrome, and only the question area in between scrolls. The keyboard
-   (interactive-widget=resizes-content) shrinks that area instead of covering
-   the nav. */
+   (interactive-widget=overlays-content, set in layout.tsx) floats ON TOP of
+   the page, so the question area gets room to scroll it clear via the
+   visualViewport reveal in wizard.tsx. */
 @media (max-width: 639px) {
   body.app-shell {
     height: 100dvh;

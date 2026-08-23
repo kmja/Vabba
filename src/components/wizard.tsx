@@ -64,6 +64,34 @@ import { cn } from "@/lib/utils";
 const scrollArea = () =>
   document.querySelector<HTMLElement>("[data-wizard-scroll]");
 
+/**
+ * Whether the phone app-shell layout (scrollable question area between fixed
+ * bars) is what's currently on screen. Mirrors the `@media (max-width: 639px)`
+ * + `.app-shell` pair that activates it in globals.css — body carries the
+ * class on every viewport (planner.tsx toggles it for the wizard), so the
+ * class alone isn't enough; the width check is.
+ */
+const phoneShell = () =>
+  window.matchMedia("(max-width: 639px)").matches &&
+  document.body.classList.contains("app-shell");
+
+/**
+ * Scroll `delta` on whatever actually scrolls. Inside the app-shell that's the
+ * question area itself; anywhere else the page does.
+ */
+const scrollByReveal = (delta: number, behavior: ScrollBehavior) => {
+  const scroller = scrollArea();
+  if (phoneShell()) {
+    // Even without top-level scroll room the field must clear the keyboard,
+    // so never bounce this to window.scrollBy (a no-op under overflow:hidden).
+    scroller?.scrollBy?.({ top: delta, behavior });
+  } else if (scroller && scroller.scrollHeight > scroller.clientHeight) {
+    scroller.scrollBy({ top: delta, behavior });
+  } else {
+    window.scrollBy({ top: delta, behavior });
+  }
+};
+
 /** Fields the flow can focus — excludes toggles and the hidden date hook. */
 const FIELD_SELECTOR =
   'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
@@ -331,10 +359,13 @@ export function Wizard({
       const el = document.activeElement as HTMLElement | null;
       if (!el?.matches?.(FIELD_SELECTOR)) return;
       const box = el.getBoundingClientRect();
-      const delta = box.bottom - (vv.offsetTop + vv.height - 12);
-      if (delta > 0) {
-        scrollArea()?.scrollBy?.({ top: delta, behavior: "smooth" });
-      }
+      const top = vv.offsetTop;
+      const bottom = vv.offsetTop + vv.height;
+      const pad = 12;
+      let delta = 0;
+      if (box.bottom > bottom - pad) delta = box.bottom - (bottom - pad);
+      else if (box.top < top + pad) delta = box.top - (top + pad);
+      if (delta !== 0) scrollByReveal(delta, "auto");
     };
     const update = () => {
       setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
@@ -344,7 +375,9 @@ export function Wizard({
       // page causes itself) doesn't reliably fire another event once it
       // settles, so one fixed-delay check can easily land mid-animation
       // and under-scroll; check a few times across that window instead.
-      [0, 80, 200, 350, 500].forEach((ms) => window.setTimeout(reveal, ms));
+      [0, 80, 200, 350, 550, 800].forEach((ms) =>
+        window.setTimeout(reveal, ms),
+      );
     };
     update();
     vv.addEventListener("resize", update);
@@ -372,7 +405,7 @@ export function Wizard({
    * the keyboard animates in, since the first pass predates it.
    */
   const revealField = (el: HTMLElement) => {
-    const nudge = () => {
+    const nudge = (behavior: ScrollBehavior) => {
       const box = el.getBoundingClientRect();
       if (box.height === 0) return;
       const vv = window.visualViewport;
@@ -383,17 +416,21 @@ export function Wizard({
       if (box.bottom > bottom - pad) delta = box.bottom - (bottom - pad);
       else if (box.top < top + pad) delta = box.top - (top + pad);
       if (delta === 0) return;
-      const scroller = scrollArea();
-      if (scroller && scroller.scrollHeight > scroller.clientHeight) {
-        scroller.scrollBy({ top: delta, behavior: "smooth" });
-      } else {
-        window.scrollBy({ top: delta, behavior: "smooth" });
-      }
+      // Instant (not smooth): the keyboard is still animating in and a smooth
+      // scroll chasing it can be interrupted mid-flight, leaving the field
+      // covered (the real-device failures the commit log records). An instant
+      // snap is far more likely to land, and the follow-up pass below corrects
+      // any residue from the keyboard settling a fraction later.
+      scrollByReveal(delta, behavior);
     };
-    nudge();
-    window.setTimeout(() => {
-      if (document.activeElement === el) nudge();
-    }, 350);
+    nudge("auto");
+    // The keyboard keeps moving after the first pass; a couple of autos pick
+    // up the final settle rather than one timed smooth scroll.
+    [350, 700].forEach((ms) =>
+      window.setTimeout(() => {
+        if (document.activeElement === el) nudge("auto");
+      }, ms),
+    );
   };
 
   const openQ = (qid: string, viaReopen = false) => {
