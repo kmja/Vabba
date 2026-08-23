@@ -293,6 +293,27 @@ describe("<Planner /> wizard", () => {
     expect(sceneBox().className).not.toContain("w-[78%]");
   });
 
+  it("pulls the hero step's questions up into the scene's own fade", () => {
+    const { container } = renderPlanner();
+    const questionsBlock = () =>
+      container.querySelector<HTMLElement>("[data-questions-block]")!;
+    // Step 1 opens hero (nothing answered yet) — pulled up into the fade,
+    // not sitting a normal margin clear of it.
+    expect(questionsBlock().style.marginTop).toMatch(/^-\d/);
+
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2, hero name
+    expect(questionsBlock().style.marginTop).toMatch(/^-\d/);
+
+    fireEvent.change(container.querySelector("#a-name")!, {
+      target: { value: "Kim" },
+    });
+    openQuestion(container, "a", "income"); // advances past name — compact now
+    // Compact's row height can be set by the summary column instead of the
+    // scene, so it keeps the plain margin rather than the scene-driven pull.
+    expect(questionsBlock().style.marginTop).toBe("");
+  });
+
   it("sizes the scene's box to the visible artwork, not the faded-out margins", () => {
     const { container } = renderPlanner();
     const scene = () => container.querySelector("[data-family-scene]")!;

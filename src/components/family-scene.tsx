@@ -71,10 +71,17 @@ const move = {
  * The close-up is cropped on every side, so it fades at both ends (the
  * bottom hard, since it's mostly torso); the standing figures already have
  * clear air above their heads, so only the ground line needs softening.
+ *
+ * `pullUp` is how much further the *next* block is allowed to reach up past
+ * `bottom`, as the same kind of fraction — into the tail end of the fade,
+ * where the picture already reads as background rather than subject. That
+ * headroom is what a hero-sized scene lends back to the keyboard: a name or
+ * date field sitting right under a big portrait has that much less height
+ * to clear before it's above an on-screen keyboard.
  */
 const FADES = {
-  closeup: { top: 0.05, solidFrom: 0.2, solidTo: 0.4, bottom: 0.6 },
-  figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75 },
+  closeup: { top: 0.05, solidFrom: 0.2, solidTo: 0.4, bottom: 0.6, pullUp: 0.06 },
+  figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75, pullUp: 0.09 },
 } as const;
 
 type Fade = (typeof FADES)[keyof typeof FADES];
@@ -96,6 +103,25 @@ const gradientOf = (f: Fade) =>
 export function sceneAspect(step: number): string {
   const f = fadeOf(step);
   return `15 / ${(22 * (f.bottom - f.top)).toFixed(3)}`;
+}
+
+// The scene's own width as a fraction of its column when shown "hero" size
+// (see the w-[78%] class in wizard.tsx) — needed here because a vertical %
+// margin resolves against the *containing block's* width, not the scene's
+// own (narrower) one, so pulling the next block up by a given fraction of
+// the scene's height means converting through this.
+const HERO_WIDTH_FRACTION = 0.78;
+
+/**
+ * How far to pull the block after a *hero*-sized scene up to sit inside its
+ * fade (a negative `margin-top`, as a CSS percentage) — see `FADES.pullUp`.
+ * Not offered for the compact size: that row's height can be set by the
+ * answered-questions summary beside the scene rather than the scene itself,
+ * and pulling up by the scene's own fade could then overlap real text.
+ */
+export function heroOverlapMargin(step: number): string {
+  const f = fadeOf(step);
+  return `${(-HERO_WIDTH_FRACTION * (22 / 15) * f.pullUp * 100).toFixed(2)}%`;
 }
 
 /**

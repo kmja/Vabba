@@ -30,7 +30,11 @@ import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
-import { FamilyScene, sceneAspect } from "@/components/family-scene";
+import {
+  FamilyScene,
+  heroOverlapMargin,
+  sceneAspect,
+} from "@/components/family-scene";
 import { FlowQuestion, FlowSlot } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
@@ -327,19 +331,24 @@ export function Wizard({
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    const reveal = () => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el?.matches?.(FIELD_SELECTOR)) return;
+      const box = el.getBoundingClientRect();
+      const delta = box.bottom - (vv.offsetTop + vv.height - 12);
+      if (delta > 0) {
+        scrollArea()?.scrollBy?.({ top: delta, behavior: "smooth" });
+      }
+    };
     const update = () => {
       setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
       // The keyboard opening is its own event — no focus change fires — so
-      // lift the already-focused field if it just got covered.
-      const el = document.activeElement as HTMLElement | null;
-      if (!el?.matches?.(FIELD_SELECTOR)) return;
-      window.setTimeout(() => {
-        const box = el.getBoundingClientRect();
-        const delta = box.bottom - (vv.offsetTop + vv.height - 12);
-        if (delta > 0) {
-          scrollArea()?.scrollBy?.({ top: delta, behavior: "smooth" });
-        }
-      }, 60);
+      // lift the already-focused field if it just got covered. Its own
+      // open animation runs for a few hundred ms and (unlike a resize the
+      // page causes itself) doesn't reliably fire another event once it
+      // settles, so one fixed-delay check can easily land mid-animation
+      // and under-scroll; check a few times across that window instead.
+      [0, 80, 200, 350, 500].forEach((ms) => window.setTimeout(reveal, ms));
     };
     update();
     vv.addEventListener("resize", update);
@@ -1823,7 +1832,15 @@ export function Wizard({
               focus — so a choice that can't work is seen, not scrolled past. */}
           {issueBanner}
 
-          <div key={current} className="animate-flow-in mt-4 space-y-5 [@media(max-height:740px)]:mt-2 [@media(max-height:740px)]:space-y-3">
+          <div
+            key={current}
+            data-questions-block
+            style={heroStage ? { marginTop: heroOverlapMargin(current) } : undefined}
+            className={cn(
+              "animate-flow-in space-y-5 [@media(max-height:740px)]:space-y-3",
+              !heroStage && "mt-4 [@media(max-height:740px)]:mt-2",
+            )}
+          >
             {current === 1 && (
               <>
                 <FlowSlot slot="active">{babyFlow}</FlowSlot>
