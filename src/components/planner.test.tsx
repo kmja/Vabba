@@ -289,7 +289,7 @@ describe("<Planner /> wizard", () => {
       target: { value: "Kim" },
     });
     openQuestion(container, "a", "income"); // advances past name
-    expect(sceneBox().className).toContain("w-28");
+    expect(sceneBox().className).toContain("w-40");
     expect(sceneBox().className).not.toContain("w-56");
   });
 

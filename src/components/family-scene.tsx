@@ -102,11 +102,13 @@ export function FamilyScene({
   const figMidY = BASE - FIG_H * 0.5;
   const camera =
     step <= 1
-      ? // Close on caregiver 1's bundle — the arm and their chest behind it.
+      ? // Close on caregiver 1's bundle — the arm and their chest behind it,
+        // with enough room around it to read as a considered crop rather
+        // than an accidental one.
         cam(
           F1X - FIG_W / 2 + FIG_W * BUNDLE_AT.fx,
           BASE - FIG_H + FIG_H * BUNDLE_AT.fy,
-          3,
+          2.2,
         )
       : two
         ? // Both figures, close together mid-handover.
@@ -129,10 +131,15 @@ export function FamilyScene({
         y: fy + FIG_H * (BUNDLE_AT.fy - 0.06),
       };
 
-  // Fades the whole illustration out toward the bottom edge, rather than
-  // cutting it off flush against the page — floats on it instead of sitting
-  // in a boxed frame.
-  const fade = "linear-gradient(to bottom, black 0%, black 68%, transparent 98%)";
+  // Fades the illustration out at its edges rather than cutting it off flush
+  // against the page — floats on it instead of sitting in a boxed frame.
+  // The close-up on the bundle is cropped on every side, so it fades top and
+  // bottom alike; the standing figures already have clear air above their
+  // heads, so only the ground line needs softening.
+  const fade =
+    step <= 1
+      ? "linear-gradient(to bottom, transparent 0%, black 20%, black 55%, transparent 100%)"
+      : "linear-gradient(to bottom, black 0%, black 38%, transparent 96%)";
 
   return (
     <svg

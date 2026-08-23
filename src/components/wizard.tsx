@@ -1743,11 +1743,12 @@ export function Wizard({
           ? null
           : caregiverFlow(secondId);
 
-  // A caregiver step's very first question, on its first pass — nothing
-  // about them is known yet, so the portrait gets the big "who is this"
-  // moment instead of sharing the frame with a (currently empty) summary.
-  const heroName =
-    !reopened && (activeQ === "a-q-name" || activeQ === "b-q-name");
+  // A step's very first question, on its first pass — nothing about it is
+  // known yet, so the portrait gets the big "here's who/what this is" moment
+  // instead of sharing the frame with a (currently empty) summary.
+  const heroStage =
+    !reopened &&
+    (activeQ === "q-date" || activeQ === "a-q-name" || activeQ === "b-q-name");
 
   return (
     <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
@@ -1771,16 +1772,16 @@ export function Wizard({
         >
           {/* The stage sits beside the answered questions; it persists across
               steps so the camera pans, the zoom-out and the handover animate
-              between them. A caregiver's first ("Namn") question gets it big
-              — the summary beside it is empty at that point anyway — then it
+              between them. A step's first question gets it big — the
+              summary beside it is empty at that point anyway — then it
               shrinks back once there's something to sit beside. */}
           <div className="flex items-start gap-3">
             <div
               className={cn(
                 "relative aspect-[15/22] shrink-0 transition-[width] duration-700 ease-[cubic-bezier(0.32,0.8,0.3,1)] motion-reduce:transition-none",
-                heroName
+                heroStage
                   ? "w-56 sm:w-64 [@media(max-height:740px)]:w-44 [@media(max-height:560px)]:w-36"
-                  : "w-28 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden",
+                  : "w-40 sm:w-48 [@media(max-height:740px)]:w-32 [@media(max-height:560px)]:hidden",
               )}
             >
               <FamilyScene
