@@ -27,12 +27,33 @@ import {
   type PaceBreak,
 } from "@/lib/projection";
 import { addDays, addMonths, addYears, differenceInDays } from "@/lib/dates";
-import { SGI_PROTECTION } from "@/lib/rules";
+import { DOUBLE_DAYS, SGI_PROTECTION, TIMING } from "@/lib/rules";
 import { DEFAULT_MUNICIPAL_RATE, householdNet } from "@/lib/tax";
 
 const DAYS_PER_MONTH = 30.4;
 const MIN_PACE = 0.5;
 const MAX_PACE = 7;
+
+/**
+ * Days a normal working week actually contains.
+ *
+ * Föräldrapenning is a calendar-day benefit — all 7 days of the week can be
+ * drawn — but salary is only lost on the days you would otherwise have
+ * worked. So a part-timer's remaining pay is measured against 5, not 7.
+ * Försäkringskassan sizes partial days the same way: 75 % work is 1,25
+ * dagar/vecka, 50 % is 2,5 (see SGI_PROTECTION in rules.ts).
+ */
+export const WORK_WEEK = 5;
+
+/**
+ * What a caregiver still earns while drawing `pace` days of benefit a week.
+ * Exported because the results page builds the same figure for its own rows,
+ * and two copies of this formula drifted apart once already.
+ */
+export function partTimeSalaryAt(salary: number, pace: number): number {
+  const p = Math.max(0, Math.min(WORK_WEEK, pace));
+  return (salary * (WORK_WEEK - p)) / WORK_WEEK;
+}
 
 /** How a caregiver's stretch is planned. */
 export type GoalMode = "manual" | "untilDate" | "budget";
@@ -130,6 +151,13 @@ export interface PlanSolve {
     endsAt: Date;
     rate: number;
   } | null;
+  /**
+   * Income-based days the schedule still draws after they expire at the 4th
+   * birthday. Normally 0 — the solvers hold a pace floor that keeps them
+   * inside the window — but when there are more days than calendar left even
+   * at full pace, this is what would be lost.
+   */
+  incomeDaysPastDeadline: number;
 }
 
 // -----------------------------------------------------------------------------
@@ -138,8 +166,7 @@ export interface PlanSolve {
 
 function partTimeSalary(spec: CaregiverPlanSpec, pace: number): number {
   if (!spec.worksPartTime) return 0;
-  const p = Math.max(0, Math.min(MAX_PACE, pace));
-  return (spec.salary * (MAX_PACE - p)) / MAX_PACE;
+  return partTimeSalaryAt(spec.salary, pace);
 }
 
 /**
@@ -188,14 +215,72 @@ function postYearFloor(spec: CaregiverPlanSpec): number {
     : SGI_PROTECTION.minDaysPerWeekAfterAge1;
 }
 
+/**
+ * A stretch where this caregiver's own pace is pinned to a full day a week
+ * regardless of their goal — dubbeldagar, where both of them draw a whole
+ * day on the same calendar day, one out of each of their pots.
+ */
+export interface OverlapWindow {
+  from: Date;
+  to: Date;
+}
+
+/**
+ * Facts about the calendar that outrank a caregiver's goal. Bundled rather
+ * than passed as two more positional arguments, since every solver needs
+ * both and neither belongs to the caregiver's own preferences.
+ */
+interface Limits {
+  /** Dubbeldagar — a stretch pinned to a full day a week. */
+  overlap?: OverlapWindow | null;
+  /** Slowest pace that still gets the income days used before they expire. */
+  minPace?: number;
+}
+
+/**
+ * The slowest pace at which this caregiver's income-based days still land
+ * before they are forfeited.
+ *
+ * Income days expire at the child's 4th birthday (bar the small saved-day
+ * allowance), so a plan drawing them more slowly than this is spending days
+ * that will not exist by the time it reaches them. Returns 0 when there is
+ * nothing to fit, and the full pace when the deadline has already passed —
+ * in that case nothing fits and the caller reports the overrun instead.
+ */
+function deadlinePaceFloor(
+  incomeDays: number,
+  cursor: Date,
+  deadline: Date,
+): number {
+  if (incomeDays <= 0) return 0;
+  const calendar = differenceInDays(cursor, deadline);
+  if (calendar <= 0) return MAX_PACE;
+  // Rounded UP to the tenth the solvers actually quantise to. Rounding the
+  // other way would hand back a floor just under what fits, which is how a
+  // plan ends up a handful of days over the line.
+  const exact = (incomeDays * 7) / calendar;
+  return Math.min(MAX_PACE, Math.ceil(exact * 10) / 10);
+}
+
 function schedule(
   phase1: number,
   phase2: number,
   oneYear: Date,
+  overlap?: OverlapWindow | null,
 ): PaceBreak[] {
-  return [
+  const base: PaceBreak[] = [
     { until: oneYear, pace: phase1 },
     { until: null, pace: phase2 },
+  ];
+  if (!overlap) return base;
+  // `breakAt` takes the first entry whose `until` is still ahead of the
+  // cursor, so the window can simply be spliced in front of the ordinary
+  // phases — it wins while the cursor is inside it and is skipped after,
+  // even when it runs past the first birthday.
+  return [
+    { until: overlap.from, pace: phase1 },
+    { until: overlap.to, pace: MAX_PACE },
+    ...base,
   ];
 }
 
@@ -227,8 +312,9 @@ function blocksFor(
   pools: Pools,
   phases: { phase1: number; phase2: number },
   oneYear: Date,
+  overlap?: OverlapWindow | null,
 ): LeaveBlock[] {
-  const sched = schedule(phases.phase1, phases.phase2, oneYear);
+  const sched = schedule(phases.phase1, phases.phase2, oneYear, overlap);
   return [
     {
       caregiver: spec.name,
@@ -323,17 +409,20 @@ function solveManual(
   cursor: Date,
   oneYear: Date,
   municipalRate: number,
+  limits: Limits = {},
 ): OneResult {
   const sgiMin = SGI_PROTECTION.minDaysPerWeekAfterAge1;
+  // A hand-picked pace is still bounded by when the days expire.
+  const floorPace = limits.minPace ?? 0;
   let phases: { phase1: number; phase2: number };
   if (spec.switchPhases) {
     const floor = spec.worksPartTime ? MIN_PACE : sgiMin;
     phases = {
-      phase1: Math.max(MIN_PACE, spec.switchPhases.phase1),
-      phase2: Math.max(floor, spec.switchPhases.phase2),
+      phase1: Math.max(MIN_PACE, floorPace, spec.switchPhases.phase1),
+      phase2: Math.max(floor, floorPace, spec.switchPhases.phase2),
     };
   } else {
-    const p = Math.max(1, spec.manualPace ?? MAX_PACE);
+    const p = Math.max(1, floorPace, spec.manualPace ?? MAX_PACE);
     // Below the SGI floor and not part-time: keep the chosen pace while SGI is
     // protected (year 1), then lift to the minimum.
     phases = {
@@ -343,7 +432,7 @@ function solveManual(
   }
   const intervals = buildLeaveIntervals(
     cursor,
-    blocksFor(spec, pools, phases, oneYear),
+    blocksFor(spec, pools, phases, oneYear, limits.overlap),
   );
   return outcomeOf(
     spec,
@@ -363,14 +452,22 @@ function solveUntilDate(
   oneYear: Date,
   target: Date,
   municipalRate: number,
+  limits: Limits = {},
 ): OneResult {
-  const f2 = postYearFloor(spec);
+  // The slowest end of the stretch range is whichever binds harder: the
+  // floor this caregiver is allowed to run at, or the one the expiry date
+  // forces on them.
+  const slowest = Math.max(MIN_PACE, limits.minPace ?? 0);
+  const f2 = Math.max(postYearFloor(spec), limits.minPace ?? 0);
   const pacesAt = (s: number) => ({
-    phase1: round1(MIN_PACE + s * (MAX_PACE - MIN_PACE)),
+    phase1: round1(slowest + s * (MAX_PACE - slowest)),
     phase2: round1(f2 + s * (MAX_PACE - f2)),
   });
   const intervalsAt = (s: number) =>
-    buildLeaveIntervals(cursor, blocksFor(spec, pools, pacesAt(s), oneYear));
+    buildLeaveIntervals(
+      cursor,
+      blocksFor(spec, pools, pacesAt(s), oneYear, limits.overlap),
+    );
   const endAt = (s: number) => {
     const iv = intervalsAt(s);
     return iv.length > 0 ? iv[iv.length - 1].endsAt : cursor;
@@ -461,6 +558,7 @@ function solveBudget(
   oneYear: Date,
   floorNet: number,
   municipalRate: number,
+  limits: Limits = {},
 ): OneResult {
   // Smallest pace in [minPace, 7] whose household net clears the floor; if
   // none does, the pace that pays the most (part-timers can earn more at a
@@ -481,14 +579,19 @@ function solveBudget(
     return best ?? argmax;
   };
 
-  const f2 = postYearFloor(spec);
+  // "As long as possible" still cannot outlast the days themselves: the
+  // expiry floor overrides the slowest pace the net floor would allow.
+  const slowest = Math.max(MIN_PACE, limits.minPace ?? 0);
+  const f2 = Math.max(postYearFloor(spec), limits.minPace ?? 0);
   const phases = {
-    phase1: paceForFloor(spec.incomeRate, MIN_PACE),
+    phase1: paceForFloor(spec.incomeRate, slowest),
     phase2: paceForFloor(spec.incomeRate, f2),
   };
+  // Lägstanivå days keep running until the child is 12, so only the SGI
+  // floor binds them — the 4-year expiry is about income-based days.
   const lagstaPhases = {
     phase1: paceForFloor(spec.lagstaRate, MIN_PACE),
-    phase2: paceForFloor(spec.lagstaRate, f2),
+    phase2: paceForFloor(spec.lagstaRate, postYearFloor(spec)),
   };
   const blocks: LeaveBlock[] = [
     {
@@ -496,14 +599,19 @@ function solveBudget(
       tier: "income" as const,
       days: pools.income,
       rate: spec.incomeRate,
-      schedule: schedule(phases.phase1, phases.phase2, oneYear),
+      schedule: schedule(phases.phase1, phases.phase2, oneYear, limits.overlap),
     },
     {
       caregiver: spec.name,
       tier: "lagsta" as const,
       days: pools.lagsta,
       rate: spec.lagstaRate,
-      schedule: schedule(lagstaPhases.phase1, lagstaPhases.phase2, oneYear),
+      schedule: schedule(
+        lagstaPhases.phase1,
+        lagstaPhases.phase2,
+        oneYear,
+        limits.overlap,
+      ),
     },
   ].filter((b) => b.days > 0);
 
@@ -536,41 +644,81 @@ export function solvePlan(
   municipalRate: number = DEFAULT_MUNICIPAL_RATE,
 ): PlanSolve {
   const oneYear = addYears(birth, 1);
+  // Income-based days are forfeited at the 4th birthday, so no goal may
+  // stretch them past it — see `deadlinePaceFloor`.
+  const incomeDeadline = addYears(birth, TIMING.sjukpenningUntilAge);
   const intervals: LeaveInterval[] = [];
   const perCaregiver: CaregiverOutcome[] = [];
   let cursor = start;
-  // Where the very first caregiver actually begins (their own startAt can
-  // push this later) — dubbeldagar overlap that, not wherever a later
-  // caregiver's own sequential turn happens to start.
-  let openingStart = start;
   let doubleDaysWindow: PlanSolve["doubleDaysWindow"] = null;
+
+  // ---------------------------------------------------------------------
+  // Dubbeldagar have to be settled before anybody is solved.
+  //
+  // A dubbeldag is one calendar day that BOTH caregivers draw a whole day
+  // for, one out of each of their own pots. That makes it a fact about the
+  // first caregiver's schedule too, not just the second's — and the first
+  // caregiver is solved first, so the window cannot be discovered halfway
+  // through the loop. Work it out up front, bounded by everything that can
+  // limit it, then hand it to both sides.
+  // ---------------------------------------------------------------------
+  const ddIndex = caregivers.findIndex(
+    (c, i) => i > 0 && (c.doubleDays ?? 0) > 0,
+  );
+  let ddDays = 0;
+  let overlap: OverlapWindow | null = null;
+  if (ddIndex > 0) {
+    const ddSpec = caregivers[ddIndex];
+    const first = caregivers[0];
+    const firstStart =
+      first.startAt && first.startAt.getTime() > start.getTime()
+        ? first.startAt
+        : start;
+    const from = addDays(firstStart, ddSpec.doubleDaysDelay ?? 0);
+    // One calendar day per dubbeldag, so the deadline is a day budget too.
+    const roomToDeadline = Math.max(
+      0,
+      differenceInDays(from, addMonths(birth, DOUBLE_DAYS.withinFirstMonths)),
+    );
+    ddDays = Math.floor(
+      Math.max(
+        0,
+        Math.min(
+          ddSpec.doubleDays ?? 0,
+          applySaveDays(ddSpec).income,
+          applySaveDays(first).income,
+          roomToDeadline,
+        ),
+      ),
+    );
+    if (ddDays > 0) overlap = { from, to: addDays(from, ddDays) };
+  }
 
   for (const [i, spec] of caregivers.entries()) {
     if (spec.startAt && spec.startAt.getTime() > cursor.getTime()) {
       cursor = spec.startAt;
     }
-    if (i === 0) openingStart = cursor;
     let pools = applySaveDays(spec);
 
-    // Dubbeldagar: on top of their own later stretch, this caregiver ALSO
-    // draws benefit right alongside the first caregiver's opening days —
-    // both home at once. Spent from their own pool, so it comes off what's
-    // left for the sequential solve below. Kept in `intervals` (so day
-    // totals and net-floor checks see it) but ALSO called out on its own —
-    // pushed here, it lands out of chronological order relative to the
-    // first caregiver's still-ongoing stretch, which the UI needs to know
-    // to merge the two into one "both home" block instead.
-    const dd =
-      i > 0 ? Math.max(0, Math.min(spec.doubleDays ?? 0, pools.income)) : 0;
-    if (dd > 0) {
-      const ddStart = addDays(openingStart, spec.doubleDaysDelay ?? 0);
-      const ddIntervals = buildLeaveIntervals(ddStart, [
+    // The second caregiver's half of the dubbeldagar window: their own
+    // concurrent stretch alongside the first caregiver's opening days. Spent
+    // from their pot, so it comes off what is left for their sequential
+    // solve below. Kept in `intervals` (so day totals and net-floor checks
+    // see it) but ALSO called out on its own — pushed here it lands out of
+    // chronological order relative to the first caregiver's still-ongoing
+    // stretch, which the UI needs to know to merge the two into one "both
+    // home" block. The first caregiver's half is not here: it is a pinned
+    // stretch inside their own schedule (see `overlap` above), because they
+    // are already on leave and simply draw a full day for those dates.
+    const dd = i === ddIndex ? ddDays : 0;
+    if (dd > 0 && overlap) {
+      const ddIntervals = buildLeaveIntervals(overlap.from, [
         {
           caregiver: spec.name,
           tier: "income",
           days: dd,
           rate: spec.incomeRate,
-          schedule: [{ until: null, pace: 7 }],
+          schedule: [{ until: null, pace: MAX_PACE }],
         },
       ]);
       intervals.push(...ddIntervals);
@@ -593,9 +741,23 @@ export function solvePlan(
           ? addMonths(cursor, spec.targetMonths)
           : (spec.targetDate ?? null)
         : null;
+    // Only the first caregiver carries the pinned window — they are the one
+    // already on leave while the other joins them.
+    const limits: Limits = {
+      overlap: i === 0 ? overlap : null,
+      minPace: deadlinePaceFloor(pools.income, cursor, incomeDeadline),
+    };
     const one =
       target
-        ? solveUntilDate(spec, pools, cursor, oneYear, target, municipalRate)
+        ? solveUntilDate(
+            spec,
+            pools,
+            cursor,
+            oneYear,
+            target,
+            municipalRate,
+            limits,
+          )
         : spec.mode === "budget"
           ? solveBudget(
               spec,
@@ -604,8 +766,9 @@ export function solvePlan(
               oneYear,
               spec.budgetFloor ?? 0,
               municipalRate,
+              limits,
             )
-          : solveManual(spec, pools, cursor, oneYear, municipalRate);
+          : solveManual(spec, pools, cursor, oneYear, municipalRate, limits);
     intervals.push(...one.intervals);
     perCaregiver.push(one.outcome);
     if (one.outcome.endsAt) cursor = one.outcome.endsAt;
@@ -619,6 +782,19 @@ export function solvePlan(
     if (minNet === null || net < minNet) minNet = net;
   }
 
+  // Whatever the pace floor could not rescue: income days still scheduled
+  // past the point they stop existing.
+  let pastDeadline = 0;
+  for (const seg of intervals) {
+    if (seg.tier !== "income") continue;
+    if (seg.endsAt.getTime() <= incomeDeadline.getTime()) continue;
+    const from =
+      seg.startsAt.getTime() > incomeDeadline.getTime()
+        ? seg.startsAt
+        : incomeDeadline;
+    pastDeadline += (differenceInDays(from, seg.endsAt) / 7) * seg.pace;
+  }
+
   return {
     intervals,
     perCaregiver,
@@ -626,5 +802,6 @@ export function solvePlan(
     savedTotal: perCaregiver.reduce((a, o) => a + o.savedDays, 0),
     minHouseholdNet: minNet,
     doubleDaysWindow,
+    incomeDaysPastDeadline: Math.round(pastDeadline),
   };
 }

@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { solvePlan, type CaregiverPlanSpec } from "@/lib/goal-seek";
-import { addDays, differenceInDays, parseIsoDate } from "@/lib/dates";
+import {
+  partTimeSalaryAt,
+  solvePlan,
+  type CaregiverPlanSpec,
+} from "@/lib/goal-seek";
+import {
+  addDays,
+  addMonths,
+  addYears,
+  differenceInDays,
+  parseIsoDate,
+} from "@/lib/dates";
 
 const birth = parseIsoDate("2025-01-15");
 
@@ -194,9 +204,28 @@ describe("solvePlan — budget", () => {
       }),
     ]);
     const [anna] = res.perCaregiver;
-    expect(anna.paces.phase1).toBeLessThan(1.5);
+    // The point of the test: working the rest of the week exempts her from
+    // the 5-days-a-week SGI floor, so the pace stays low on both sides of
+    // the first birthday. (The exact figure moved when part-time pay
+    // started being measured against a 5-day working week — less salary
+    // left over means slightly more benefit is needed to clear the floor.)
+    expect(anna.paces.phase1).toBeLessThan(2.5);
     expect(anna.paces.phase2).toBeLessThan(5);
     expect(anna.sgiLifted).toBe(false);
+  });
+
+  it("measures a part-timer's remaining salary against a 5-day working week", () => {
+    // Föräldrapenning is a calendar-day benefit, but salary is only lost on
+    // days you would have worked. Försäkringskassan sizes partial days the
+    // same way — 50 % work is 2,5 dagar/vecka, not the 3,5 a 7-day week
+    // would imply. Dividing by 7 overstated the pay left over, which then
+    // let the budget solver settle on a slower pace than the floor allows.
+    expect(partTimeSalaryAt(40000, 2.5)).toBeCloseTo(20000, 6);
+    expect(partTimeSalaryAt(40000, 1.25)).toBeCloseTo(30000, 6);
+    // At (and past) a full working week there is no salary left to keep.
+    expect(partTimeSalaryAt(40000, 5)).toBe(0);
+    expect(partTimeSalaryAt(40000, 7)).toBe(0);
+    expect(partTimeSalaryAt(40000, 0)).toBe(40000);
   });
 
   it("flags when even the best pace cannot clear the floor", () => {
@@ -273,5 +302,131 @@ describe("solvePlan — dubbeldagar", () => {
     const bea = res.intervals.filter((s) => s.caregiver === "Bea");
     expect(bea[0].startsAt.getTime()).toBe(addDays(birth, 10).getTime());
     expect(differenceInDays(bea[0].startsAt, bea[0].endsAt)).toBe(20);
+  });
+
+  it("puts BOTH caregivers on a whole day for the window, whatever pace the first one is otherwise on", () => {
+    // A dubbeldag is one calendar day that both of them draw a full day
+    // for. The first caregiver used to just carry on at their own goal's
+    // pace through the window, so a plan claiming 20 dubbeldagar could
+    // deliver as little as one and a half of them while charging the
+    // family for forty days.
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", mode: "budget", budgetFloor: 0, incomeDays: 195 }),
+      cg({ name: "Bea", mode: "budget", budgetFloor: 0, incomeDays: 195, doubleDays: 20 }),
+    ]);
+    const window = res.doubleDaysWindow!;
+    expect(window).not.toBeNull();
+
+    const drawnInWindow = (name: string) =>
+      res.intervals
+        .filter((s) => s.caregiver === name)
+        .reduce((sum, s) => {
+          const from = Math.max(s.startsAt.getTime(), window.startsAt.getTime());
+          const to = Math.min(s.endsAt.getTime(), window.endsAt.getTime());
+          return to > from ? sum + ((to - from) / 86_400_000 / 7) * s.pace : sum;
+        }, 0);
+
+    expect(differenceInDays(window.startsAt, window.endsAt)).toBe(20);
+    expect(drawnInWindow("Bea")).toBeCloseTo(20, 6);
+    // Anna is on a slow pace either side of the window and a whole day
+    // inside it — otherwise these are not dubbeldagar at all.
+    expect(drawnInWindow("Anna")).toBeCloseTo(20, 6);
+    expect(res.perCaregiver[0].paces.phase1).toBeLessThan(7);
+  });
+
+  it("cannot draw more dubbeldagar than the FIRST caregiver's pool holds either", () => {
+    // One day out of each pot, so the shorter pot bounds the window.
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 12, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 300, manualPace: 7, doubleDays: 40 }),
+    ]);
+    const window = res.doubleDaysWindow!;
+    expect(differenceInDays(window.startsAt, window.endsAt)).toBe(12);
+  });
+
+  it("clamps the window to the 15-month deadline", () => {
+    // The deadline is a day budget as much as a date: one calendar day per
+    // dubbeldag, so a window starting late simply has fewer left in it.
+    const late = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 390, manualPace: 7 }),
+      cg({
+        name: "Bea",
+        incomeDays: 390,
+        manualPace: 7,
+        doubleDays: 60,
+        doubleDaysDelay: 420,
+      }),
+    ]);
+    const deadline = addMonths(birth, 15);
+    expect(late.doubleDaysWindow!.endsAt.getTime()).toBeLessThanOrEqual(
+      deadline.getTime(),
+    );
+
+    // Starting past the deadline leaves no window at all.
+    const past = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 390, manualPace: 7 }),
+      cg({
+        name: "Bea",
+        incomeDays: 390,
+        manualPace: 7,
+        doubleDays: 60,
+        doubleDaysDelay: 500,
+      }),
+    ]);
+    expect(past.doubleDaysWindow).toBeNull();
+  });
+});
+
+describe("solvePlan — the income days' expiry date", () => {
+  it("will not stretch income days past the child's 4th birthday", () => {
+    // "As long as possible" used to mean 0,5 dagar/vecka indefinitely — a
+    // part-timer's plan ran to the child's 9th birthday, spending days that
+    // are forfeited at 4.
+    const res = solvePlan(birth, birth, [
+      cg({
+        mode: "budget",
+        budgetFloor: 0,
+        incomeDays: 195,
+        lagstaDays: 45,
+        worksPartTime: true,
+      }),
+    ]);
+    const age4 = addYears(birth, 4);
+    for (const seg of res.intervals) {
+      if (seg.tier !== "income") continue;
+      expect(seg.endsAt.getTime()).toBeLessThanOrEqual(age4.getTime());
+    }
+    expect(res.incomeDaysPastDeadline).toBe(0);
+    // Lägstanivå days are not bound by the 4-year date — they last until
+    // 12 — so they may still run on past it.
+    expect(res.endsAt!.getTime()).toBeGreaterThan(age4.getTime());
+  });
+
+  it("holds the floor in manual mode too", () => {
+    const res = solvePlan(birth, birth, [
+      cg({ mode: "manual", manualPace: 1, incomeDays: 390, lagstaDays: 90 }),
+    ]);
+    // A hand-picked 1 day/week cannot fit 390 days before the 4th birthday.
+    expect(res.perCaregiver[0].paces.phase1).toBeGreaterThan(1);
+    expect(res.incomeDaysPastDeadline).toBe(0);
+  });
+
+  it("reports the overrun when no pace can fit the days that are left", () => {
+    // Starting six months before the deadline with a full pot: even every
+    // single day of the week does not get through 390 of them.
+    const res = solvePlan(birth, addYears(birth, 4 - 0.5), [
+      cg({ incomeDays: 390, lagstaDays: 90, manualPace: 7 }),
+    ]);
+    expect(res.perCaregiver[0].paces.phase1).toBe(7);
+    expect(res.incomeDaysPastDeadline).toBeGreaterThan(0);
+  });
+
+  it("leaves an ordinary plan alone", () => {
+    const res = solvePlan(birth, birth, [
+      cg({ name: "Anna", incomeDays: 195, lagstaDays: 45, manualPace: 7 }),
+      cg({ name: "Bea", incomeDays: 195, lagstaDays: 45, manualPace: 7 }),
+    ]);
+    expect(res.perCaregiver.map((o) => o.paces.phase1)).toEqual([7, 7]);
+    expect(res.incomeDaysPastDeadline).toBe(0);
   });
 });

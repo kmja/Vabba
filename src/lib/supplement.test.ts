@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 
-import { computeSupplement } from "@/lib/supplement";
+import {
+  computeSupplement,
+  SUPPLEMENT_WINDOW_MONTHS,
+} from "@/lib/supplement";
 import { sjukpenningnivaDailyAmount, MONEY } from "@/lib/rules";
 
 const CAP_MONTHLY = Math.round(MONEY.sgiAnnualCap / 12);
@@ -71,8 +74,45 @@ describe("computeSupplement", () => {
     const full = computeSupplement({ ...base, pace: 7 })!;
     const half = computeSupplement({ ...base, pace: 3.5 })!;
     expect(half.monthly).toBeCloseTo(full.monthly / 2, -1);
-    expect(half.total).toBe(full.total); // same money, stretched out
     expect(half.months).toBe(full.months * 2);
+    // Same money, stretched out — 12 months still fits inside the
+    // agreement's window, so none of it is lost.
+    expect(half.cutShortByWindow).toBe(false);
+    expect(half.total).toBeCloseTo(full.total, -2);
+    // The parts reconcile with the headline: rounding months to a whole
+    // number used to lose up to 5 % of the total.
+    for (const r of [full, half]) {
+      expect(r.total).toBe(Math.round(r.monthly * r.months));
+    }
+  });
+
+  it("stops paying at the end of the agreement's window", () => {
+    // A six-month top-up drawn at half a day a week would otherwise run for
+    // 84 months — the child would be seven before it ended.
+    const slow = computeSupplement({
+      grossMonthlySalary: 45_000,
+      incomeAboveCap: false,
+      pct: 90,
+      months: 6,
+      fkDailyRate: sjukpenningnivaDailyAmount(45_000),
+      pace: 0.5,
+    })!;
+    expect(slow.cutShortByWindow).toBe(true);
+    expect(slow.months).toBe(SUPPLEMENT_WINDOW_MONTHS);
+    expect(slow.total).toBe(Math.round(slow.monthly * slow.months));
+
+    // An agreement with a longer window pays for longer.
+    const generous = computeSupplement({
+      grossMonthlySalary: 45_000,
+      incomeAboveCap: false,
+      pct: 90,
+      months: 6,
+      fkDailyRate: sjukpenningnivaDailyAmount(45_000),
+      pace: 0.5,
+      withinMonths: 24,
+    })!;
+    expect(generous.months).toBe(24);
+    expect(generous.total).toBeGreaterThan(slow.total);
   });
 
   it("returns null when it does not apply", () => {

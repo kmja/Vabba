@@ -39,11 +39,15 @@ import {
   paceForMonthlyTarget,
 } from "@/lib/format";
 import {
+  partTimeSalaryAt,
   solvePlan,
   type CaregiverPlanSpec,
   type GoalMode,
 } from "@/lib/goal-seek";
-import { computeSupplement } from "@/lib/supplement";
+import {
+  computeSupplement,
+  SUPPLEMENT_WINDOW_MONTHS,
+} from "@/lib/supplement";
 import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
@@ -685,8 +689,38 @@ export function Planner() {
         message: `Ni sparar ungefär ${Math.round(planSolve.savedTotal)} dagar till senare. Vid 4-årsdagen (${formatDate(deadlines.sjukpenningDeadline)}) får högst 96 dagar finnas kvar — planera in resten före dess, t.ex. till klämdagar och lov.`,
       });
     }
+    // The solver holds a pace floor that keeps income days inside their
+    // window, so this only fires when there is genuinely more pott than
+    // calendar — nothing the plan can rearrange its way out of.
+    if (planSolve.incomeDaysPastDeadline > 0) {
+      out.push({
+        level: "critical",
+        code: "incomeDaysExpire",
+        message: `Ungefär ${planSolve.incomeDaysPastDeadline} inkomstbaserade dagar hinner inte tas ut före 4-årsdagen (${formatDate(deadlines.sjukpenningDeadline)}) ens i full takt, och går då förlorade. Börja tidigare, eller lägg fler dagar på den andra vårdnadshavaren.`,
+      });
+    }
+    // Föräldralön runs out on the agreement's clock, not the plan's. One
+    // warning for the household, not one per caregiver — it is the same
+    // fact about the same agreement either way.
+    const stretchedSupp = (
+      soloMode
+        ? ([[soloName, supplementA]] as const)
+        : ([
+            [nameA, supplementA],
+            [nameB, supplementB],
+          ] as const)
+    )
+      .filter(([, supp]) => supp?.cutShortByWindow)
+      .map(([name]) => name);
+    if (stretchedSupp.length > 0) {
+      out.push({
+        level: "warning",
+        code: "supplementWindow",
+        message: `I den här takten skulle föräldralönen till ${stretchedSupp.join(" och ")} räcka längre än de ${SUPPLEMENT_WINDOW_MONTHS} månader efter födseln som kollektivavtal brukar betala ut den inom. Beloppen här räknar bara med det som hinner betalas ut — kontrollera vad ert avtal säger.`,
+      });
+    }
     return out;
-  }, [planSolve, deadlines, soloMode, nameA, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB]);
+  }, [planSolve, deadlines, soloMode, soloName, nameA, nameB, supplementA, supplementB, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB]);
 
   const warnings = [...baseWarnings, ...goalWarnings];
 
@@ -903,11 +937,7 @@ export function Planner() {
         supplement: (isA ? supplementA : supplementB) ?? undefined,
         householdBase: isA ? householdBaseA : householdBaseB,
         partnerWorking: soloMode ? undefined : isA ? nameB : nameA,
-        partTimeSalary: works
-          ? Math.round(
-              (salary * (7 - Math.max(0, Math.min(7, startPace)))) / 7,
-            )
-          : 0,
+        partTimeSalary: works ? Math.round(partTimeSalaryAt(salary, startPace)) : 0,
       };
     };
 

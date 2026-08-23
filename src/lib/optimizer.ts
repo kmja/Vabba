@@ -94,6 +94,10 @@ export type WarningCode =
   | "incomeAboveCap"
   | "doubleDaysLimited"
   | "grundnivaFirst180"
+  | "incomeDaysExpire"
+  | "supplementWindow"
+  | "leaveRights"
+  | "applyDeadlines"
   | "overAllocated";
 
 export interface PlanWarning {
@@ -477,6 +481,24 @@ function buildWarnings(plan: PlanInput, ctx: WarningContext): PlanWarning[] {
       });
     }
   }
+
+  // 3b. Being off work and being paid for it are two different rights, and
+  //     only the second one is what this app calculates. Föräldraledighetslagen
+  //     is what actually decides whether you may be at home.
+  warnings.push({
+    level: "info",
+    code: "leaveRights",
+    message:
+      "Rätten att vara ledig är inte samma sak som pengarna. Du har rätt till hel ledighet tills barnet är 18 månader, oavsett om du tar ut föräldrapenning. Efter det har du rätt att vara ledig i den omfattning du tar ut föräldrapenning — plus rätt att gå ner till 75 % arbetstid tills barnet fyller 8 år.",
+  });
+
+  // 3c. Two deadlines that decide whether a plan is worth anything.
+  warnings.push({
+    level: "info",
+    code: "applyDeadlines",
+    message:
+      "Ansök om föräldrapenning senast 90 dagar efter den dag du vill ha ersättning för — annars betalas den inte ut. Säg till arbetsgivaren minst 2 månader innan ledigheten börjar (föräldraledighetslagen 13 §).",
+  });
 
   // 4. Timing: can the remaining income-based days physically be used before the
   //    child turns 4?

@@ -20,15 +20,28 @@ const CAP_MONTHLY = Math.round(MONEY.sgiAnnualCap / 12);
 /** Days per month, matching the duration helpers used elsewhere. */
 const DAYS_PER_MONTH = 30.4;
 
+/**
+ * How long after the birth a collective agreement will still pay the top-up.
+ * Agreements vary — 18 months is the common shape, some allow 24 — but they
+ * all have a limit, and a slow pace can otherwise stretch a six-month top-up
+ * over seven years on paper.
+ */
+export const SUPPLEMENT_WINDOW_MONTHS = 18;
+
 export interface SupplementResult {
   /** Top-up per calendar month, at the caregiver's leave pace. */
   monthly: number;
-  /** Total top-up over the whole period (independent of pace). */
+  /** Total top-up actually collected, after the window below cuts it short. */
   total: number;
-  /** Roughly how many calendar months it lasts at this pace. */
+  /** How many calendar months it lasts at this pace. */
   months: number;
   /** The salary the estimate is based on (cap level if only "above cap" known). */
   basedOnSalary: number;
+  /**
+   * The pace stretches the top-up beyond the agreement's window, so the tail
+   * of it is never paid. The UI warns; the figures above already exclude it.
+   */
+  cutShortByWindow: boolean;
 }
 
 export interface SupplementInput {
@@ -43,6 +56,11 @@ export interface SupplementInput {
   fkDailyRate: number;
   /** The caregiver's leave pace, days/week. The top-up scales with it. */
   pace: number;
+  /**
+   * How long after the birth the agreement still pays, in calendar months.
+   * Defaults to {@link SUPPLEMENT_WINDOW_MONTHS}.
+   */
+  withinMonths?: number;
 }
 
 /**
@@ -64,10 +82,24 @@ export function computeSupplement(input: SupplementInput): SupplementResult | nu
   if (topUpFull <= 0) return null;
 
   const pace = input.pace > 0 ? Math.min(7, input.pace) : 7;
+  const monthly = Math.round(topUpFull * (pace / 7));
+
+  // The agreement pays a fixed number of leave days' worth, so a half pace
+  // stretches it over twice the calendar — but only up to the point the
+  // agreement stops paying at all.
+  const stretched = (input.months * 7) / pace;
+  const window = input.withinMonths ?? SUPPLEMENT_WINDOW_MONTHS;
+  const cutShortByWindow = stretched > window + 0.05;
+  // Kept to one decimal rather than whole months: rounding 8,4 months down
+  // to 8 quietly lost 5 % of the total, so the breakdown stopped adding up
+  // to the headline.
+  const months = Math.round(Math.min(stretched, window) * 10) / 10;
+
   return {
-    monthly: Math.round(topUpFull * (pace / 7)),
-    total: Math.round(topUpFull * input.months),
-    months: Math.max(1, Math.round((input.months * 7) / pace)),
+    monthly,
+    total: Math.round(monthly * months),
+    months: Math.max(0.1, months),
     basedOnSalary: salary,
+    cutShortByWindow,
   };
 }

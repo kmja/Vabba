@@ -103,15 +103,27 @@ export const DAY_BUDGET = {
   reservedDaysPerParent: 90,
 
   /**
-   * Multiple birth bump: extra days per additional child beyond the first.
-   * Each additional child adds 180 days, split 90 sjukpenningnivå + 90
-   * lägstanivå (confirmed June 2026). So twins (2) = +180 (480/180 split totals
-   * below), triplets (3) = +360, etc. Unlike the reserved days, the extra days
-   * are freely transferable between the parents.
+   * Multiple birth bump: every child past the first adds 180 days, but they
+   * do NOT all land on the same tier.
+   *
+   * The second child's 180 split evenly, 90 sjukpenningnivå + 90 lägstanivå
+   * (confirmed June 2026). For the third child and each one after, the whole
+   * 180 are income-based — SFB 12 kap. 12 §: "Om barnen är fler än två lämnas
+   * föräldrapenning enligt första stycket 1 för samtliga ytterligare dagar."
+   * The totals are the same either way; the value is not, since an
+   * income-based day is worth up to 1 259 kr against lägstanivå's 180.
+   *
+   * TODO(confirm): the triplets-and-up split is read from the statute rather
+   * than from an FK page stating it in plain language. Re-check on the next
+   * annual pass.
+   *
+   * Unlike the reserved days, the extra days are freely transferable.
    */
-  multipleBirthExtraPerChild: {
-    sjukpenning: 90,
-    lagsta: 90,
+  multipleBirthExtra: {
+    /** The second child in the birth. */
+    secondChild: { sjukpenning: 90, lagsta: 90 },
+    /** The third child, and every child after it. */
+    furtherChild: { sjukpenning: 180, lagsta: 0 },
   },
 } as const;
 
@@ -203,6 +215,22 @@ export const MONEY = {
 // SGI protection (a major optimization lever — letting SGI lapse loses money)
 // -----------------------------------------------------------------------------
 
+/**
+ * The only shares of a day Försäkringskassan will grant (SFB 12 kap. 9 §):
+ * hel, tre fjärdedels, halv, en fjärdedels or en åttondels föräldrapenning.
+ * Nothing finer exists.
+ *
+ * This is why a pace is an average and not an instruction. A week's total has
+ * to be a multiple of an eighth, so "1,6 dagar/vecka" is not something you can
+ * file for in any single week — but 8 whole days across 5 weeks is, and comes
+ * to the same thing. See `paceAsWholeDays` in format.ts for turning a pace
+ * into the cycle you would actually claim.
+ */
+export const BENEFIT_DAY_FRACTIONS = [1, 3 / 4, 1 / 2, 1 / 4, 1 / 8] as const;
+
+/** The smallest share of a day that can be drawn — one eighth. */
+export const SMALLEST_DAY_FRACTION = 1 / 8;
+
 export const SGI_PROTECTION = {
   /**
    * SGI is fully protected while on parental leave during the child's first
@@ -286,10 +314,15 @@ export interface TierTotals {
  */
 export function totalDaysForBirth(childrenInBirth = 1): TierTotals {
   const extraChildren = Math.max(0, Math.floor(childrenInBirth) - 1);
+  const { secondChild, furtherChild } = DAY_BUDGET.multipleBirthExtra;
+  // Twins take the even split; triplets and up put every further child's
+  // whole 180 on the income-based tier.
+  const second = Math.min(extraChildren, 1);
+  const beyond = Math.max(0, extraChildren - 1);
   const extraSjuk =
-    extraChildren * DAY_BUDGET.multipleBirthExtraPerChild.sjukpenning;
+    second * secondChild.sjukpenning + beyond * furtherChild.sjukpenning;
   const extraLagsta =
-    extraChildren * DAY_BUDGET.multipleBirthExtraPerChild.lagsta;
+    second * secondChild.lagsta + beyond * furtherChild.lagsta;
   return {
     total: DAY_BUDGET.totalPerChild + extraSjuk + extraLagsta,
     sjukpenning: DAY_BUDGET.sjukpenningDays + extraSjuk,

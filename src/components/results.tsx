@@ -277,6 +277,12 @@ export function Results({
           municipalRate={municipalRate}
         />
       )}
+
+      {/* The context that isn't a problem with the plan — how leave rights
+          work, the deadlines for actually claiming it, the SGI rule. Kept
+          at the foot of the page so it doesn't push the plan itself down,
+          but present: a plan filed too late is worth nothing. */}
+      <WarningsList warnings={warnings.filter((w) => w.level === "info")} />
     </div>
   );
 }

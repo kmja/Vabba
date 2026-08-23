@@ -99,11 +99,23 @@ describe("totalDaysForBirth", () => {
     });
   });
 
-  it("triplets add 360 days (90/90 per extra child)", () => {
+  it("puts the third child's whole 180 on sjukpenningnivå", () => {
+    // SFB 12 kap. 12 §: the second child's 180 split evenly, but for the
+    // third and every one after, all 180 are income-based. The total is 840
+    // either way — the value is not, since those 90 days are worth up to
+    // 1 259 kr each instead of lägstanivå's 180.
     expect(totalDaysForBirth(3)).toEqual({
       total: 840,
-      sjukpenning: 570,
-      lagsta: 270,
+      sjukpenning: 660,
+      lagsta: 180,
+    });
+  });
+
+  it("keeps adding 180 income-based days per further child", () => {
+    expect(totalDaysForBirth(4)).toEqual({
+      total: 1020,
+      sjukpenning: 840,
+      lagsta: 180,
     });
   });
 

@@ -275,6 +275,26 @@
   .chip.crit { background: var(--crit-bg); color: var(--crit); }
   .chip.warn { background: var(--warn-bg); color: var(--warn); }
   .chip.note { background: var(--inset);   color: var(--muted); }
+  .chip.done { background: var(--ok-bg);    color: var(--ok); }
+
+  .done-note {
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+    background: var(--ok-bg);
+    border-left: 2px solid var(--ok);
+    padding: 0.7rem 1rem;
+    margin-top: 0.9rem;
+  }
+  .done-note b {
+    font-family: var(--f-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ok);
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+  .done-note code { background: transparent; padding: 0; }
 
   .cite {
     font-family: var(--f-mono);
@@ -399,19 +419,19 @@
   <header class="masthead">
     <p class="eyebrow">Ruleset &amp; solver review</p>
     <h1>What the plan says, and what Försäkringskassan would actually pay</h1>
-    <p class="standfirst">A line-by-line check of Vabba's day accounting, money maths and calendar rules against Socialförsäkringsbalken and Föräldraledighetslagen — plus the question of what a fractional pace like <em>1,6 dagar/vecka</em> means when you sit down to file the claim.</p>
+    <p class="standfirst">A line-by-line check of Vabba's day accounting, money maths and calendar rules against Socialförsäkringsbalken and Föräldraledighetslagen — plus the question of what a fractional pace like <em>1,6 dagar/vecka</em> means when you sit down to file the claim. Every finding below has since been fixed; each carries what was done.</p>
     <p class="facts">
-      <span><b>Audited</b> v0.28.5 · 22 Aug 2026</span>
+      <span><b>Audited</b> v0.28.5 · <b>fixed in</b> v0.29.0 · 23 Aug 2026</span>
       <span><b>Scope</b> src/lib (rules, calc, projection, goal-seek, optimizer, tax, supplement, birth-days, vab)</span>
       <span><b>Method</b> source read + numeric probes against the real modules</span>
     </p>
   </header>
 
   <div class="score">
-    <div class="c-crit"><span class="n">3</span><span class="l">Material bugs</span></div>
-    <div class="c-warn"><span class="n">5</span><span class="l">Rule gaps</span></div>
-    <div><span class="n">3</span><span class="l">Verify / advisory</span></div>
-    <div class="c-ok"><span class="n">14</span><span class="l">Checks passed</span></div>
+    <div class="c-ok"><span class="n">9</span><span class="l">Fixed</span></div>
+    <div><span class="n">1</span><span class="l">Was already handled</span></div>
+    <div><span class="n">1</span><span class="l">Annual re-check</span></div>
+    <div class="c-ok"><span class="n">206</span><span class="l">Tests passing</span></div>
   </div>
 
   <section>
@@ -445,17 +465,19 @@
 
       <p><b>The one place averaging breaks.</b> After the child turns 1, the SGI rule is a test on <em>each</em> week, not on the average. A plan that shows exactly 5,0 has to be five days in every week — you cannot bank three quiet weeks and take twenty days in the fourth. Below the first birthday SGI is protected regardless, so averaging is free there.</p>
 
-      <p>None of this is anywhere in the app today. "1,6 dagar/vecka" is presented as though you could ask for it, and a user who tries will be told no.</p>
+      <p>None of this was anywhere in the app. "1,6 dagar/vecka" was presented as though you could ask for it, and a user who tried would have been told no.</p>
+
+      <div class="done-note"><b>Fixed in v0.29.0</b>Every period block now spells out the cycle underneath the pace: <em>"Takten är ett snitt: 1,3 dagar/vecka betyder 13 hela dagar var 10:e vecka — du väljer själv vilka dagar. Hos Försäkringskassan tar du ut hela, ¾, halva, ¼ eller ⅛ dagar, så en enskild vecka kan inte bli just den här siffran."</em> A pace that is already a clean weekly number says so without the caveat.</div>
     </div>
   </section>
 
   <section>
     <h2>Findings</h2>
-    <p class="lede">Ordered by how much money or legality is at stake. Every number below was measured by running the real modules, not read off the source.</p>
+    <p class="lede">Ordered by how much money or legality was at stake. Every number below was measured by running the real modules, not read off the source — and every fix was checked the same way, plus a reverted-code pass confirming each new test fails without it.</p>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip crit">Material</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>goal-seek.ts:139</span><span>planner.tsx:906</span></p>
         <p class="cite"><b>Rule</b><span>SFB 12:9</span><span>FK deltid guidance</span></p>
       </div>
@@ -470,13 +492,13 @@
 
 On a 40 000 kr salary at pace 1,25: <b>+2 857 kr/mån too much</b>.</div>
         <p>This inflates household net on every part-time plan, and because <code>solveBudget</code> picks the slowest pace that clears a net floor, an inflated net makes it pick a <em>slower</em> pace than the floor really allows — the error compounds into the schedule, not just the display.</p>
-        <p class="fix"><b>Direction</b>The deeper issue is that days drawn and hours not worked are independent — föräldrapenning can be drawn on a Saturday at no cost to salary. At minimum, divide by 5. Properly, ask for the work percentage and derive the pace from it.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b>Both copies of the formula collapsed into one exported <code>partTimeSalaryAt()</code> measured against a 5-day week, so they cannot drift apart again. A part-timer at 2,5 dagar/vecka now keeps 50 % of salary, not 64,3 %. The budget solver reads the corrected figure, so the pace it picks moved with it.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip crit">Material</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>goal-seek.ts:563</span><span>optimizer.ts:329</span></p>
         <p class="cite"><b>Rule</b><span>SFB 12:4 a</span></p>
       </div>
@@ -489,13 +511,13 @@ first caregiver at pace 7    B draws 20, A draws 20,00  <b>100 % real</b>
 first caregiver at pace 0,5  B draws 20, A draws  1,43  <b>7 % real</b>
                                           ↑ the app's default pace</div>
         <p>In the default configuration the family is debited 40 days for roughly 1,4 genuine dubbeldagar. The first caregiver's other ~18,6 charged days do not vanish — they quietly become ordinary solo days later in their own stretch, so the plan is longer than it should be and the "20 dubbeldagar" headline describes something the schedule never delivers.</p>
-        <p class="fix"><b>Direction</b>Force the first caregiver's pace to 7 inside the dubbeldagar window (or clamp the window to what both pools can sustain at a matched pace), and draw both sides from the window rather than only one.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b>The window is now settled before anyone is solved and handed to both caregivers: the second gets their concurrent stretch as before, the first gets a full-day stretch pinned into their own pace schedule over the same dates. Measured at three goal modes, including the slow default — 20 of 20 days are now days both of them draw. The window is also bounded by whichever pot is smaller.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip crit">Material</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>goal-seek.ts (all solvers)</span><span>optimizer.ts:483</span></p>
         <p class="cite"><b>Rule</b><span>SFB 12:12–13</span><span>TIMING.sjukpenningUntilAge</span></p>
       </div>
@@ -512,13 +534,13 @@ first caregiver at pace 0,5  B draws 20, A draws  1,43  <b>7 % real</b>
   overruns the income-day deadline by <b>1 899 days</b>
   warnings raised: <b>none</b></div>
         <p><code>TIMING.maxDaysSavedFromAge4</code> (96) is declared in the ruleset and never enforced anywhere in the codebase.</p>
-        <p class="fix"><b>Direction</b>Clamp the pace schedule so income days finish before the 4th birthday, and add a warning derived from <code>PlanSolve.intervals</code> rather than from day counts.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b><code>deadlinePaceFloor()</code> gives every solver a pace floor derived from days-remaining against calendar-remaining, rounded up to the tenth the solvers quantise to. The age-9 plan now finishes its income days three months inside the deadline and ends at 5,5 years on lägstanivå days, which legitimately run to 12. Where no pace can fit — more pott than calendar — <code>PlanSolve.incomeDaysPastDeadline</code> reports the loss from the solved schedule and the results page raises it as critical.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip warn">Rule gap</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>optimizer.ts:322</span></p>
         <p class="cite"><b>Rule</b><span>SFB 12:4 a</span><span>15 months</span></p>
       </div>
@@ -529,29 +551,31 @@ first caregiver at pace 0,5  B draws 20, A draws  1,43  <b>7 % real</b>
   window       2027-10-14 .. 2027-12-13
   deadline     2027-09-01
   starts after the deadline: <b>true</b>, silently</div>
+        <div class="done-note"><b>Fixed in v0.29.0</b>The deadline is now a day budget as well as a date — one calendar day per dubbeldag — applied in the solver where the window is built. A delay of 400 days trims 60 requested days to the 57 that fit; a delay of 460 leaves no window at all.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip warn">Rule gap</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>goal-seek.ts:212</span></p>
         <p class="cite"><b>Rule</b><span>96-day cap from age 4</span></p>
       </div>
       <div class="body">
-        <h3><span class="idx">05</span>Days saved beyond 96 are forfeited without a word</h3>
-        <p>A short date goal parks the unused days in <code>savedDays</code> and reports them as "sparade till senare". Only 96 may be carried past the child's fourth birthday, both parents combined.</p>
-        <div class="evidence">Both caregivers home 3 months each:
-  savedTotal = <b>297 days</b>
-  survivable  =    96 days
-  silently lost = <b>201 days</b></div>
-        <p>At a 1 020 kr daily rate that is roughly 205 000 kr presented to the user as money they still have.</p>
+        <h3><span class="idx">05</span>Days saved beyond 96 — a false alarm, corrected</h3>
+        <p>This one was wrong. The original probe exercised <code>optimizer.buildWarnings</code> and found nothing, and I reported the gap on that basis. The warning does exist — it is built from the solved plan in <code>planner.tsx</code>, which the probe never called.</p>
+        <div class="evidence">planner.tsx — already present before this review:
+
+  if (planSolve.savedTotal > 96) {
+    out.push({ level: "warning", code: "savedDaysCap", … })
+  }</div>
+        <p>The lesson is about the probe, not the app: a warning assembled from the solve cannot be found by testing the allocator alone. Nothing was changed here.</p>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip warn">Rule gap</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>supplement.ts:70</span></p>
         <p class="cite"><b>Rule</b><span>Kollektivavtal</span><span>not statute</span></p>
       </div>
@@ -564,12 +588,13 @@ first caregiver at pace 0,5  B draws 20, A draws  1,43  <b>7 % real</b>
 2,5      2 000       17           34 000   33 605
 0,5        400       84           33 600   33 605   <b>child is 7</b></div>
         <p>Secondary: the per-month figure and the total disagree by up to ~5 %, so the breakdown does not reconcile with the headline.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b>A window — <code>SUPPLEMENT_WINDOW_MONTHS</code>, 18 by default and overridable per agreement — now caps the stretch, and the total counts only what is actually paid inside it. Months are kept to one decimal instead of rounded to whole months, which is where the 5 % went; <code>total === round(monthly × months)</code> is now asserted. A plan whose pace outruns the window says so.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip warn">Rule gap</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>nowhere in src/</span></p>
         <p class="cite"><b>Rule</b><span>FLL 5 §, 6 §, 7 §</span></p>
       </div>
@@ -580,25 +605,27 @@ first caregiver at pace 0,5  B draws 20, A draws  1,43  <b>7 % real</b>
 FLL 6 §  after that, leave only for the fraction you draw FP for
 FLL 7 §  up to <b>25 % reduced hours</b> until the child turns 8, no FP needed</div>
         <p>So the default plan's "0,5 dagar/vecka through the first year" is lawful leave under 5 §. The same pace at 20 months is not — past 18 months a caregiver drawing 0,5 days a week has the right to be off 0,5 days a week, plus a quarter of their hours. The app draws these plans without comment.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b>All three rights are now stated on the results page. Worth noting what the fix could <em>not</em> be: a warning that fires on bad plans. Once the expiry floor and the SGI floor are both in place, a non-part-timer is never scheduled below 5 dagar/vecka after the first year, and a part-timer is working the rest of the week by definition — so the condition has no plans left to flag. It is context, and it is placed as context.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip warn">Rule gap</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>UI copy</span></p>
         <p class="cite"><b>Rule</b><span>FK 90-day limit</span><span>FLL 13 §</span></p>
       </div>
       <div class="body">
         <h3><span class="idx">08</span>The two deadlines that actually bite in practice are missing</h3>
         <p>A plan is only worth what you can still claim. Föräldrapenning must be applied for within <b>90 days</b> of the day being claimed, and an employer is owed <b>two months' notice</b> of leave under FLL 13 §. Neither appears anywhere in the app — and the second one shapes when a plan has to be settled, not just filed.</p>
-        <p class="fix"><b>Verify</b>Confirm the 90-day figure against Försäkringskassan before publishing it as guidance.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b>Both now appear in "Bra att veta" at the foot of the results page. Finding them a home meant an unrelated repair: <code>results.tsx</code> filtered every info-level warning out before rendering, so that whole branch of <code>WarningsList</code> was dead code and the existing SGI and above-the-cap notes were invisible too. Info warnings now render at the foot of the page, below the plan rather than above it.</div>
+        <p class="fix"><b>Still to verify</b>The 90-day figure is stated from knowledge, not from a checked FK page. Confirm it on the next annual pass.</p>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip note">Verify</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>rules.ts:112</span></p>
         <p class="cite"><b>Rule</b><span>SFB 12:12</span></p>
       </div>
@@ -609,13 +636,14 @@ FLL 7 §  up to <b>25 % reduced hours</b> until the child turns 8, no FP needed<
            law: <b>660</b> sjuk + <b>180</b> lägsta   (total 840 ✓)
 
 90 days misclassified — at 1 020 vs 180 kr/day, ≈ <b>75 600 kr</b></div>
-        <p>The total is right either way, which is why it survives the existing tests. Twins are correct. Confirm against SFB 12:12 second paragraph before changing.</p>
+        <p>The total is right either way, which is why it survived the existing tests. Twins were correct.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b><code>multipleBirthExtra</code> now distinguishes the second child (90 + 90) from the third and every one after (180 income-based, 0 lägstanivå). Triplets come out 660 / 180. This is the one change resting on my reading of SFB 12:12 rather than a checked FK page, so it carries a <code>TODO(confirm)</code> for the annual pass.</div>
       </div>
     </article>
 
     <article class="finding">
       <div class="margin">
-        <span class="chip note">Advisory</span>
+        <span class="chip done">Fixed</span>
         <p class="cite"><b>Source</b><span>planner.tsx:84–89</span><span>goal-seek.ts:34</span></p>
       </div>
       <div class="body">
@@ -625,7 +653,8 @@ FLL 7 §  up to <b>25 % reduced hours</b> until the child turns 8, no FP needed<
   gross föräldrapenning  <b>2 215 kr/mån</b>
   household net          32 888 kr/mån
   of which partner's salary   30 673 kr</div>
-        <p>It is the honest answer to "as long as possible", but the block is labelled as that caregiver being home, and at 0,5 dagar/vecka they are drawing benefit for one day in fourteen. Worth either a floor above zero or a line of copy explaining what the pace implies.</p>
+        <p>It is the honest answer to "as long as possible", but the block is labelled as that caregiver being home, and at 0,5 dagar/vecka they are drawing benefit for one day in fourteen.</p>
+        <div class="done-note"><b>Fixed in v0.29.0</b>Resolved from two directions rather than by changing the default. The expiry floor lifts the slowest workable pace off 0,5 on its own — the default two-caregiver plan now opens at 1,0 rather than 0,5 — and every block spells out what its pace means in days you would actually claim, so "1,3 dagar/vecka" now reads "13 hela dagar var 10:e vecka" underneath.</div>
       </div>
     </article>
 
@@ -642,8 +671,8 @@ FLL 7 §  up to <b>25 % reduced hours</b> until the child turns 8, no FP needed<
   </section>
 
   <section>
-    <h2>What checks out</h2>
-    <p class="lede">Verified by running the modules, not by reading them.</p>
+    <h2>What checked out</h2>
+    <p class="lede">Verified by running the modules, not by reading them. These needed no change, and the fixes above were built not to disturb them — the ordinary full-pace plan comes out byte-identical.</p>
     <ul class="checks">
       <li><span class="tick">✓</span><span><b>Day budget.</b> 480 = 390 + 90; 240 per parent; 90 reserved and non-transferable; twins +180 as 90 + 90.</span></li>
       <li><span class="tick">✓</span><span><b>Benefit formula.</b> SGI × 0,97 × 0,8 / 365, floored at grundnivå 250 and capped at 1 259 kr. The grundnivå floor takes over below 9 799 kr/mån, exactly where the formula crosses it.</span></li>
@@ -664,6 +693,7 @@ FLL 7 §  up to <b>25 % reduced hours</b> until the child turns 8, no FP needed<
 
   <footer>
     <p><b>Standing caveat.</b> This is a review of a planning aid against public sources, not legal advice. Amounts and edge rules change every January with the prisbasbelopp; the statute references above are pointers for verification, not a substitute for Försäkringskassan's own decision.</p>
+    <p><b>Two things to carry into the next annual pass.</b> The triplets tier split (finding 09) and the 90-day application deadline (finding 08) are both implemented from my reading rather than from a checked Försäkringskassan page. Both are marked in the source. Everything else here was measured.</p>
   </footer>
 
 </div>

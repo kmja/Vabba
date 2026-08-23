@@ -24,7 +24,14 @@ import type { LeaveInterval } from "@/lib/projection";
 import type { BirthDaysResult } from "@/lib/birth-days";
 import { netOfExtra } from "@/lib/tax";
 import { MONEY, SGI_PROTECTION } from "@/lib/rules";
-import { formatDate, formatDays, formatPace, formatSek } from "@/lib/format";
+import {
+  describePaceCycle,
+  formatDate,
+  formatDays,
+  formatPace,
+  formatSek,
+  paceAsWholeDays,
+} from "@/lib/format";
 import { addDays, differenceInDays, toIsoDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
@@ -661,47 +668,80 @@ export function PeriodPager({
         )
       : null;
 
-  // Dubbeldagar: the second caregiver's own period (pushed in by the solver
-  // alongside their later sequential stretch, so it landed out of order —
-  // see the comment on doubleDaysOverlap). Find it, merge it into a second
-  // combined block, and drop the standalone entry so it isn't shown twice.
+  // Dubbeldagar are two blocks over the very same dates — one per caregiver,
+  // each drawing a whole day. The solver hands both sides over: the second
+  // caregiver's is pushed in alongside their later sequential stretch (so it
+  // lands out of chronological order), the first caregiver's is a pinned
+  // full-day stretch inside their own run. Find each, fold them into one
+  // "both home" block, and drop the two standalone entries.
+  const inWindow = (p: Period, name: string) =>
+    doubleDaysWindow != null &&
+    p.caregiver === name &&
+    p.startsAt.getTime() === doubleDaysWindow.startsAt.getTime() &&
+    p.endsAt.getTime() === doubleDaysWindow.endsAt.getTime();
   const doubleDaysPeriod = doubleDaysWindow
-    ? (periods.find(
-        (p) =>
-          p.caregiver === doubleDaysWindow.caregiver &&
-          p.startsAt.getTime() === doubleDaysWindow.startsAt.getTime(),
-      ) ?? null)
+    ? (periods.find((p) => inWindow(p, doubleDaysWindow.caregiver)) ?? null)
     : null;
-  const doubleDaysMerge = doubleDaysPeriod
-    ? doubleDaysOverlap(
-        periods[0],
-        doubleDaysPeriod,
-        rows.find((r) => r.name === periods[0].caregiver),
-        rows.find((r) => r.name === doubleDaysPeriod.caregiver),
-        municipalRate,
-      )
+  const doubleDaysFirst = doubleDaysWindow
+    ? (periods.find((p) => inWindow(p, periods[0].caregiver)) ?? null)
     : null;
-  const periodsShown = doubleDaysPeriod
-    ? periods.filter((p) => p !== doubleDaysPeriod)
-    : periods;
+  const doubleDaysMerge =
+    doubleDaysPeriod && doubleDaysFirst
+      ? doubleDaysOverlap(
+          doubleDaysFirst,
+          doubleDaysPeriod,
+          rows.find((r) => r.name === doubleDaysFirst.caregiver),
+          rows.find((r) => r.name === doubleDaysPeriod.caregiver),
+          municipalRate,
+        )
+      : null;
+  const periodsShown = periods.filter(
+    (p) => p !== doubleDaysPeriod && p !== doubleDaysFirst,
+  );
 
-  // The first caregiver's block, truncated past whichever combined window
-  // above reaches furthest — its true start is inside that block, so this
-  // one no longer owns the "first" facts (grundnivå, extra days) or an
-  // editable start date. It is still their first block for the whole-stretch
-  // toggles (part-time, byt takt vid 1 år), so `firstOfCaregiver` stays true.
-  const croppedStart = doubleDaysMerge?.endsAt ?? overlap?.endsAt;
-  const displayPeriods = croppedStart
-    ? [
-        { ...periodsShown[0], startsAt: croppedStart, truncatedStart: true },
-        ...periodsShown.slice(1),
-      ]
+  // Blocks the birth-days merge already covers: drop the ones it swallows
+  // whole, crop the one it lands inside. That block's true start is now
+  // inside the combined window, so it no longer owns the "first" facts
+  // (grundnivå, extra days) or an editable start date.
+  const croppedStart = overlap?.endsAt;
+  const trimmed = croppedStart
+    ? periodsShown.filter((p) => p.endsAt.getTime() > croppedStart.getTime())
     : periodsShown;
+  const displayPeriods = trimmed.map((p, i) => {
+    // Whichever block of theirs now comes first carries the whole-stretch
+    // toggles (part-time, byt takt vid 1 år), even when the block that
+    // originally held them was merged away above.
+    const firstOfCaregiver =
+      trimmed.findIndex((o) => o.caregiver === p.caregiver) === i;
+    const cropped =
+      croppedStart != null && p.startsAt.getTime() < croppedStart.getTime();
+    // Their run started earlier than this block shows — either cropped by
+    // the birth window, or because an earlier block of theirs was merged
+    // into a combined one above.
+    const truncatedStart =
+      cropped ||
+      (firstOfCaregiver && p.startsAt.getTime() > periods[0].startsAt.getTime()
+        ? periods.some(
+            (o) =>
+              o.caregiver === p.caregiver &&
+              o.startsAt.getTime() < p.startsAt.getTime(),
+          )
+        : false);
+    return {
+      ...p,
+      startsAt: cropped ? croppedStart : p.startsAt,
+      firstOfCaregiver,
+      truncatedStart,
+    };
+  });
+
+  // Nothing left to show once the merges have taken everything.
+  if (displayPeriods.length === 0) return null;
 
   const total = formatMonths(
     differenceInDays(
-      periodsShown[0].startsAt,
-      periodsShown[periodsShown.length - 1].endsAt,
+      periods[0].startsAt,
+      periods[periods.length - 1].endsAt,
     ) / 30.4,
   );
 
@@ -856,9 +896,12 @@ export function PeriodPager({
           const months = formatMonths(
             differenceInDays(p.startsAt, p.endsAt) / 30.4,
           );
-          const paceText = `${formatPace(row?.daysPerWeek ?? p.segments[0]?.pace ?? 0)} dagar/vecka`;
+          const paceValue = row?.daysPerWeek ?? p.segments[0]?.pace ?? 0;
+          const paceText = `${formatPace(paceValue)} dagar/vecka`;
           const pace =
             p.phase === "lägstanivå" ? `lägstanivå · ${paceText}` : paceText;
+          const cycleText = describePaceCycle(paceValue);
+          const cycleWeeks = paceAsWholeDays(paceValue)?.weeks ?? 1;
           // The stretch that begins at the first birthday is where the SGI
           // floor lifts the pace — say so there, once, instead of listing it
           // as something wrong with the plan.
@@ -989,6 +1032,25 @@ export function PeriodPager({
                     Från 1-årsdagen krävs minst{" "}
                     {SGI_PROTECTION.minDaysPerWeekAfterAge1} uttagsdagar i
                     veckan för att SGI:n ska skyddas, så takten är höjd här.
+                  </span>
+                </p>
+              )}
+
+              {/* How a fractional pace is actually claimed. Försäkringskassan
+                  grants whole, ¾, ½, ¼ or ⅛ of a day and nothing finer, so
+                  "1,6 dagar/vecka" is an average you hit with whole days on
+                  dates you pick — not a week you can apply for. */}
+              {cycleText && (
+                <p className="text-muted-foreground mt-2 flex items-start gap-2 text-xs">
+                  <IconInfoCircle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>
+                    Takten är ett snitt: {pace} betyder{" "}
+                    <span className="text-foreground font-medium">
+                      {cycleText}
+                    </span>
+                    {cycleWeeks > 1
+                      ? " — du väljer själv vilka dagar. Hos Försäkringskassan tar du ut hela, ¾, halva, ¼ eller ⅛ dagar, så en enskild vecka kan inte bli just den här siffran."
+                      : "."}
                   </span>
                 </p>
               )}

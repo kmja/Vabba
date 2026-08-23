@@ -92,3 +92,41 @@ export function formatPace(daysPerWeek: number): string {
   const rounded = Math.round(daysPerWeek * 10) / 10;
   return numberFormatter.format(rounded);
 }
+
+/**
+ * The shortest run of whole weeks over which a pace comes out as a whole
+ * number of days — what you would actually file for.
+ *
+ * Föräldrapenning is granted per calendar day at hel, tre fjärdedels, halv,
+ * en fjärdedels or en åttondels nivå and nothing finer (see
+ * BENEFIT_DAY_FRACTIONS in rules.ts), so a pace like 1,6 cannot be requested
+ * for a single week. It is an average: 8 whole days every 5 weeks, on dates
+ * you pick. Returns null for a pace with no short whole-day cycle.
+ */
+export function paceAsWholeDays(
+  daysPerWeek: number,
+): { weeks: number; days: number } | null {
+  const pace = Math.round(daysPerWeek * 10) / 10;
+  if (pace <= 0) return null;
+  for (let weeks = 1; weeks <= 20; weeks++) {
+    const days = pace * weeks;
+    if (Math.abs(days - Math.round(days)) < 1e-6) {
+      return { weeks, days: Math.round(days) };
+    }
+  }
+  return null;
+}
+
+/**
+ * That cycle as a sentence: "5 hela dagar i veckan", "8 hela dagar var 5:e
+ * vecka". Null when the pace is already a plain whole week or has no tidy
+ * cycle to describe.
+ */
+export function describePaceCycle(daysPerWeek: number): string | null {
+  const cycle = paceAsWholeDays(daysPerWeek);
+  if (!cycle) return null;
+  const days = `${formatNumber(cycle.days)} hela ${cycle.days === 1 ? "dag" : "dagar"}`;
+  if (cycle.weeks === 1) return `${days} i veckan`;
+  if (cycle.weeks === 2) return `${days} varannan vecka`;
+  return `${days} var ${cycle.weeks}:e vecka`;
+}
