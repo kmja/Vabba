@@ -125,21 +125,17 @@
   }
 }
 
-/* Illustration tokens for the wizard's family scene: the frame it's painted
-   on, the name tags, and the multiple-birth badge (the figures themselves
-   are the portrait illustrations, not drawn from these). Dark mode inverts
-   the ground and ink together, which keeps every contrast pair intact. */
+/* Illustration tokens for the wizard's family scene: just the
+   multiple-birth badge now (the figures are the portrait illustrations,
+   not drawn from these). Dark mode inverts them together, which keeps the
+   badge's own contrast (ink on bg) intact. */
 :root {
   --scene-bg: #f1efec;
-  --scene-ink: #3e3d3b; /* caregiver 1 */
-  --scene-ink-2: #6b655c; /* caregiver 2 */
-  --scene-bundle: #c9c5be;
+  --scene-ink: #3e3d3b;
 }
 .dark {
   --scene-bg: #2a2926;
   --scene-ink: #e2ded8;
-  --scene-ink-2: #b3ab9d;
-  --scene-bundle: #8f8a82;
 }
 
 /* App-shell (phones, while the wizard is showing): the page as a whole never

@@ -11,15 +11,16 @@
  *
  * Built from the same illustrated portraits as the results page
  * (`CaregiverPortrait`, below) — caregiver 1 in coral, caregiver 2 in blue —
- * so the cast reads as the same two people throughout the app. Decorative
- * only for assistive tech.
+ * so the cast reads as the same two people throughout the app. Floats
+ * directly on the page (no card, no background of its own), fading out at
+ * the bottom edge. Decorative only for assistive tech.
  */
 
 const EASE = "cubic-bezier(0.32, 0.8, 0.3, 1)";
 const DUR = "850ms";
 
-// The frame. Its own little card, painted with the scene's background — the
-// illustration keeps its palette rather than borrowing the page's.
+// The frame — just a coordinate space for the camera math below, no visible
+// bounds of its own.
 const VIEW_W = 300;
 const VIEW_H = 440;
 
@@ -31,7 +32,6 @@ const FIG_H = 500;
 const FIG_W = (FIG_H * 1024) / 1536;
 const F1X = 130; // caregiver 1 (coral), the one home first
 const F2X = 400; // caregiver 2 (blue), 270 world-units over
-const NAME_Y = 462;
 
 /** Where the bundle rides in caregiver 1's holding pose, as a fraction of
  *  their own box — the step-1 close-up zooms in on this point. */
@@ -42,29 +42,12 @@ const STEP_BACK_DY = -20;
 /** Where caregiver 1 recedes to once they've handed the baby over: toward
  *  the frame's centre, smaller — the vanishing point. */
 const STEP_BACK = `translate(${STEP_BACK_DX}px, ${STEP_BACK_DY}px) scale(0.6)`;
-/** Same drift, without the shrink — a name tag stays legible as it follows
- *  the figure back. */
-const NAME_STEP_BACK = `translate(${STEP_BACK_DX}px, ${STEP_BACK_DY}px)`;
 
 const move = {
   transitionProperty: "transform, opacity",
   transitionDuration: DUR,
   transitionTimingFunction: EASE,
 } as const;
-
-/** A four-point star — the illustration's bit of sparkle. */
-function Sparkle({ x, y, r }: { x: number; y: number; r: number }) {
-  return (
-    <path
-      d={`M 0,${-r} l ${r * 0.27},${r * 0.73} ${r * 0.73},${r * 0.27}
-          ${-r * 0.73},${r * 0.27} ${-r * 0.27},${r * 0.73}
-          ${-r * 0.27},${-r * 0.73} ${-r * 0.73},${-r * 0.27}
-          ${r * 0.73},${-r * 0.27} z`}
-      transform={`translate(${x}, ${y})`}
-      fill="var(--scene-bundle)"
-    />
-  );
-}
 
 /**
  * One caregiver's illustrated portrait, on the results page: whoever is
@@ -104,16 +87,12 @@ export function FamilyScene({
   step,
   soloMode,
   babyCount = 1,
-  nameFirst,
-  nameSecond,
 }: {
   /** Current wizard step (1 = the baby, 2 = first caregiver, 3 = second). */
   step: number;
   soloMode: boolean;
   /** Children in this birth (1–4) — shown as a badge on the bundle. */
   babyCount?: number;
-  nameFirst?: string;
-  nameSecond?: string;
 }) {
   const two = step >= 3 && !soloMode;
 
@@ -150,6 +129,11 @@ export function FamilyScene({
         y: fy + FIG_H * (BUNDLE_AT.fy - 0.06),
       };
 
+  // Fades the whole illustration out toward the bottom edge, rather than
+  // cutting it off flush against the page — floats on it instead of sitting
+  // in a boxed frame.
+  const fade = "linear-gradient(to bottom, black 0%, black 68%, transparent 98%)";
+
   return (
     <svg
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -157,18 +141,8 @@ export function FamilyScene({
       data-family-scene
       preserveAspectRatio="xMidYMid meet"
       className="pointer-events-none h-full w-full select-none"
+      style={{ maskImage: fade, WebkitMaskImage: fade }}
     >
-      <rect
-        x="0"
-        y="0"
-        width={VIEW_W}
-        height={VIEW_H}
-        rx="16"
-        fill="var(--scene-bg)"
-      />
-      <Sparkle x={26} y={372} r={11} />
-      <Sparkle x={266} y={52} r={11} />
-
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">
         {/* Caregiver 1 (coral) — holds the baby first, then hands over and
             steps back out of focus. Both poses share the same silhouette
@@ -228,33 +202,6 @@ export function FamilyScene({
           </g>
         )}
 
-        {/* Name tags — the "character select" label under each figure */}
-        <g style={{ ...move, opacity: step >= 2 ? 1 : 0 }} className="motion-reduce:transition-none!">
-          <text
-            x={F1X}
-            y={NAME_Y}
-            textAnchor="middle"
-            fontSize="28"
-            fill="var(--scene-ink)"
-            // Follows caregiver 1 as they step back (the label keeps its
-            // size — only the figure shrinks).
-            style={{ ...move, transform: two ? NAME_STEP_BACK : "none" }}
-            className="motion-reduce:transition-none!"
-          >
-            {nameFirst || ""}
-          </text>
-          <text
-            x={F2X}
-            y={NAME_Y}
-            textAnchor="middle"
-            fontSize="28"
-            fill="var(--scene-ink-2)"
-            style={{ ...move, opacity: two ? 1 : 0 }}
-            className="motion-reduce:transition-none!"
-          >
-            {nameSecond || ""}
-          </text>
-        </g>
       </g>
     </svg>
   );

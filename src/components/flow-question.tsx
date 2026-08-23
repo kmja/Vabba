@@ -42,6 +42,7 @@ export function FlowSlot({
 export function FlowQuestion({
   id,
   label,
+  heroLabel,
   value,
   open,
   hero,
@@ -53,6 +54,12 @@ export function FlowQuestion({
 }: {
   id: string;
   label: string;
+  /** Heading shown only on the first-pass hero view, in place of `label` —
+   *  for a question that can lead with more context than its own name
+   *  ("Vem går på ledighet först?" rather than "Namn"). Reopening it later
+   *  (the accordion view) still says `label`, and so does the collapsed
+   *  summary's fallback. */
+  heroLabel?: string;
   /** The chosen value, shown in the header while collapsed. */
   value?: string | null;
   open: boolean;
@@ -81,6 +88,7 @@ export function FlowQuestion({
   // Collapsed rows lead with the answer. A question that was passed over
   // without one falls back to its label, so it stays identifiable.
   const summary = answered && value ? value : label;
+  const heading = bare && heroLabel ? heroLabel : label;
 
   return (
     <div
@@ -154,7 +162,7 @@ export function FlowQuestion({
                   ),
           )}
         >
-          {open ? label : summary}
+          {open ? heading : summary}
         </span>
       </button>
 

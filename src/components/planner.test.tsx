@@ -259,11 +259,38 @@ describe("<Planner /> wizard", () => {
     next(); // → step 2
     // Same element instance — the camera/handover can animate between steps.
     expect(scene()).toBe(el);
-    // The first caregiver's name tag appears in the scene from step 2 on.
+    // Caregiver 1's portrait is now in view.
+    expect(el?.innerHTML).toContain("Caregiver1.png");
+  });
+
+  it("shows the step intro as the name question's heading, but plain \"Namn\" once reopened", () => {
+    const { container } = renderPlanner();
+    const heading = () => container.querySelector("#a-q-name")!.textContent;
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2, opens on a-q-name (hero, first pass)
+    expect(heading()).toContain("Vem går på ledighet först");
     fireEvent.change(container.querySelector("#a-name")!, {
-      target: { value: "Kim Andersson" },
+      target: { value: "Kim" },
     });
-    expect(el?.textContent).toContain("Kim");
+    openQuestion(container, "a", "income"); // advances past name
+    // Reopen "Namn" from its now-collapsed summary row.
+    fireEvent.click(container.querySelector("#a-q-name")!);
+    expect(heading()).toBe("Namn");
+  });
+
+  it("shows the portrait large while naming a caregiver, then shrinks it once answered", () => {
+    const { container } = renderPlanner();
+    const sceneBox = () =>
+      container.querySelector("[data-family-scene]")!.parentElement!;
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2, opens on a-q-name (hero, first pass)
+    expect(sceneBox().className).toContain("w-56");
+    fireEvent.change(container.querySelector("#a-name")!, {
+      target: { value: "Kim" },
+    });
+    openQuestion(container, "a", "income"); // advances past name
+    expect(sceneBox().className).toContain("w-28");
+    expect(sceneBox().className).not.toContain("w-56");
   });
 
   it("reopens an answered question as an accordion, not the hero view", () => {

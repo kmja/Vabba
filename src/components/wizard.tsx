@@ -984,6 +984,7 @@ export function Wizard({
         <FlowQuestion
           id={`${prefix}-q-name`}
           label="Namn"
+          heroLabel={stepIntro ?? undefined}
           value={displayName}
           hero={!reopened}
           open={activeQ === `${prefix}-q-name`}
@@ -1672,8 +1673,6 @@ export function Wizard({
                   step={stepCount}
                   soloMode={soloMode}
                   babyCount={plan.childrenInBirth}
-                  nameFirst={sceneName(firstId)}
-                  nameSecond={soloMode ? "" : sceneName(secondId)}
                 />
               </div>
               <div className="min-w-0 flex-1 space-y-1.5 pt-1">
@@ -1744,6 +1743,12 @@ export function Wizard({
           ? null
           : caregiverFlow(secondId);
 
+  // A caregiver step's very first question, on its first pass — nothing
+  // about them is known yet, so the portrait gets the big "who is this"
+  // moment instead of sharing the frame with a (currently empty) summary.
+  const heroName =
+    !reopened && (activeQ === "a-q-name" || activeQ === "b-q-name");
+
   return (
     <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
       <form
@@ -1764,26 +1769,24 @@ export function Wizard({
           style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
-          {stepIntro && (
-            <p
-              key={`intro-${current}`}
-              className="animate-flow-in text-muted-foreground mb-2 text-sm"
-            >
-              {stepIntro}
-            </p>
-          )}
-
           {/* The stage sits beside the answered questions; it persists across
               steps so the camera pans, the zoom-out and the handover animate
-              between them. */}
+              between them. A caregiver's first ("Namn") question gets it big
+              — the summary beside it is empty at that point anyway — then it
+              shrinks back once there's something to sit beside. */}
           <div className="flex items-start gap-3">
-            <div className="relative aspect-[15/22] w-28 shrink-0 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden">
+            <div
+              className={cn(
+                "relative aspect-[15/22] shrink-0 transition-[width] duration-700 ease-[cubic-bezier(0.32,0.8,0.3,1)] motion-reduce:transition-none",
+                heroName
+                  ? "w-56 sm:w-64 [@media(max-height:740px)]:w-44 [@media(max-height:560px)]:w-36"
+                  : "w-28 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden",
+              )}
+            >
               <FamilyScene
                 step={current}
                 soloMode={soloMode}
                 babyCount={plan.childrenInBirth}
-                nameFirst={sceneName(firstId)}
-                nameSecond={soloMode ? "" : sceneName(secondId)}
               />
               {/* A quiet way to say "twins, actually" without a whole
                   question for it — precise control (and a way back down)
