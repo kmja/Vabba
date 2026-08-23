@@ -34,8 +34,11 @@ const F1X = 130; // caregiver 1 (coral), the one home first
 const F2X = 400; // caregiver 2 (blue), 270 world-units over
 
 /** Where the bundle rides in caregiver 1's holding pose, as a fraction of
- *  their own box — the step-1 close-up zooms in on this point. */
-const BUNDLE_AT = { fx: 0.615, fy: 0.31 };
+ *  their own box — the step-1 close-up zooms in on this point. Measured
+ *  directly off Caregiver1.png (centroid of its lavender pixels), not
+ *  eyeballed — an earlier guess here (0.615, 0.31) had it noticeably too
+ *  far up and to the right, which is why the close-up looked off-centre. */
+const BUNDLE_AT = { fx: 0.558, fy: 0.394 };
 
 const STEP_BACK_DX = (F2X - F1X) * 0.35;
 const STEP_BACK_DY = -20;
