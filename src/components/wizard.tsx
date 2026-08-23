@@ -501,7 +501,7 @@ export function Wizard({
         ? "Dina uppgifter — du har alla dagarna."
         : "Vem går på ledighet först? Ofta den som fött barnet."
       : current === 3 && !soloMode
-        ? `${plan.parents[secondId].name?.trim() || `Vårdnadshavare ${secondId}`} tar över när ${plan.parents[firstId].name?.trim() || `Vårdnadshavare ${firstId}`} är klar.`
+        ? `Vem tar över efter ${plan.parents[firstId].name?.trim() || `Vårdnadshavare ${firstId}`}?`
         : null;
 
   /**
@@ -1775,7 +1775,7 @@ export function Wizard({
               between them. A step's first question gets it big — the
               summary beside it is empty at that point anyway — then it
               shrinks back once there's something to sit beside. */}
-          <div className="flex items-start gap-3">
+          <div className={cn("flex items-start gap-3", heroStage && "justify-center")}>
             <div
               className={cn(
                 "relative aspect-[15/22] shrink-0 transition-[width] duration-700 ease-[cubic-bezier(0.32,0.8,0.3,1)] motion-reduce:transition-none",
@@ -1810,7 +1810,7 @@ export function Wizard({
                 </button>
               )}
             </div>
-            <div className="min-w-0 flex-1 space-y-1.5">
+            <div className={cn("min-w-0 flex-1 space-y-1.5", heroStage && "hidden")}>
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
             </div>
           </div>
@@ -1841,11 +1841,20 @@ export function Wizard({
 
             {current === 3 && (
               <>
+                {soloMode ? (
+                  <p className="text-muted-foreground text-sm">
+                    Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
+                  </p>
+                ) : (
+                  <FlowSlot slot="active">{caregiverFlow(secondId)}</FlowSlot>
+                )}
+
                 {/* Naming the other caregiver answers this — the opt-out only
                     stays while there is still nobody to name. */}
                 {!plan.parents[secondId].name?.trim() && (
                   <CheckRow
                     id="solo-mode"
+                    small
                     checked={soloMode}
                     onChange={(b) =>
                       setForm((f) => ({
@@ -1857,14 +1866,6 @@ export function Wizard({
                   >
                     Jag planerar ensam — det finns ingen andra vårdnadshavare
                   </CheckRow>
-                )}
-
-                {soloMode ? (
-                  <p className="text-muted-foreground text-sm">
-                    Alla dagar tillhör dig. Planen räknas för en vårdnadshavare.
-                  </p>
-                ) : (
-                  <FlowSlot slot="active">{caregiverFlow(secondId)}</FlowSlot>
                 )}
               </>
             )}

@@ -43,7 +43,7 @@ const BUNDLE_AT = { fx: 0.558, fy: 0.394 };
 /** Where the step-1 close-up camera centres and how tight it zooms — tuned
  *  by hand against the real artwork (not the same point as BUNDLE_AT: this
  *  frames a little more of the chest below the bundle, by choice). */
-const CLOSEUP_FOCUS = { fx: 0.5, fy: 0.537, scale: 1.395 };
+const CLOSEUP_FOCUS = { fx: 0.5, fy: 0.582, scale: 1.17 };
 
 const STEP_BACK_DX = (F2X - F1X) * 0.35;
 const STEP_BACK_DY = -20;
@@ -142,11 +142,12 @@ export function FamilyScene({
   // Fades the illustration out at its edges rather than cutting it off flush
   // against the page — floats on it instead of sitting in a boxed frame.
   // The close-up on the bundle is cropped on every side, so it fades top and
-  // bottom alike; the standing figures already have clear air above their
-  // heads, so only the ground line needs softening.
+  // bottom independently (the bottom more aggressively — mostly torso, not
+  // much worth keeping solid); the standing figures already have clear air
+  // above their heads, so only the ground line needs softening.
   const fade =
     step <= 1
-      ? "linear-gradient(to bottom, transparent 0%, black 20%, black 55%, transparent 100%)"
+      ? "linear-gradient(to bottom, transparent 0%, transparent 5%, black 20%, black 40%, transparent 60%, transparent 100%)"
       : "linear-gradient(to bottom, black 0%, black 45%, transparent 75%)";
 
   return (
