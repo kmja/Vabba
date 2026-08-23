@@ -284,13 +284,13 @@ describe("<Planner /> wizard", () => {
       container.querySelector("[data-family-scene]")!.parentElement!;
     pickBirth(container, "2025-01-15");
     next(); // → step 2, opens on a-q-name (hero, first pass)
-    expect(sceneBox().className).toContain("w-56");
+    expect(sceneBox().className).toContain("w-[78%]");
     fireEvent.change(container.querySelector("#a-name")!, {
       target: { value: "Kim" },
     });
     openQuestion(container, "a", "income"); // advances past name
-    expect(sceneBox().className).toContain("w-40");
-    expect(sceneBox().className).not.toContain("w-56");
+    expect(sceneBox().className).toContain("w-[45%]");
+    expect(sceneBox().className).not.toContain("w-[78%]");
   });
 
   it("reopens an answered question as an accordion, not the hero view", () => {

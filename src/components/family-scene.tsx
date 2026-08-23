@@ -34,11 +34,16 @@ const F1X = 130; // caregiver 1 (coral), the one home first
 const F2X = 400; // caregiver 2 (blue), 270 world-units over
 
 /** Where the bundle rides in caregiver 1's holding pose, as a fraction of
- *  their own box — the step-1 close-up zooms in on this point. Measured
+ *  their own box — used to anchor the multiple-birth badge. Measured
  *  directly off Caregiver1.png (centroid of its lavender pixels), not
  *  eyeballed — an earlier guess here (0.615, 0.31) had it noticeably too
- *  far up and to the right, which is why the close-up looked off-centre. */
+ *  far up and to the right. */
 const BUNDLE_AT = { fx: 0.558, fy: 0.394 };
+
+/** Where the step-1 close-up camera centres and how tight it zooms — tuned
+ *  by hand against the real artwork (not the same point as BUNDLE_AT: this
+ *  frames a little more of the chest below the bundle, by choice). */
+const CLOSEUP_FOCUS = { fx: 0.5, fy: 0.537, scale: 1.395 };
 
 const STEP_BACK_DX = (F2X - F1X) * 0.35;
 const STEP_BACK_DY = -20;
@@ -109,9 +114,9 @@ export function FamilyScene({
         // with enough room around it to read as a considered crop rather
         // than an accidental one.
         cam(
-          F1X - FIG_W / 2 + FIG_W * BUNDLE_AT.fx,
-          BASE - FIG_H + FIG_H * BUNDLE_AT.fy,
-          2.2,
+          F1X - FIG_W / 2 + FIG_W * CLOSEUP_FOCUS.fx,
+          BASE - FIG_H + FIG_H * CLOSEUP_FOCUS.fy,
+          CLOSEUP_FOCUS.scale,
         )
       : two
         ? // Both figures, close together mid-handover.
@@ -142,7 +147,7 @@ export function FamilyScene({
   const fade =
     step <= 1
       ? "linear-gradient(to bottom, transparent 0%, black 20%, black 55%, transparent 100%)"
-      : "linear-gradient(to bottom, black 0%, black 38%, transparent 96%)";
+      : "linear-gradient(to bottom, black 0%, black 45%, transparent 75%)";
 
   return (
     <svg
