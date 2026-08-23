@@ -58,6 +58,47 @@ const move = {
 } as const;
 
 /**
+ * Where the illustration fades out, as fractions of the scene's own height:
+ * invisible before `top` and after `bottom`, solid in between. It floats on
+ * the page rather than sitting in a frame, so it's softened at the edges
+ * instead of cut off flush.
+ *
+ * Everything outside [top, bottom] is fully transparent, so as far as the
+ * page is concerned the picture *ends* there — whatever comes next should
+ * butt right up against it rather than clearing the whole untrimmed box.
+ * `sceneAspect` below is what makes the layout agree.
+ *
+ * The close-up is cropped on every side, so it fades at both ends (the
+ * bottom hard, since it's mostly torso); the standing figures already have
+ * clear air above their heads, so only the ground line needs softening.
+ */
+const FADES = {
+  closeup: { top: 0.05, solidFrom: 0.2, solidTo: 0.4, bottom: 0.6 },
+  figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75 },
+} as const;
+
+type Fade = (typeof FADES)[keyof typeof FADES];
+
+const fadeOf = (step: number): Fade =>
+  step <= 1 ? FADES.closeup : FADES.figures;
+
+const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
+
+const gradientOf = (f: Fade) =>
+  `linear-gradient(to bottom, transparent ${pct(f.top)}, black ${pct(f.solidFrom)}, black ${pct(f.solidTo)}, transparent ${pct(f.bottom)})`;
+
+/**
+ * The `aspect-ratio` a `FamilyScene` box should be given: the scene's own
+ * 15:22 shape, trimmed to just the part the fade leaves visible. Without
+ * this the invisible margins still reserve space and the content below sits
+ * a long way clear of the picture it's meant to sit under.
+ */
+export function sceneAspect(step: number): string {
+  const f = fadeOf(step);
+  return `15 / ${(22 * (f.bottom - f.top)).toFixed(3)}`;
+}
+
+/**
  * One caregiver's illustrated portrait, on the results page: whoever is
  * home right now holding the bundle, the other with empty arms. Two drawn
  * poses per caregiver, reused by the wizard's own animated scene below —
@@ -139,16 +180,8 @@ export function FamilyScene({
         y: fy + FIG_H * (BUNDLE_AT.fy - 0.06),
       };
 
-  // Fades the illustration out at its edges rather than cutting it off flush
-  // against the page — floats on it instead of sitting in a boxed frame.
-  // The close-up on the bundle is cropped on every side, so it fades top and
-  // bottom independently (the bottom more aggressively — mostly torso, not
-  // much worth keeping solid); the standing figures already have clear air
-  // above their heads, so only the ground line needs softening.
-  const fade =
-    step <= 1
-      ? "linear-gradient(to bottom, transparent 0%, transparent 5%, black 20%, black 40%, transparent 60%, transparent 100%)"
-      : "linear-gradient(to bottom, black 0%, black 45%, transparent 75%)";
+  const f = fadeOf(step);
+  const vis = f.bottom - f.top;
 
   return (
     <svg
@@ -156,8 +189,22 @@ export function FamilyScene({
       aria-hidden
       data-family-scene
       preserveAspectRatio="xMidYMid meet"
-      className="pointer-events-none h-full w-full select-none"
-      style={{ maskImage: fade, WebkitMaskImage: fade }}
+      className="pointer-events-none select-none"
+      style={{
+        maskImage: gradientOf(f),
+        WebkitMaskImage: gradientOf(f),
+        // The faded-out margins are invisible but would still take up room,
+        // so the scene is blown up and pulled through its parent until only
+        // the part that's actually visible fills it — see `sceneAspect`.
+        position: "absolute",
+        left: 0,
+        width: "100%",
+        height: `${(100 / vis).toFixed(3)}%`,
+        top: `${((-100 * f.top) / vis).toFixed(3)}%`,
+        transitionProperty: "height, top",
+        transitionDuration: DUR,
+        transitionTimingFunction: EASE,
+      }}
     >
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">
         {/* Caregiver 1 (coral) — holds the baby first, then hands over and

@@ -293,6 +293,27 @@ describe("<Planner /> wizard", () => {
     expect(sceneBox().className).not.toContain("w-[78%]");
   });
 
+  it("sizes the scene's box to the visible artwork, not the faded-out margins", () => {
+    const { container } = renderPlanner();
+    const scene = () => container.querySelector("[data-family-scene]")!;
+    const sceneBox = () => scene().parentElement!;
+
+    // Step 1's close-up fades out well before its own bottom edge (it's
+    // mostly torso down there). The box must be trimmed to just the part
+    // that's actually visible, or the invisible remainder pushes whatever
+    // follows — the "Födelsedatum" question — far down the page.
+    // 15/22 is the artwork's own shape; anything with a 22 here is untrimmed.
+    expect(sceneBox().style.aspectRatio).toBe("15 / 12.100");
+    // ...and the scene itself is scaled up and pulled through the box to
+    // compensate, so the visible band still fills it exactly.
+    expect(scene().getAttribute("style")).toContain("height: 181.818%");
+
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2: standing figures, which only fade at the ground line
+    expect(sceneBox().style.aspectRatio).toBe("15 / 16.500");
+    expect(scene().getAttribute("style")).toContain("height: 133.333%");
+  });
+
   it("reopens an answered question as an accordion, not the hero view", () => {
     const { container } = renderPlanner();
     openQ(container, "q-date");

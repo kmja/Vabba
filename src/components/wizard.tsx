@@ -30,7 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
-import { FamilyScene } from "@/components/family-scene";
+import { FamilyScene, sceneAspect } from "@/components/family-scene";
 import { FlowQuestion, FlowSlot } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
@@ -1668,7 +1668,10 @@ export function Wizard({
             className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5"
           >
             <div className="flex items-start gap-3">
-              <div className="aspect-[15/22] w-28 shrink-0 sm:w-32">
+              <div
+                style={{ aspectRatio: sceneAspect(stepCount) }}
+                className="relative w-28 shrink-0 sm:w-32"
+              >
                 <FamilyScene
                   step={stepCount}
                   soloMode={soloMode}
@@ -1777,8 +1780,9 @@ export function Wizard({
               shrinks back once there's something to sit beside. */}
           <div className={cn("flex items-start gap-3", heroStage && "justify-center")}>
             <div
+              style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative aspect-[15/22] shrink-0 transition-[width] duration-700 ease-[cubic-bezier(0.32,0.8,0.3,1)] motion-reduce:transition-none",
+                "relative shrink-0 transition-[width,aspect-ratio] duration-700 ease-[cubic-bezier(0.32,0.8,0.3,1)] motion-reduce:transition-none",
                 heroStage
                   ? "w-[78%] [@media(max-height:740px)]:w-[62%] [@media(max-height:560px)]:w-[50%]"
                   : "w-[45%] [@media(max-height:740px)]:w-[36%] [@media(max-height:560px)]:hidden",
