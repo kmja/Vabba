@@ -173,8 +173,8 @@ describe("<Planner /> wizard", () => {
     expect(screen.getByText("Perioder")).toBeTruthy();
     // The 10-dagar around the birth, then one block per caregiver.
     expect(periodHeaders(container).length).toBe(3);
-    // The period card leads with the household income.
-    expect(screen.getAllByText(/Hushåll/).length).toBeGreaterThan(0);
+    // The period card's collapsed header leads with the net monthly figure.
+    expect(screen.getAllByText(/\/mån/).length).toBeGreaterThan(0);
     // Household-income default: the lower earner (B) takes the 300 income-based
     // days while the higher earner (A) keeps their 90 reserved and stays at
     // work — less the 20 days each caregiver saves by default.
@@ -736,25 +736,17 @@ describe("<Planner /> wizard", () => {
     }
   });
 
-  it("notes a real gap between periods, only where the dates actually leave one", () => {
+  it("explains a caregiver handoff, and the birth, in the markers between blocks", () => {
     const { container } = renderPlanner();
-    // A short, fixed length for A keeps their natural end predictable, so
-    // pushing B's start well past it is unambiguously a gap.
-    fillToResults(container, { birth: futureIso(14), goalPresetA: "3man" });
+    fillToResults(container, { birth: futureIso(14) });
     showPlan();
-    // Open B's block and push its start out — a real gap where both work.
-    const headers = () => periodHeaders(container);
-    fireEvent.click(headers()[headers().length - 1]);
-    const startInput = container.querySelector<HTMLInputElement>(
-      'input[id^="period-start-"]:not([disabled])',
-    )!;
-    fireEvent.change(startInput, { target: { value: futureIso(400) } });
-    const markers = container.querySelectorAll("[data-period-marker]");
-    const notes = Array.from(markers)
-      .map((m) => m.querySelector("[data-gap-note]"))
-      .filter(Boolean);
-    expect(notes.length).toBeGreaterThan(0);
-    expect(notes[0]!.textContent).toMatch(/dagar/);
+    const reasons = Array.from(
+      container.querySelectorAll("[data-marker-reason]"),
+    ).map((el) => el.textContent);
+    expect(reasons.some((t) => t === "Barnet föds.")).toBe(true);
+    // A is home first by default — their stretch ending and B's starting is
+    // the one boundary a plain two-caregiver plan always has.
+    expect(reasons.some((t) => t?.includes("tar över."))).toBe(true);
   });
 
   it("merges the birth-days into the first caregiver's overlapping start", () => {
@@ -840,17 +832,9 @@ describe("<Planner /> wizard", () => {
     expect(screen.getAllByText(/till senare/).length).toBeGreaterThan(0);
   });
 
-  it("editing a period's end date flips that caregiver to a date goal", () => {
-    const { container } = renderPlanner();
-    fillToResults(container);
-    showPlan();
-    fireEvent.change(container.querySelector("#period-end-0")!, {
-      target: { value: futureIso(45) },
-    });
-    // The edit becomes a "hemma till" goal, with an undo affordance.
-    expect(screen.getByText(/Släpp slutdatumet/)).toBeTruthy();
-    expect(screen.getAllByText(/Hemma till/).length).toBeGreaterThan(0);
-  });
+  // The inline end-date edit this test exercised (period-end-N + "Släpp
+  // slutdatumet") was removed from the period card — a fixed length is now
+  // only ever set as a goal from the wizard's "Bestämd längd" option.
 
   it("has a live split slider on the results page that updates the numbers", () => {
     const { container } = renderPlanner();
@@ -1024,11 +1008,14 @@ describe("<Planner /> wizard", () => {
       target: { value: "30000" },
     });
     showPlan();
-    // Carried-over days are fine print, behind the block's own chevron.
-    fireEvent.click(periodHeaders(container)[1]);
-    expect(
-      screen.getAllByText(/sparade från tidigare barn/).length,
-    ).toBeGreaterThan(0);
+    // The carried-over figure isn't broken out on the period card any more
+    // (it's folded into the caregiver's own day total) — round-trip through
+    // "Ändra" instead, confirming the wizard still has what was entered.
+    fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
+    openQuestion(container, "a", "extra");
+    expect(container.querySelector<HTMLInputElement>("#a-extra")?.value).toBe(
+      "40",
+    );
   });
 
   it("only offers advanced settings once the wizard reaches its summary", () => {

@@ -1136,18 +1136,6 @@ export function Planner() {
             A: periodStartA != null,
             B: periodStartB != null,
           },
-          onEndDate: (id, iso) =>
-            setForm((f) =>
-              id === "A"
-                ? { ...f, goalModeA: "untilDate", goalDateA: iso }
-                : { ...f, goalModeB: "untilDate", goalDateB: iso },
-            ),
-          onClearEnd: (id) =>
-            setForm((f) =>
-              id === "A"
-                ? { ...f, goalModeA: "budget" }
-                : { ...f, goalModeB: "budget" },
-            ),
           onStartDate: (id, iso) =>
             setForm((f) =>
               id === "A"

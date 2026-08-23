@@ -499,10 +499,14 @@ export function PeriodLevers({
   // for the same month. A block can also be a phase because the SOLVER split
   // it, not because this switch is on; that is the same case.
   const showPace = which !== null && phase.on && !goalDriven;
+  const hasToggles = showToggles && (showPartTime || !goalDriven);
+  // A goal-driven block with no phase row to show has nothing left to say —
+  // the goal itself lives in the wizard now, not on a card here.
+  if (!hasToggles && !showPace && goalDriven) return null;
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
-      {showToggles && (showPartTime || !goalDriven) && (
+      {hasToggles && (
         <div className="flex flex-wrap gap-x-3 gap-y-1.5">
           {showPartTime && (
             <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
@@ -559,12 +563,7 @@ export function PeriodLevers({
               </p>
             ))}
         </>
-      ) : goalDriven ? (
-        <p className="text-muted-foreground text-xs">
-          Takten och längden räknas ut från målet — ändra datumet här ovanför,
-          eller målet i guiden.
-        </p>
-      ) : (
+      ) : goalDriven ? null : (
         <DurationLever
           name={name}
           days={days}

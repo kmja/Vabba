@@ -116,17 +116,3 @@ export function paceAsWholeDays(
   }
   return null;
 }
-
-/**
- * That cycle as a sentence: "5 hela dagar i veckan", "8 hela dagar var 5:e
- * vecka". Null when the pace is already a plain whole week or has no tidy
- * cycle to describe.
- */
-export function describePaceCycle(daysPerWeek: number): string | null {
-  const cycle = paceAsWholeDays(daysPerWeek);
-  if (!cycle) return null;
-  const days = `${formatNumber(cycle.days)} hela ${cycle.days === 1 ? "dag" : "dagar"}`;
-  if (cycle.weeks === 1) return `${days} i veckan`;
-  if (cycle.weeks === 2) return `${days} varannan vecka`;
-  return `${days} var ${cycle.weeks}:e vecka`;
-}

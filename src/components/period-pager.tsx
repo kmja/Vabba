@@ -1,8 +1,6 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { IconChevronDown, IconInfoCircle } from "@tabler/icons-react";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   CG_BAR,
   IncomeBreakdownTable,
@@ -11,7 +9,6 @@ import {
 } from "@/components/timeline";
 import {
   formatMonths,
-  householdMonthly,
   householdNetMonthly,
   incomeSources,
   type IncomeSource,
@@ -23,16 +20,15 @@ import type { PlanDeadlines } from "@/lib/calc";
 import type { LeaveInterval } from "@/lib/projection";
 import type { BirthDaysResult } from "@/lib/birth-days";
 import { netOfExtra } from "@/lib/tax";
-import { MONEY, SGI_PROTECTION } from "@/lib/rules";
+import { MONEY } from "@/lib/rules";
 import {
-  describePaceCycle,
   formatDate,
   formatDays,
   formatPace,
   formatSek,
   paceAsWholeDays,
 } from "@/lib/format";
-import { addDays, differenceInDays, toIsoDate } from "@/lib/dates";
+import { addDays, differenceInDays } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 /** Callbacks that let a period's date edits drive the plan ("custom" mode). */
@@ -41,11 +37,9 @@ export interface PeriodEditing {
   idByName: Record<string, "A" | "B">;
   modeById: Record<"A" | "B", GoalMode>;
   hasStartOverride: Record<"A" | "B", boolean>;
-  /** Editing a period's end sets that caregiver's "hemma till" date goal. */
-  onEndDate: (id: "A" | "B", iso: string) => void;
-  /** Back to the automatic length (as long as possible). */
-  onClearEnd: (id: "A" | "B") => void;
-  /** Editing a period's start delays it (a gap where both work). */
+  /** Editing a period's start delays it (a gap where both work). Setting it
+   *  back to null is the only edit still offered from this page — a target
+   *  end date or length is a goal, set from the wizard. */
   onStartDate: (id: "A" | "B", iso: string | null) => void;
 }
 
@@ -74,6 +68,31 @@ interface Period {
 
 function paceText(pace: number): string {
   return `${Number(pace.toFixed(1)).toString().replace(".", ",")} dagar/vecka`;
+}
+
+/**
+ * Why a new block starts where the caregiver before it left off — the only
+ * three reasons this model can actually produce: a handoff to the other
+ * caregiver, income-based days giving way to lägstanivå, or the SGI floor
+ * forcing a faster pace at the child's first birthday. Null when the pace
+ * changed for some other, model-external reason (a hand-picked pace) —
+ * nothing to honestly say beyond the date itself.
+ */
+function periodTransitionReason(
+  prev: Period,
+  p: Period,
+  sgiStartsHere: boolean,
+): string | null {
+  if (prev.caregiver !== p.caregiver) {
+    return `${prev.caregiver}s period tar slut. ${p.caregiver} tar över.`;
+  }
+  if (p.segments[0].tier === "lagsta" && prev.segments[0].tier !== "lagsta") {
+    return `${p.caregiver}s inkomstbaserade dagar tar slut. Nu tas lägstanivådagar ut istället.`;
+  }
+  if (sgiStartsHere) {
+    return `Barnet fyller 1 år. ${p.caregiver} måste öka takten till ${formatPace(p.segments[0].pace)} dagar/vecka för att skydda sin SGI.`;
+  }
+  return null;
 }
 
 /**
@@ -388,32 +407,40 @@ const DOUBLE_IDX = -2;
 /**
  * A dated line between two blocks — where one stretch ends and the next
  * begins. Carries the gap note when there is real waiting time between them
- * (both working); says nothing extra when the next stretch picks up right
- * away, or overlaps the one before it (the 10-dagar alongside the first
- * caregiver's own leave).
+ * (both working) and, where the model actually knows why a new block starts
+ * here, a short reason — the birth itself, a handoff to the other
+ * caregiver, income-based days giving way to lägstanivå, or the SGI floor
+ * forcing a faster pace at the child's first birthday.
  */
 function DateMarker({
   date,
   gapDays,
   atBirth,
+  reason,
 }: {
   date: Date;
   gapDays: number;
   /** This is the very first marker, dated to the birth itself. */
   atBirth: boolean;
+  reason?: string | null;
 }) {
   return (
-    <div data-period-marker className="flex items-center gap-2 px-0.5">
-      <span className="bg-border h-px flex-1" />
-      <span className="text-muted-foreground shrink-0 text-center text-[11px] leading-tight tabular-nums">
+    <div data-period-marker className="flex items-start gap-2 px-0.5">
+      <span className="bg-border mt-2.5 h-px flex-1" />
+      <span className="text-muted-foreground w-40 shrink-0 text-center text-[11px] leading-tight tabular-nums">
         <span className="block">{formatDate(date)}</span>
         {gapDays > 0 && (
           <span data-gap-note className="block">
             ≈ {gapDays} dagar {atBirth ? "efter födseln" : "då båda jobbar"}
           </span>
         )}
+        {reason && (
+          <span data-marker-reason className="mt-0.5 block text-pretty">
+            {reason}
+          </span>
+        )}
       </span>
-      <span className="bg-border h-px flex-1" />
+      <span className="bg-border mt-2.5 h-px flex-1" />
     </div>
   );
 }
@@ -423,13 +450,14 @@ function DateMarker({
  *
  * `subtitle` and `headerRight` are the collapsed state's own text — the
  * header carries the headline net figure, but the itemized breakdown only
- * exists inside `children`, which is what the chevron reveals.
+ * exists inside `children`, which is what the chevron reveals. Whose block
+ * this is reads from the coloured stripe down the left edge, not a dot —
+ * one colour for a single caregiver, split top/bottom for two.
  */
 function Block({
   colorIdx,
   colorIdx2,
   title,
-  phase,
   subtitle,
   headerRight,
   open,
@@ -438,10 +466,9 @@ function Block({
   children,
 }: {
   colorIdx: number;
-  /** A second dot, for a block where two caregivers are both home. */
+  /** A second stripe, for a block where two caregivers are both home. */
   colorIdx2?: number;
   title: string;
-  phase: string | null;
   subtitle: ReactNode;
   headerRight?: ReactNode;
   open: boolean;
@@ -452,44 +479,49 @@ function Block({
   return (
     <div
       className={cn(
-        "bg-card rounded-lg border shadow-sm transition-colors",
+        "bg-card relative overflow-hidden rounded-lg border shadow-sm transition-colors",
         open && "border-primary/40",
       )}
     >
+      {colorIdx2 == null ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-y-0 left-0 z-10 w-1.5",
+            CG_BAR[colorIdx % CG_BAR.length],
+          )}
+        />
+      ) : (
+        <>
+          <span
+            aria-hidden
+            className={cn(
+              "absolute top-0 left-0 z-10 h-1/2 w-1.5",
+              CG_BAR[colorIdx % CG_BAR.length],
+            )}
+          />
+          <span
+            aria-hidden
+            className={cn(
+              "absolute bottom-0 left-0 z-10 h-1/2 w-1.5",
+              CG_BAR[colorIdx2 % CG_BAR.length],
+            )}
+          />
+        </>
+      )}
       <button
         type="button"
         data-period-header
         aria-expanded={open}
         aria-controls={panelId}
         onClick={onToggle}
-        className="active:bg-secondary/40 flex w-full items-start gap-3 rounded-lg px-4 py-3 text-left"
+        className="active:bg-secondary/40 flex w-full items-start gap-3 rounded-lg py-3 pr-4 pl-5 text-left"
       >
-        <span className="mt-1 flex shrink-0 gap-0.5">
-          <span
-            className={cn(
-              "size-2.5 rounded-sm",
-              CG_BAR[colorIdx % CG_BAR.length],
-            )}
-          />
-          {colorIdx2 != null && (
-            <span
-              className={cn(
-                "size-2.5 rounded-sm",
-                CG_BAR[colorIdx2 % CG_BAR.length],
-              )}
-            />
-          )}
-        </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-            <span className="text-sm font-semibold">{title}</span>
+            <span className="text-base font-semibold">{title}</span>
             {headerRight}
           </span>
-          {phase && (
-            <span className="text-muted-foreground bg-secondary mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium">
-              {phase}
-            </span>
-          )}
           <span className="text-muted-foreground mt-0.5 block text-xs tabular-nums">
             {subtitle}
           </span>
@@ -511,7 +543,7 @@ function Block({
         style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
-          <div className="px-4 pt-1 pb-4">{children}</div>
+          <div className="pt-1 pr-4 pb-4 pl-5">{children}</div>
         </div>
       </div>
     </div>
@@ -542,8 +574,14 @@ function BirthDaysBlock({
     <Block
       colorIdx={colorIdx}
       title={period.caregiver}
-      phase={period.phase}
-      subtitle={`≈ ${formatSek(net)} · ${formatDays(result.days)}`}
+      subtitle={
+        <>
+          <span className="block">vid födseln</span>
+          <span className="block">
+            ≈ {formatSek(net)} · {formatDays(result.days)}
+          </span>
+        </>
+      }
       open={open}
       onToggle={onToggle}
       panelId="period-panel-birth"
@@ -646,7 +684,10 @@ export function PeriodPager({
         startsAt: deadlines.birth,
         endsAt: addDays(deadlines.birth, birthDays.result.days),
         segments: [],
-        phase: "vid födseln",
+        // Nothing reads this — the synthetic object only stands in for
+        // `Block`'s title, which already says who and the subtitle below
+        // already says why.
+        phase: null,
         firstOfCaregiver: false,
         lastOfCaregiver: false,
         caregiverStart: deadlines.birth,
@@ -757,12 +798,16 @@ export function PeriodPager({
       <div className="space-y-2">
         {birth && birthDays && overlap && (
           <>
-            <DateMarker date={birth.startsAt} gapDays={0} atBirth />
+            <DateMarker
+              date={birth.startsAt}
+              gapDays={0}
+              atBirth
+              reason="Barnet föds."
+            />
             <Block
               colorIdx={Math.max(0, cgOrder.indexOf(overlap.caregiver1))}
               colorIdx2={Math.max(0, cgOrder.indexOf(overlap.caregiver2))}
               title={`${overlap.caregiver1} & ${overlap.caregiver2}`}
-              phase="vid födseln"
               subtitle={
                 <>
                   <span className="block">
@@ -815,7 +860,12 @@ export function PeriodPager({
         )}
         {birth && birthDays && !overlap && (
           <>
-            <DateMarker date={birth.startsAt} gapDays={0} atBirth />
+            <DateMarker
+              date={birth.startsAt}
+              gapDays={0}
+              atBirth
+              reason="Barnet föds."
+            />
             <BirthDaysBlock
               period={birth}
               result={birthDays.result}
@@ -835,6 +885,13 @@ export function PeriodPager({
               date={doubleDaysMerge.startsAt}
               gapDays={0}
               atBirth={!overlap && !birth}
+              reason={
+                !overlap && !birth
+                  ? "Barnet föds."
+                  : overlap
+                    ? `${overlap.caregiver1}s dagar vid födseln tar slut här.`
+                    : null
+              }
             />
             <Block
               colorIdx={Math.max(
@@ -846,7 +903,6 @@ export function PeriodPager({
                 cgOrder.indexOf(doubleDaysMerge.caregiver2),
               )}
               title={`${doubleDaysMerge.caregiver1} & ${doubleDaysMerge.caregiver2}`}
-              phase="dubbeldagar"
               subtitle={
                 <>
                   <span className="block">
@@ -900,8 +956,7 @@ export function PeriodPager({
           const paceText = `${formatPace(paceValue)} dagar/vecka`;
           const pace =
             p.phase === "lägstanivå" ? `lägstanivå · ${paceText}` : paceText;
-          const cycleText = describePaceCycle(paceValue);
-          const cycleWeeks = paceAsWholeDays(paceValue)?.weeks ?? 1;
+          const cycle = paceAsWholeDays(paceValue);
           // The stretch that begins at the first birthday is where the SGI
           // floor lifts the pace — say so there, once, instead of listing it
           // as something wrong with the plan.
@@ -924,6 +979,20 @@ export function PeriodPager({
                 birth?.endsAt ??
                 deadlines.birth);
           const gapBefore = differenceInDays(priorEnd, p.startsAt);
+          const reason =
+            i > 0
+              ? periodTransitionReason(
+                  displayPeriods[i - 1],
+                  p,
+                  sgiStartsHere,
+                )
+              : doubleDaysMerge
+                ? `${doubleDaysMerge.caregiver2}s dubbeldagar tar slut här.`
+                : overlap
+                  ? `${overlap.caregiver1}s dagar vid födseln tar slut här.`
+                  : birth
+                    ? null
+                    : "Barnet föds.";
 
           return (
             <Fragment key={i}>
@@ -931,11 +1000,11 @@ export function PeriodPager({
                 date={p.startsAt}
                 gapDays={gapBefore > 3 ? gapBefore : 0}
                 atBirth={i === 0 && !birth}
+                reason={reason}
               />
               <Block
                 colorIdx={colorIdx}
                 title={p.caregiver}
-                phase={null}
                 subtitle={
                   <>
                     <span className="block">{months}</span>
@@ -961,134 +1030,44 @@ export function PeriodPager({
                   <IncomeBreakdownTable sources={sources} />
                 </div>
               )}
-              {/* Editable span — edits become goals ("custom" planning). */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor={`period-start-${i}`} className="text-xs">
-                    Från
-                  </Label>
-                  <Input
-                    id={`period-start-${i}`}
-                    type="date"
-                    value={toIsoDate(p.startsAt)}
-                    // A later block starts where the previous one ended —
-                    // only the start of the whole stretch can move. A
-                    // truncated first block's TRUE start is inside the
-                    // combined block above it, so it can't move from here
-                    // either.
-                    disabled={!p.firstOfCaregiver || p.truncatedStart}
-                    onChange={(e) =>
-                      id &&
-                      e.target.value &&
-                      editing.onStartDate(id, e.target.value)
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`period-end-${i}`} className="text-xs">
-                    Till
-                  </Label>
-                  <Input
-                    id={`period-end-${i}`}
-                    type="date"
-                    value={toIsoDate(p.endsAt)}
-                    disabled={!p.lastOfCaregiver}
-                    onChange={(e) =>
-                      id &&
-                      e.target.value &&
-                      editing.onEndDate(id, e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                {mode === "untilDate" && id && p.lastOfCaregiver && (
-                  <button
-                    type="button"
-                    onClick={() => editing.onClearEnd(id)}
-                    className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
-                  >
-                    Släpp slutdatumet (automatisk längd)
-                  </button>
-                )}
-                {id &&
-                  p.firstOfCaregiver &&
-                  !p.truncatedStart &&
-                  editing.hasStartOverride[id] && (
-                  <button
-                    type="button"
-                    onClick={() => editing.onStartDate(id, null)}
-                    className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
-                  >
-                    Återställ startdatumet
-                  </button>
-                )}
-              </div>
-
-              {sgiStartsHere && (
-                <p className="text-muted-foreground mt-2 flex items-start gap-2 text-xs">
-                  <IconInfoCircle className="mt-0.5 size-3.5 shrink-0" />
-                  <span>
-                    Från 1-årsdagen krävs minst{" "}
-                    {SGI_PROTECTION.minDaysPerWeekAfterAge1} uttagsdagar i
-                    veckan för att SGI:n ska skyddas, så takten är höjd här.
-                  </span>
-                </p>
+              {/* The dates themselves aren't editable here any more — a
+                  fixed length or target date is a goal, set from the wizard.
+                  "Återställ startdatumet" survives as the one way back for a
+                  start pushed later by an old saved plan or shared link. */}
+              {id &&
+                p.firstOfCaregiver &&
+                !p.truncatedStart &&
+                editing.hasStartOverride[id] && (
+                <button
+                  type="button"
+                  onClick={() => editing.onStartDate(id, null)}
+                  className="text-muted-foreground hover:text-foreground active:text-foreground inline-flex min-h-10 items-center text-xs underline underline-offset-2 sm:min-h-0"
+                >
+                  Återställ startdatumet
+                </button>
               )}
 
               {/* How a fractional pace is actually claimed. Försäkringskassan
                   grants whole, ¾, ½, ¼ or ⅛ of a day and nothing finer, so
-                  "1,6 dagar/vecka" is an average you hit with whole days on
-                  dates you pick — not a week you can apply for. */}
-              {cycleText && (
+                  "1,6 dagar/vecka" is an average, not a week you can apply
+                  for — say so, the total it comes to, and (when there's one)
+                  the simple weekly recipe that hits it. A pace that's
+                  already a whole number needs none of this. */}
+              {cycle && cycle.weeks > 1 && row && (
                 <p className="text-muted-foreground mt-2 flex items-start gap-2 text-xs">
                   <IconInfoCircle className="mt-0.5 size-3.5 shrink-0" />
                   <span>
-                    Takten är ett snitt: {pace} betyder{" "}
-                    <span className="text-foreground font-medium">
-                      {cycleText}
-                    </span>
-                    {cycleWeeks > 1
-                      ? " — du väljer själv vilka dagar. Hos Försäkringskassan tar du ut hela, ¾, halva, ¼ eller ⅛ dagar, så en enskild vecka kan inte bli just den här siffran."
-                      : "."}
+                    Takten är ett snitt: {formatDays(row.days)} under hela
+                    perioden.
+                    {cycle.weeks === 2 && (
+                      <>
+                        {" "}
+                        T.ex. {Math.ceil(paceValue)} dagar en vecka och{" "}
+                        {Math.floor(paceValue)} dagar nästa, upprepat.
+                      </>
+                    )}
                   </span>
                 </p>
-              )}
-
-              {/* The fine print behind the headline numbers above. */}
-              {row && (
-                <div className="text-muted-foreground mt-3 space-y-0.5 text-xs">
-                  <div className="tabular-nums">
-                    Hushåll brutto ≈ {formatSek(householdMonthly(row))}/mån ·{" "}
-                    {formatSek(row.dailyRate)}/dag föräldrapenning ·{" "}
-                    {formatDays(row.days)}
-                  </div>
-                  {row.supplement && (
-                    <div>
-                      Föräldralön i ca{" "}
-                      {String(row.supplement.months).replace(".", ",")} mån
-                      {row.aboveCap ? " · täcker även lön över taket" : ""}
-                    </div>
-                  )}
-                  {row.grundnivaFirstDays ? (
-                    <div>
-                      Första {formatDays(row.grundnivaFirstDays)} på grundnivå
-                      ({formatSek(MONEY.grundnivaPerDay)}/dag)
-                    </div>
-                  ) : null}
-                  {row.extraDays ? (
-                    <div>
-                      inkl. {formatDays(row.extraDays)} sparade från tidigare
-                      barn
-                    </div>
-                  ) : null}
-                  {row.savedDays ? (
-                    <div>
-                      sparar {formatDays(row.savedDays)} till senare
-                      (klämdagar, lov …)
-                    </div>
-                  ) : null}
-                </div>
               )}
 
               {/* Play with this stretch: the pace and what it pays. */}
