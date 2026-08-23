@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { SiteHeader } from "@/components/site-header";
+import { HomeNavProvider } from "@/lib/home-nav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -78,10 +79,12 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col overflow-x-clip">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
-        <SiteHeader />
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
-          {children}
-        </main>
+        <HomeNavProvider>
+          <SiteHeader />
+          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+            {children}
+          </main>
+        </HomeNavProvider>
       </body>
     </html>
   );

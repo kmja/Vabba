@@ -3,14 +3,13 @@
 import {
   IconCheck,
   IconDeviceFloppy,
-  IconHome2,
   IconPencil,
   IconRefresh,
   IconShare2,
 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
-import { CaregiverSummary } from "@/components/caregiver-summary";
+import { FamilySummary } from "@/components/family-summary";
 import { SplitSuggestion } from "@/components/split-suggestion";
 import { SoloSummary } from "@/components/solo-summary";
 import type {
@@ -79,7 +78,6 @@ export function Results({
   copied,
   onSave,
   saved,
-  onHome,
 }: {
   soloMode: boolean;
   objective: Objective;
@@ -134,8 +132,6 @@ export function Results({
   /** Save (or update) this plan in the saved-plans list. */
   onSave: () => void;
   saved: boolean;
-  /** Back to the landing page, plan untouched. */
-  onHome: () => void;
 }) {
   // The dials each period block drives, keyed by caregiver.
   const rowFor = (id: "A" | "B") => {
@@ -168,9 +164,6 @@ export function Results({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Er plan</h2>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={onHome}>
-            <IconHome2 /> Startsidan
-          </Button>
           <Button type="button" size="sm" onClick={() => onEdit(1)}>
             <IconPencil /> Ändra uppgifter
           </Button>
@@ -190,34 +183,36 @@ export function Results({
 
       <WarningsList warnings={warnings.filter((w) => w.level !== "info")} />
 
-      {/* Who is in this plan: a portrait, what they bring and what they are
-          aiming for, with a way straight back to their own step. */}
-      <div className="space-y-2">
-        {(soloMode
+      {/* Who is in this plan: both portraits grouped together as the family,
+          each caregiver's own summary and edit button flanking them. */}
+      {(() => {
+        const order = soloMode
           ? (["A"] as const)
           : firstCaregiver === "B"
             ? (["B", "A"] as const)
-            : (["A", "B"] as const)
-        ).map((id, i) => {
+            : (["A", "B"] as const);
+        const infoFor = (id: "A" | "B", i: number) => {
           const name =
             plan.parents[id].name?.trim() ||
             (soloMode ? soloName : `Vårdnadshavare ${id}`);
-          return (
-            <CaregiverSummary
-              key={id}
-              name={name}
-              salary={id === "A" ? salaryA : salaryB}
-              row={monthlyRows.find((r) => r.name === name)}
-              goalText={id === "A" ? goalTextA : goalTextB}
-              second={id !== "A"}
-              holding={i === 0}
-              babyCount={plan.childrenInBirth}
-              // Step 2 is whoever is home first, step 3 the other one.
-              onEdit={() => onEdit(i === 0 ? 2 : 3)}
-            />
-          );
-        })}
-      </div>
+          return {
+            name,
+            salary: id === "A" ? salaryA : salaryB,
+            row: monthlyRows.find((r) => r.name === name),
+            goalText: id === "A" ? goalTextA : goalTextB,
+            // Step 2 is whoever is home first, step 3 the other one.
+            onEdit: () => onEdit(i === 0 ? 2 : 3),
+          };
+        };
+        const second: "A" | "B" | undefined = order[1];
+        return (
+          <FamilySummary
+            first={infoFor(order[0], 0)}
+            second={second ? infoFor(second, 1) : null}
+            babyCount={plan.childrenInBirth}
+          />
+        );
+      })()}
 
       {/* The adjust controls stay pinned above the timeline (and release once
           the timeline scrolls past), so you can drag and watch it shift. */}

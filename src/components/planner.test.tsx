@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Planner } from "@/components/planner";
+import { SiteHeader } from "@/components/site-header";
+import { HomeNavProvider } from "@/lib/home-nav";
 
 afterEach(() => {
   cleanup();
@@ -153,12 +155,26 @@ function futureIso(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Clicks the site header's logo — the sole "go home" trigger now. */
+function clickLogo() {
+  fireEvent.click(screen.getByRole("button", { name: /Föräldradagar/ }));
+}
+
 /**
  * Render the app and dismiss the landing page via "Skapa ny plan" — every
  * wizard/results test starts from a blank plan and doesn't care about it.
+ *
+ * Mirrors the root layout: <SiteHeader> and <Planner> are siblings, both
+ * inside the same provider, so the header's logo can reach <Planner>'s
+ * "go home" handler exactly as it does in the real app.
  */
 function renderPlanner() {
-  const rendered = render(<Planner />);
+  const rendered = render(
+    <HomeNavProvider>
+      <SiteHeader />
+      <Planner />
+    </HomeNavProvider>,
+  );
   fireEvent.click(rendered.container.querySelector("#create-plan")!);
   return rendered;
 }
@@ -1083,7 +1099,11 @@ describe("<Planner /> wizard", () => {
 
 describe("<Planner /> landing & saved plans", () => {
   it("launches into a landing page with a create-plan button", () => {
-    render(<Planner />);
+    render(
+      <HomeNavProvider>
+        <Planner />
+      </HomeNavProvider>,
+    );
     expect(
       screen.getByRole("button", { name: /Skapa ny plan/ }),
     ).toBeTruthy();
@@ -1091,7 +1111,11 @@ describe("<Planner /> landing & saved plans", () => {
   });
 
   it("Skapa ny plan reaches the wizard", () => {
-    const { container } = render(<Planner />);
+    const { container } = render(
+      <HomeNavProvider>
+        <Planner />
+      </HomeNavProvider>,
+    );
     fireEvent.click(container.querySelector("#create-plan")!);
     expect(container.querySelector("#birth-count-1")).toBeTruthy();
   });
@@ -1104,7 +1128,7 @@ describe("<Planner /> landing & saved plans", () => {
     fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
     expect(screen.getByText("Sparad!")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    clickLogo();
     expect(screen.getByText("Sparade planer")).toBeTruthy();
     expect(screen.getByText("Namnlös plan")).toBeTruthy();
 
@@ -1119,12 +1143,12 @@ describe("<Planner /> landing & saved plans", () => {
     showPlan();
 
     fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    clickLogo();
     fireEvent.click(screen.getByText("Namnlös plan"));
 
     // Back on results for the same plan — saving again should not duplicate it.
     fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    clickLogo();
     expect(screen.getAllByText("Namnlös plan").length).toBe(1);
   });
 
@@ -1133,7 +1157,7 @@ describe("<Planner /> landing & saved plans", () => {
     fillToResults(container);
     showPlan();
     fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Startsidan/ }));
+    clickLogo();
     expect(screen.getByText("Namnlös plan")).toBeTruthy();
 
     vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -1147,7 +1171,11 @@ describe("<Planner /> landing & saved plans", () => {
     pickBirth(container, "2025-01-15");
     cleanup();
 
-    render(<Planner />);
+    render(
+      <HomeNavProvider>
+        <Planner />
+      </HomeNavProvider>,
+    );
     expect(screen.getByText("Påbörjad, inte klar")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /Fortsätt/ }));
     expect(
@@ -1162,7 +1190,11 @@ describe("<Planner /> landing & saved plans", () => {
     next(); // → step 2
     cleanup();
 
-    render(<Planner />);
+    render(
+      <HomeNavProvider>
+        <Planner />
+      </HomeNavProvider>,
+    );
     fireEvent.click(screen.getByRole("button", { name: /Fortsätt/ }));
     expect(
       document

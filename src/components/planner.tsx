@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { useHomeNav } from "@/lib/home-nav";
 import {
   DEFAULT_SAVE_DAYS,
   Wizard,
@@ -153,6 +156,23 @@ export function Planner() {
     document.body.classList.toggle("app-shell", wizardVisible);
     return () => document.body.classList.remove("app-shell");
   }, [wizardVisible]);
+
+  // The site header's logo lives outside this component (it's rendered once,
+  // in the root layout, above every page) — this hands it a way home without
+  // either of them knowing about the other beyond this one callback. Mid
+  // -wizard it asks first rather than just leaving; the answers are already
+  // saved regardless (this app is never mid-save), so the confirmation is a
+  // courtesy, not a data-loss guard.
+  const [homeConfirmOpen, setHomeConfirmOpen] = useState(false);
+  const { setGoHome } = useHomeNav();
+  useEffect(() => {
+    const handler = () => {
+      if (wizardVisible) setHomeConfirmOpen(true);
+      else setView("landing");
+    };
+    setGoHome(() => handler);
+    return () => setGoHome(null);
+  }, [wizardVisible, setGoHome]);
 
   // A shared link (#p=…) takes precedence over stored state. Applied on mount.
   useEffect(() => {
@@ -1164,27 +1184,58 @@ export function Planner() {
         copied={copied}
         onSave={savePlan}
         saved={saved}
-        onHome={() => setView("landing")}
       />
     );
   }
 
   return (
-    <Wizard
-      form={form}
-      setForm={setForm}
-      valid={valid}
-      issues={wizardIssues}
-      periodStarts={periodStarts}
-      initialStep={editStep}
-      onSubmit={() => {
-        window.scrollTo(0, 0);
-        setForm((f) => ({ ...f, submitted: true }));
-      }}
-      onReset={resetPlan}
-      onStepChange={(s) =>
-        setForm((f) => (f.wizardStep === s ? f : { ...f, wizardStep: s }))
-      }
-    />
+    <>
+      <Wizard
+        form={form}
+        setForm={setForm}
+        valid={valid}
+        issues={wizardIssues}
+        periodStarts={periodStarts}
+        initialStep={editStep}
+        onSubmit={() => {
+          window.scrollTo(0, 0);
+          setForm((f) => ({ ...f, submitted: true }));
+        }}
+        onReset={resetPlan}
+        onStepChange={(s) =>
+          setForm((f) => (f.wizardStep === s ? f : { ...f, wizardStep: s }))
+        }
+      />
+      <Dialog
+        open={homeConfirmOpen}
+        onClose={() => setHomeConfirmOpen(false)}
+        title="Lämna guiden?"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setHomeConfirmOpen(false)}
+            >
+              Fortsätt guiden
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setHomeConfirmOpen(false);
+                setView("landing");
+              }}
+            >
+              Till startsidan
+            </Button>
+          </>
+        }
+      >
+        <p className="text-muted-foreground text-sm">
+          Era svar sparas, så ni kan fortsätta där ni var via
+          &quot;Fortsätt&quot; på startsidan.
+        </p>
+      </Dialog>
+    </>
   );
 }
