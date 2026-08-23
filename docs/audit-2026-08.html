@@ -1,0 +1,669 @@
+<title>Föräldrapenning Math Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #F6F8F6;
+    --surface:     #FFFFFF;
+    --inset:       #EDF1EE;
+    --ink:         #171E1B;
+    --ink-soft:    #43524C;
+    --muted:       #6B7A73;
+    --rule:        #D3DCD6;
+    --rule-strong: #B4C2BA;
+    --accent:      #1C5A49;
+    --accent-soft: #E2EFE8;
+    --crit:        #9C2F26;
+    --crit-bg:     #F8E7E4;
+    --warn:        #8A5E0F;
+    --warn-bg:     #F7EEDA;
+    --ok:          #2C6248;
+    --ok-bg:       #E4F0E7;
+
+    --f-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --f-body:    "Source Sans 3", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --f-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --col: 40rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #101614;
+      --surface:     #18201D;
+      --inset:       #1F2926;
+      --ink:         #E7EEEA;
+      --ink-soft:    #B7C5BE;
+      --muted:       #8A9A93;
+      --rule:        #2B3733;
+      --rule-strong: #3D4C46;
+      --accent:      #64C4A4;
+      --accent-soft: #1B2E28;
+      --crit:        #E88A7E;
+      --crit-bg:     #33201D;
+      --warn:        #DDAE5C;
+      --warn-bg:     #302617;
+      --ok:          #78C39A;
+      --ok-bg:       #1A2A21;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #101614;
+    --surface:     #18201D;
+    --inset:       #1F2926;
+    --ink:         #E7EEEA;
+    --ink-soft:    #B7C5BE;
+    --muted:       #8A9A93;
+    --rule:        #2B3733;
+    --rule-strong: #3D4C46;
+    --accent:      #64C4A4;
+    --accent-soft: #1B2E28;
+    --crit:        #E88A7E;
+    --crit-bg:     #33201D;
+    --warn:        #DDAE5C;
+    --warn-bg:     #302617;
+    --ok:          #78C39A;
+    --ok-bg:       #1A2A21;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 6rem;
+  }
+
+  /* ---- masthead ---------------------------------------------------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--rule-strong);
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: clamp(2.1rem, 5.5vw, 3.1rem);
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  .standfirst {
+    font-family: var(--f-display);
+    font-size: clamp(1.05rem, 2.2vw, 1.2rem);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: var(--col);
+    margin: 0;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 2rem;
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .facts b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---- scoreboard -------------------------------------------------- */
+
+  .score {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 2.5rem 0 0;
+  }
+  .score div {
+    background: var(--surface);
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .score .n {
+    font-family: var(--f-display);
+    font-size: 2rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .score .l {
+    font-family: var(--f-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .score .c-crit .n { color: var(--crit); }
+  .score .c-warn .n { color: var(--warn); }
+  .score .c-ok   .n { color: var(--ok); }
+
+  /* ---- sections ---------------------------------------------------- */
+
+  section { margin-top: 3.5rem; }
+
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 500;
+    font-size: clamp(1.5rem, 3.5vw, 1.9rem);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.4rem;
+    text-wrap: balance;
+  }
+
+  .lede {
+    max-width: var(--col);
+    color: var(--ink-soft);
+    margin: 0 0 1.75rem;
+  }
+
+  p { max-width: var(--col); }
+
+  /* ---- the answer panel -------------------------------------------- */
+
+  .answer {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--accent);
+    padding: 1.75rem;
+    margin-top: 1.5rem;
+  }
+  .answer p:first-child { margin-top: 0; }
+  .answer p:last-child { margin-bottom: 0; }
+
+  .verdict {
+    font-family: var(--f-display);
+    font-size: 1.3rem;
+    line-height: 1.4;
+    color: var(--ink);
+    margin: 0 0 1.25rem;
+    max-width: var(--col);
+  }
+  .verdict em { color: var(--accent); font-style: italic; }
+
+  /* ---- tables ------------------------------------------------------ */
+
+  .scroll { overflow-x: auto; margin: 1.5rem 0; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 34rem;
+    font-size: 0.86rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.55rem 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: baseline;
+  }
+  th {
+    font-family: var(--f-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom-color: var(--rule-strong);
+    white-space: nowrap;
+  }
+  td.num, th.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .yes { color: var(--ok); font-weight: 600; }
+  .no  { color: var(--crit); font-weight: 600; }
+
+  /* ---- findings ---------------------------------------------------- */
+
+  .finding {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    gap: 0 2.5rem;
+    padding: 2rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .finding:first-of-type { border-top: 1px solid var(--rule-strong); }
+
+  .margin {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding-top: 0.35rem;
+  }
+
+  .chip {
+    align-self: flex-start;
+    font-family: var(--f-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 2px;
+  }
+  .chip.crit { background: var(--crit-bg); color: var(--crit); }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  .chip.note { background: var(--inset);   color: var(--muted); }
+
+  .cite {
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .cite b {
+    display: block;
+    color: var(--ink-soft);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .cite span { display: block; }
+
+  .body h3 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: 1.22rem;
+    line-height: 1.3;
+    margin: 0 0 0.6rem;
+    text-wrap: balance;
+  }
+  .body h3 .idx {
+    font-family: var(--f-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 0.5rem;
+    vertical-align: 0.12em;
+  }
+  .body p { margin: 0 0 0.85rem; }
+  .body p:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.83em;
+    background: var(--inset);
+    padding: 0.1em 0.34em;
+    border-radius: 2px;
+  }
+
+  .evidence {
+    font-family: var(--f-mono);
+    font-size: 0.76rem;
+    line-height: 1.65;
+    background: var(--inset);
+    border-left: 2px solid var(--rule-strong);
+    padding: 0.8rem 1rem;
+    margin: 0 0 0.9rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    color: var(--ink-soft);
+  }
+  .evidence b { color: var(--ink); font-weight: 600; }
+
+  .fix {
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+    border-top: 1px dotted var(--rule-strong);
+    padding-top: 0.7rem;
+    margin-top: 0.2rem;
+  }
+  .fix b {
+    font-family: var(--f-mono);
+    font-size: 0.64rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  /* ---- clean list -------------------------------------------------- */
+
+  .checks {
+    list-style: none;
+    padding: 0;
+    margin: 1.5rem 0 0;
+    display: grid;
+    gap: 0.9rem;
+    max-width: 48rem;
+  }
+  .checks li {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0.6rem;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+  }
+  .checks .tick {
+    font-family: var(--f-mono);
+    color: var(--ok);
+    font-weight: 600;
+  }
+  .checks b { color: var(--ink); font-weight: 600; }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid var(--rule-strong);
+    font-size: 0.85rem;
+    color: var(--muted);
+    max-width: 48rem;
+  }
+  footer b { color: var(--ink-soft); }
+
+  @media (max-width: 46rem) {
+    .finding { grid-template-columns: 1fr; gap: 1rem; }
+    .margin { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.6rem 1.25rem; padding-top: 0; }
+    .cite b { display: inline; margin-right: 0.4rem; }
+    .cite span { display: inline; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Ruleset &amp; solver review</p>
+    <h1>What the plan says, and what Försäkringskassan would actually pay</h1>
+    <p class="standfirst">A line-by-line check of Vabba's day accounting, money maths and calendar rules against Socialförsäkringsbalken and Föräldraledighetslagen — plus the question of what a fractional pace like <em>1,6 dagar/vecka</em> means when you sit down to file the claim.</p>
+    <p class="facts">
+      <span><b>Audited</b> v0.28.5 · 22 Aug 2026</span>
+      <span><b>Scope</b> src/lib (rules, calc, projection, goal-seek, optimizer, tax, supplement, birth-days, vab)</span>
+      <span><b>Method</b> source read + numeric probes against the real modules</span>
+    </p>
+  </header>
+
+  <div class="score">
+    <div class="c-crit"><span class="n">3</span><span class="l">Material bugs</span></div>
+    <div class="c-warn"><span class="n">5</span><span class="l">Rule gaps</span></div>
+    <div><span class="n">3</span><span class="l">Verify / advisory</span></div>
+    <div class="c-ok"><span class="n">14</span><span class="l">Checks passed</span></div>
+  </div>
+
+  <section>
+    <h2>The short answer on fractional days</h2>
+    <p class="lede">You asked whether you can request 1,7 days in a single week. You cannot — but your instinct about averaging is exactly right, and it is the reason the app's numbers are still usable.</p>
+
+    <div class="answer">
+      <p class="verdict">Föräldrapenning is granted per calendar day at one of five levels — <em>hel, tre fjärdedels, halv, en fjärdedels, en åttondels</em> dag. Nothing finer exists. So a single week's total must land on a multiple of ⅛, and 1,7 is not one of them.</p>
+
+      <p>Over a longer stretch it stops mattering. You file for specific dates, so any average that resolves to whole days over a repeating cycle is filable exactly as the plan describes it — 1,6 days a week is 8 whole days every 5 weeks, and you choose which 8. That is what every pace in this app means: an <em>average</em>, not a weekly instruction.</p>
+
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="num">Pace shown</th>
+              <th>Filable as one week?</th>
+              <th class="num">Whole-day cycle</th>
+              <th>What you actually file</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">0,5</td><td class="yes">Yes — halv dag</td><td class="num">2 weeks</td><td>1 day per fortnight</td></tr>
+            <tr><td class="num">1,6</td><td class="no">No — nearest 1,5 or 1,625</td><td class="num">5 weeks</td><td>8 days per 5 weeks</td></tr>
+            <tr><td class="num">2,3</td><td class="no">No — nearest 2,25 or 2,375</td><td class="num">10 weeks</td><td>23 days per 10 weeks</td></tr>
+            <tr><td class="num">3,7</td><td class="no">No — nearest 3,625 or 3,75</td><td class="num">10 weeks</td><td>37 days per 10 weeks</td></tr>
+            <tr><td class="num">5,0</td><td class="yes">Yes</td><td class="num">1 week</td><td>5 days every week</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><b>The one place averaging breaks.</b> After the child turns 1, the SGI rule is a test on <em>each</em> week, not on the average. A plan that shows exactly 5,0 has to be five days in every week — you cannot bank three quiet weeks and take twenty days in the fourth. Below the first birthday SGI is protected regardless, so averaging is free there.</p>
+
+      <p>None of this is anywhere in the app today. "1,6 dagar/vecka" is presented as though you could ask for it, and a user who tries will be told no.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Findings</h2>
+    <p class="lede">Ordered by how much money or legality is at stake. Every number below was measured by running the real modules, not read off the source.</p>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip crit">Material</span>
+        <p class="cite"><b>Source</b><span>goal-seek.ts:139</span><span>planner.tsx:906</span></p>
+        <p class="cite"><b>Rule</b><span>SFB 12:9</span><span>FK deltid guidance</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">01</span>Part-time salary is divided by a 7-day week instead of a 5-day one</h3>
+        <p><code>partTimeSalary = salary × (7 − pace) / 7</code> treats the working week as seven days. Försäkringskassan sizes partial days against normal working time — five days. The app's own <code>rules.ts</code> comment states the correct mapping (75 % work → 1,25 dagar/vecka, 50 % → 2,5) and the code then contradicts it.</p>
+        <div class="evidence">pace  app salary%   FK-consistent   error
+1,25       82,1 %          75,0 %   <b>+7,1 pp</b>
+2,0        71,4 %          60,0 %   <b>+11,4 pp</b>
+2,5        64,3 %          50,0 %   <b>+14,3 pp</b>
+3,75       46,4 %          25,0 %   <b>+21,4 pp</b>
+
+On a 40 000 kr salary at pace 1,25: <b>+2 857 kr/mån too much</b>.</div>
+        <p>This inflates household net on every part-time plan, and because <code>solveBudget</code> picks the slowest pace that clears a net floor, an inflated net makes it pick a <em>slower</em> pace than the floor really allows — the error compounds into the schedule, not just the display.</p>
+        <p class="fix"><b>Direction</b>The deeper issue is that days drawn and hours not worked are independent — föräldrapenning can be drawn on a Saturday at no cost to salary. At minimum, divide by 5. Properly, ask for the work percentage and derive the pace from it.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip crit">Material</span>
+        <p class="cite"><b>Source</b><span>goal-seek.ts:563</span><span>optimizer.ts:329</span></p>
+        <p class="cite"><b>Rule</b><span>SFB 12:4 a</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">02</span>Dubbeldagar are only real if the first caregiver happens to be at pace 7</h3>
+        <p>A dubbeldag is a day <em>both</em> parents draw föräldrapenning. The optimizer correctly charges one day to each parent. The solver then schedules only the second caregiver's side of it, at pace 7, and lets the first caregiver carry on at whatever pace their own goal produced.</p>
+        <div class="evidence">20-day window, both caregivers "home":
+
+first caregiver at pace 7    B draws 20, A draws 20,00  <b>100 % real</b>
+first caregiver at pace 0,5  B draws 20, A draws  1,43  <b>7 % real</b>
+                                          ↑ the app's default pace</div>
+        <p>In the default configuration the family is debited 40 days for roughly 1,4 genuine dubbeldagar. The first caregiver's other ~18,6 charged days do not vanish — they quietly become ordinary solo days later in their own stretch, so the plan is longer than it should be and the "20 dubbeldagar" headline describes something the schedule never delivers.</p>
+        <p class="fix"><b>Direction</b>Force the first caregiver's pace to 7 inside the dubbeldagar window (or clamp the window to what both pools can sustain at a matched pace), and draw both sides from the window rather than only one.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip crit">Material</span>
+        <p class="cite"><b>Source</b><span>goal-seek.ts (all solvers)</span><span>optimizer.ts:483</span></p>
+        <p class="cite"><b>Rule</b><span>SFB 12:12–13</span><span>TIMING.sjukpenningUntilAge</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">03</span>The solver has no idea the deadlines exist</h3>
+        <p><code>solvePlan</code> never looks at <code>planDeadlines</code>. It will happily lay income-based days across years in which they are already forfeit. The warnings that do exist compare day <em>counts</em> against calendar days from <em>today</em> — they never inspect the schedule that was actually produced.</p>
+        <div class="evidence">Part-time caregiver, "as long as possible", floor 0 kr:
+
+  2026-06-01 .. 2027-06-01  pace 0,5  income
+  2027-06-01 .. 2033-11-21  pace 0,5  income   <b>← past the 4-year deadline</b>
+  2033-11-21 .. 2035-08-13  pace 0,5  lägstanivå
+
+  ends 2035-08-13 — the child is <b>9,2 years old</b>
+  overruns the income-day deadline by <b>1 899 days</b>
+  warnings raised: <b>none</b></div>
+        <p><code>TIMING.maxDaysSavedFromAge4</code> (96) is declared in the ruleset and never enforced anywhere in the codebase.</p>
+        <p class="fix"><b>Direction</b>Clamp the pace schedule so income days finish before the 4th birthday, and add a warning derived from <code>PlanSolve.intervals</code> rather than from day counts.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip warn">Rule gap</span>
+        <p class="cite"><b>Source</b><span>optimizer.ts:322</span></p>
+        <p class="cite"><b>Rule</b><span>SFB 12:4 a</span><span>15 months</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">04</span>The dubbeldagar deadline is checked against today, not against the window</h3>
+        <p><code>doubleStillOpen</code> asks whether the 15-month deadline is in the future <em>relative to now</em>. For an unborn child that is always true, so the check never bites. Nothing validates where the window actually lands.</p>
+        <div class="evidence">doubleDaysDelay = 500
+  window       2027-10-14 .. 2027-12-13
+  deadline     2027-09-01
+  starts after the deadline: <b>true</b>, silently</div>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip warn">Rule gap</span>
+        <p class="cite"><b>Source</b><span>goal-seek.ts:212</span></p>
+        <p class="cite"><b>Rule</b><span>96-day cap from age 4</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">05</span>Days saved beyond 96 are forfeited without a word</h3>
+        <p>A short date goal parks the unused days in <code>savedDays</code> and reports them as "sparade till senare". Only 96 may be carried past the child's fourth birthday, both parents combined.</p>
+        <div class="evidence">Both caregivers home 3 months each:
+  savedTotal = <b>297 days</b>
+  survivable  =    96 days
+  silently lost = <b>201 days</b></div>
+        <p>At a 1 020 kr daily rate that is roughly 205 000 kr presented to the user as money they still have.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip warn">Rule gap</span>
+        <p class="cite"><b>Source</b><span>supplement.ts:70</span></p>
+        <p class="cite"><b>Rule</b><span>Kollektivavtal</span><span>not statute</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">06</span>Föräldralön stretches without any calendar limit</h3>
+        <p><code>months = round(months × 7 / pace)</code> has no ceiling. A six-month employer top-up taken at 0,5 dagar/vecka is reported as running for 84 months. Collective agreements generally require it to be drawn within 18–24 months of the birth.</p>
+        <div class="evidence">pace   monthly   months   monthly×months   total
+7,0      5 601        6           33 606   33 605
+5,0      4 001        8           32 008   33 605   <b>−4,8 %</b>
+2,5      2 000       17           34 000   33 605
+0,5        400       84           33 600   33 605   <b>child is 7</b></div>
+        <p>Secondary: the per-month figure and the total disagree by up to ~5 %, so the breakdown does not reconcile with the headline.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip warn">Rule gap</span>
+        <p class="cite"><b>Source</b><span>nowhere in src/</span></p>
+        <p class="cite"><b>Rule</b><span>FLL 5 §, 6 §, 7 §</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">07</span>Föräldraledighetslagen is absent — the right to be off is not the money</h3>
+        <p>The app models föräldrapenning entitlement and treats it as though it also granted time away from work. It does not. Three separate rights govern that:</p>
+        <div class="evidence">FLL 5 §  full leave until the child is <b>18 months</b>, with or without FP
+FLL 6 §  after that, leave only for the fraction you draw FP for
+FLL 7 §  up to <b>25 % reduced hours</b> until the child turns 8, no FP needed</div>
+        <p>So the default plan's "0,5 dagar/vecka through the first year" is lawful leave under 5 §. The same pace at 20 months is not — past 18 months a caregiver drawing 0,5 days a week has the right to be off 0,5 days a week, plus a quarter of their hours. The app draws these plans without comment.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip warn">Rule gap</span>
+        <p class="cite"><b>Source</b><span>UI copy</span></p>
+        <p class="cite"><b>Rule</b><span>FK 90-day limit</span><span>FLL 13 §</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">08</span>The two deadlines that actually bite in practice are missing</h3>
+        <p>A plan is only worth what you can still claim. Föräldrapenning must be applied for within <b>90 days</b> of the day being claimed, and an employer is owed <b>two months' notice</b> of leave under FLL 13 §. Neither appears anywhere in the app — and the second one shapes when a plan has to be settled, not just filed.</p>
+        <p class="fix"><b>Verify</b>Confirm the 90-day figure against Försäkringskassan before publishing it as guidance.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip note">Verify</span>
+        <p class="cite"><b>Source</b><span>rules.ts:112</span></p>
+        <p class="cite"><b>Rule</b><span>SFB 12:12</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">09</span>Triplets and beyond probably split into the wrong tiers</h3>
+        <p><code>multipleBirthExtraPerChild</code> applies 90 sjukpenning + 90 lägstanivå uniformly to every child past the first. For the third and each further child the extra 180 days are believed to be entirely on sjukpenningnivå.</p>
+        <div class="evidence">triplets   app: <b>570</b> sjuk + <b>270</b> lägsta   (total 840 ✓)
+           law: <b>660</b> sjuk + <b>180</b> lägsta   (total 840 ✓)
+
+90 days misclassified — at 1 020 vs 180 kr/day, ≈ <b>75 600 kr</b></div>
+        <p>The total is right either way, which is why it survives the existing tests. Twins are correct. Confirm against SFB 12:12 second paragraph before changing.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip note">Advisory</span>
+        <p class="cite"><b>Source</b><span>planner.tsx:84–89</span><span>goal-seek.ts:34</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">10</span>The default plan is one benefit day a fortnight</h3>
+        <p>The wizard ships <code>goalMode: "budget"</code> with <code>goalBudget: 0</code>. Since any net clears a floor of zero, <code>paceForFloor</code> returns <code>MIN_PACE</code> — 0,5.</p>
+        <div class="evidence">first caregiver, first year:
+  gross föräldrapenning  <b>2 215 kr/mån</b>
+  household net          32 888 kr/mån
+  of which partner's salary   30 673 kr</div>
+        <p>It is the honest answer to "as long as possible", but the block is labelled as that caregiver being home, and at 0,5 dagar/vecka they are drawing benefit for one day in fourteen. Worth either a floor above zero or a line of copy explaining what the pace implies.</p>
+      </div>
+    </article>
+
+    <article class="finding">
+      <div class="margin">
+        <span class="chip note">Verify</span>
+        <p class="cite"><b>Source</b><span>rules.ts:164</span><span>tax.ts:36</span></p>
+      </div>
+      <div class="body">
+        <h3><span class="idx">11</span>Annual figures are self-consistent but need their yearly re-check</h3>
+        <p>Every derived amount reconciles against its own inputs — 592 000 × 0,97 × 0,8 / 365 = 1 258,6, capped to the stated 1 259 kr. The inputs themselves are the part that goes stale: prisbasbelopp 59 200, skiktgräns 643 000, average kommunalskatt 32,38 %. The file says June 2026; the next revision lands in January.</p>
+      </div>
+    </article>
+  </section>
+
+  <section>
+    <h2>What checks out</h2>
+    <p class="lede">Verified by running the modules, not by reading them.</p>
+    <ul class="checks">
+      <li><span class="tick">✓</span><span><b>Day budget.</b> 480 = 390 + 90; 240 per parent; 90 reserved and non-transferable; twins +180 as 90 + 90.</span></li>
+      <li><span class="tick">✓</span><span><b>Benefit formula.</b> SGI × 0,97 × 0,8 / 365, floored at grundnivå 250 and capped at 1 259 kr. The grundnivå floor takes over below 9 799 kr/mån, exactly where the formula crosses it.</span></li>
+      <li><span class="tick">✓</span><span><b>Two different ceilings.</b> 10 prisbasbelopp for föräldrapenning, 7,5 for tillfällig — kept in separate modules so they cannot drift into each other.</span></li>
+      <li><span class="tick">✓</span><span><b>The birth-days overlap is lawful.</b> The 10-dagar are tillfällig föräldrapenning, a different benefit, so both parents drawing at once is fine outside the dubbeldagar rules. The app merges them into one block for exactly the right reason.</span></li>
+      <li><span class="tick">✓</span><span><b>Dubbeldagar cannot come from reserved days,</b> and are capped at ⌊transferable / 2⌋ and 60 — <code>optimizer.ts:320–326</code> gets this right.</span></li>
+      <li><span class="tick">✓</span><span><b>240-day rule.</b> First 180 income days drop to grundnivå, and days already used count toward the 180.</span></li>
+      <li><span class="tick">✓</span><span><b>Per-person taxation.</b> 40 000 kr nets 30 716 as salary and 27 515 as benefit — a 3 201 kr gap that comes entirely from jobbskatteavdrag not applying to föräldrapenning. A flat household rate would hide this, and it is the single largest error such a model would make. Figures track the Skatteverket tables.</span></li>
+      <li><span class="tick">✓</span><span><b>Statlig inkomstskatt</b> is applied to income after grundavdrag, matching how skiktgränsen is defined.</span></li>
+      <li><span class="tick">✓</span><span><b>Calendar arithmetic.</b> Rounding drift in the date walk stays under 0,2 of a day across every pace tested — immaterial against figures already shown as approximations.</span></li>
+      <li><span class="tick">✓</span><span><b>Goal solving.</b> The <code>untilDate</code> binary search converges on the fastest pace that still reaches the target, and the monotonicity it assumes holds.</span></li>
+      <li><span class="tick">✓</span><span><b>Day conservation.</b> Across budget and manual modes the dated schedule draws 480,0–480,4 of 480 allocated days.</span></li>
+      <li><span class="tick">✓</span><span><b>The SGI floor after age 1</b> is applied at 5 days a week, and the lift is surfaced on the block where it happens rather than as a plan-level complaint.</span></li>
+      <li><span class="tick">✓</span><span><b>Reserved-day forfeiture</b> is judged on the single-day split, correctly excluding the dubbeldagar added on top.</span></li>
+      <li><span class="tick">✓</span><span><b>Separation of concerns.</b> The ruleset is a single pure data file with provenance dates and source links per constant. That is why this review could be done at all.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p><b>Standing caveat.</b> This is a review of a planning aid against public sources, not legal advice. Amounts and edge rules change every January with the prisbasbelopp; the statute references above are pointers for verification, not a substitute for Försäkringskassan's own decision.</p>
+  </footer>
+
+</div>
