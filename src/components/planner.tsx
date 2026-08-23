@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { CaregiverEditDialog } from "@/components/caregiver-edit-dialog";
 import { useHomeNav } from "@/lib/home-nav";
 import {
   DEFAULT_SAVE_DAYS,
@@ -164,6 +165,8 @@ export function Planner() {
   // saved regardless (this app is never mid-save), so the confirmation is a
   // courtesy, not a data-loss guard.
   const [homeConfirmOpen, setHomeConfirmOpen] = useState(false);
+  // Which caregiver's quick-edit dialog is open, if any.
+  const [quickEditId, setQuickEditId] = useState<"A" | "B" | null>(null);
   const { setGoHome } = useHomeNav();
   useEffect(() => {
     const handler = () => {
@@ -1112,6 +1115,7 @@ export function Planner() {
       );
     }
     return (
+      <>
       <Results
         soloMode={soloMode}
         objective={objective}
@@ -1179,12 +1183,24 @@ export function Planner() {
           setEditStep(step);
           setForm((f) => ({ ...f, submitted: false }));
         }}
+        onQuickEdit={setQuickEditId}
         onReset={resetPlan}
         onShare={share}
         copied={copied}
         onSave={savePlan}
         saved={saved}
       />
+      {quickEditId && (
+        <CaregiverEditDialog
+          open
+          onClose={() => setQuickEditId(null)}
+          id={quickEditId}
+          title={quickEditId === "A" ? nameA : nameB}
+          form={form}
+          setForm={setForm}
+        />
+      )}
+      </>
     );
   }
 

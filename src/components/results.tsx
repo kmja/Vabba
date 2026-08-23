@@ -73,6 +73,7 @@ export function Results({
   sgiLiftedNames,
   warnings,
   onEdit,
+  onQuickEdit,
   onReset,
   onShare,
   copied,
@@ -126,6 +127,8 @@ export function Results({
   warnings: PlanWarning[];
   /** Back to the wizard, optionally straight to a caregiver's own step. */
   onEdit: (step?: number) => void;
+  /** Opens that caregiver's quick-edit dialog. */
+  onQuickEdit: (id: "A" | "B") => void;
   onReset: () => void;
   onShare: () => void;
   copied: boolean;
@@ -191,7 +194,7 @@ export function Results({
           : firstCaregiver === "B"
             ? (["B", "A"] as const)
             : (["A", "B"] as const);
-        const infoFor = (id: "A" | "B", i: number) => {
+        const infoFor = (id: "A" | "B") => {
           const name =
             plan.parents[id].name?.trim() ||
             (soloMode ? soloName : `Vårdnadshavare ${id}`);
@@ -200,15 +203,14 @@ export function Results({
             salary: id === "A" ? salaryA : salaryB,
             row: monthlyRows.find((r) => r.name === name),
             goalText: id === "A" ? goalTextA : goalTextB,
-            // Step 2 is whoever is home first, step 3 the other one.
-            onEdit: () => onEdit(i === 0 ? 2 : 3),
+            onEdit: () => onQuickEdit(id),
           };
         };
         const second: "A" | "B" | undefined = order[1];
         return (
           <FamilySummary
-            first={infoFor(order[0], 0)}
-            second={second ? infoFor(second, 1) : null}
+            first={infoFor(order[0])}
+            second={second ? infoFor(second) : null}
             babyCount={plan.childrenInBirth}
           />
         );

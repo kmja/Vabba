@@ -1,10 +1,25 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { Planner } from "@/components/planner";
 import { SiteHeader } from "@/components/site-header";
 import { HomeNavProvider } from "@/lib/home-nav";
+
+// jsdom doesn't implement the native <dialog>'s modal behaviour — attribute
+// reflection (the `open` property) works, but showModal()/close() are
+// missing entirely. The real behaviour is covered by browser verification
+// (Playwright) elsewhere; this just lets <dialog>-based components render
+// here without crashing, close enough to test what opens inside them.
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
+  };
+}
 
 afterEach(() => {
   cleanup();
@@ -1094,6 +1109,52 @@ describe("<Planner /> wizard", () => {
     expect(
       container.querySelector<HTMLInputElement>("#include-lagsta")?.checked,
     ).toBe(false);
+  });
+});
+
+describe("<Planner /> caregiver quick-edit dialog", () => {
+  /** The two caregivers' exact-text "Ändra" buttons — excludes the header's
+   *  "Ändra uppgifter", which still goes to the wizard. */
+  function editButtons() {
+    return screen.getAllByRole("button", { name: "Ändra" });
+  }
+
+  it("opens a dialog scoped to just the caregiver whose button was clicked", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(editButtons()[0]);
+    const dialog = within(screen.getByRole("dialog"));
+    // Both caregivers' cards stay mounted behind the dialog (only covered,
+    // not unmounted), so the dialog's own scope is what actually proves it
+    // is showing just the one caregiver — not the page as a whole.
+    expect(dialog.getByText("Vårdnadshavare A")).toBeTruthy();
+    expect(dialog.queryByText("Vårdnadshavare B")).toBeNull();
+
+    fireEvent.click(dialog.getByRole("button", { name: "Klar" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("edits income and a fixed-length goal live, and Klar leaves them on the plan", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(editButtons()[0]);
+    fireEvent.change(
+      container.querySelector<HTMLInputElement>('dialog input[type="number"]')!,
+      { target: { value: "40000" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Bestämd längd" }));
+    fireEvent.change(
+      container.querySelector<HTMLInputElement>('dialog input[type="date"]')!,
+      { target: { value: futureIso(200) } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Klar" }));
+
+    expect(screen.getAllByText(/40 000/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Hemma till/).length).toBeGreaterThan(0);
   });
 });
 
