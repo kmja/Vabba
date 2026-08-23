@@ -21,9 +21,20 @@ if (!HTMLDialogElement.prototype.showModal) {
   };
 }
 
+// jsdom doesn't implement visualViewport at all. The wizard's
+// keyboard-avoidance logic (the useEffect in Wizard) needs it to know when
+// an on-screen keyboard has shrunk the visible area — this stand-in lets a
+// test drive that directly via a plain "resize" event.
+class MockVisualViewport extends EventTarget {
+  height = 800;
+  width = 390;
+  offsetTop = 0;
+}
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  delete (window as { visualViewport?: unknown }).visualViewport;
 });
 
 /**
@@ -291,6 +302,69 @@ describe("<Planner /> wizard", () => {
     openQuestion(container, "a", "income"); // advances past name
     expect(sceneBox().className).toContain("w-[45%]");
     expect(sceneBox().className).not.toContain("w-[78%]");
+  });
+
+  it("scrolls a focused field clear of the keyboard once the visible area shrinks", () => {
+    const vv = new MockVisualViewport();
+    Object.defineProperty(window, "visualViewport", {
+      value: vv,
+      configurable: true,
+    });
+
+    const { container } = renderPlanner();
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2, hero name — #a-name is auto-focused
+
+    const field = container.querySelector<HTMLElement>("#a-name")!;
+    expect(document.activeElement).toBe(field);
+    // jsdom lays nothing out for real — give the field a plausible position
+    // low on the page, the way it actually sits under a hero-sized portrait.
+    field.getBoundingClientRect = () =>
+      ({ bottom: 700, top: 650, left: 0, right: 300, width: 300, height: 50, x: 0, y: 650, toJSON: () => ({}) }) as DOMRect;
+
+    const scroller = container.querySelector<HTMLElement>("[data-wizard-scroll]")!;
+    const scrollBy = vi.fn();
+    scroller.scrollBy = scrollBy;
+
+    // Untouched so far: at full height the field already fits (700 < 788).
+    expect(scrollBy).not.toHaveBeenCalled();
+
+    // Keyboard opens — the visible area shrinks to 400px, covering the field.
+    vv.height = 400;
+    vv.dispatchEvent(new Event("resize"));
+
+    expect(scrollBy).toHaveBeenCalled();
+    const delta = scrollBy.mock.calls.at(-1)![0].top;
+    expect(delta).toBeGreaterThan(0);
+  });
+
+  it("keeps checking after focus on its own, not only when the viewport fires a resize", async () => {
+    const vv = new MockVisualViewport();
+    vv.height = 400; // the keyboard is already open by the time focus lands
+    Object.defineProperty(window, "visualViewport", {
+      value: vv,
+      configurable: true,
+    });
+
+    const { container } = renderPlanner();
+    pickBirth(container, "2025-01-15");
+    next(); // → step 2 — focuses #a-name, firing a native "focusin"
+
+    const field = container.querySelector<HTMLElement>("#a-name")!;
+    field.getBoundingClientRect = () =>
+      ({ bottom: 700, top: 650, left: 0, right: 300, width: 300, height: 50, x: 0, y: 650, toJSON: () => ({}) }) as DOMRect;
+
+    const scroller = container.querySelector<HTMLElement>("[data-wizard-scroll]")!;
+    const scrollBy = vi.fn();
+    scroller.scrollBy = scrollBy;
+
+    // No resize/scroll event dispatched at all — a real keyboard's own open
+    // animation doesn't reliably fire a second one once it settles, which is
+    // exactly what broke the two previous attempts at this. Only the poll
+    // loop that focus itself starts should catch this one.
+    await new Promise((r) => setTimeout(r, 250));
+
+    expect(scrollBy).toHaveBeenCalled();
   });
 
   it("sizes the scene's box to the visible artwork, not the faded-out margins", () => {

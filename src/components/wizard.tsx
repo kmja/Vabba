@@ -327,31 +327,59 @@ export function Wizard({
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const reveal = () => {
+    // interactive-widget is "overlays-content" (see layout.tsx): the
+    // keyboard is drawn on top rather than resizing the layout, so nothing
+    // here can lean on the browser's own scroll-a-focused-field-into-view —
+    // that only reacts to layout reflow, which deliberately never happens.
+    // This is the entire mechanism, not a backstop for one.
+    let poll: number | null = null;
+    const stopPolling = () => {
+      if (poll !== null) window.clearInterval(poll);
+      poll = null;
+    };
+    // True if it scrolled (so the caller knows whether another check is
+    // still worth taking).
+    const reveal = (): boolean => {
       const el = document.activeElement as HTMLElement | null;
-      if (!el?.matches?.(FIELD_SELECTOR)) return;
+      if (!el?.matches?.(FIELD_SELECTOR)) return false;
       const box = el.getBoundingClientRect();
       const delta = box.bottom - (vv.offsetTop + vv.height - 12);
-      if (delta > 0) {
-        scrollArea()?.scrollBy?.({ top: delta, behavior: "smooth" });
-      }
+      if (delta <= 1) return false;
+      scrollArea()?.scrollBy?.({ top: delta, behavior: "smooth" });
+      return true;
     };
-    const update = () => {
+    const onViewportChange = () => {
       setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
-      // The keyboard opening is its own event — no focus change fires — so
-      // lift the already-focused field if it just got covered. Its own
-      // open animation runs for a few hundred ms and (unlike a resize the
-      // page causes itself) doesn't reliably fire another event once it
-      // settles, so one fixed-delay check can easily land mid-animation
-      // and under-scroll; check a few times across that window instead.
-      [0, 80, 200, 350, 500].forEach((ms) => window.setTimeout(reveal, ms));
+      reveal();
     };
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
+    // The keyboard's own open animation runs a few hundred ms, generally
+    // without firing another visualViewport event once it settles — so a
+    // field can end up needing a correction well after the event that
+    // should have triggered one. Poll instead of guessing a delay: starts
+    // the moment a field gets focus (native "focusin" bubbles regardless of
+    // what triggered the focus — a click, or `.focus()` called from code),
+    // keeps nudging while it's still needed, and gives up once settled or
+    // after a couple of seconds regardless — long enough for any keyboard,
+    // short enough it can't spin forever on a field that just won't fit.
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.matches?.(FIELD_SELECTOR)) return;
+      stopPolling();
+      let ticks = 0;
+      poll = window.setInterval(() => {
+        ticks += 1;
+        if (!reveal() || ticks >= 20) stopPolling();
+      }, 100);
+    };
+    onViewportChange();
+    vv.addEventListener("resize", onViewportChange);
+    vv.addEventListener("scroll", onViewportChange);
+    document.addEventListener("focusin", onFocusIn);
     return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
+      stopPolling();
+      vv.removeEventListener("resize", onViewportChange);
+      vv.removeEventListener("scroll", onViewportChange);
+      document.removeEventListener("focusin", onFocusIn);
     };
   }, []);
 
