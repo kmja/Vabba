@@ -186,58 +186,37 @@ function Sparkle({ x, y, r }: { x: number; y: number; r: number }) {
 }
 
 /**
- * One caregiver on their own, framed head to hem — the same figure the wizard
- * animates, reused as a portrait beside their summary on the results page.
+ * One caregiver's illustrated portrait, on the results page: whoever is
+ * home right now holding the bundle, the other with empty arms. Two drawn
+ * poses per caregiver rather than the wizard's own animated scene (still
+ * built from separate, composable body/arm/baby pieces below) — so there's
+ * no independent control over how many babies show; a multiple birth still
+ * renders as the one bundle.
  */
 export function CaregiverPortrait({
   second = false,
   holding = false,
-  babyCount = 1,
 }: {
-  /** Draw the second caregiver's tone rather than the first's. */
+  /** The second caregiver's artwork rather than the first's. */
   second?: boolean;
-  /** Cradling the bundle(s) — for whoever is home in the period shown. */
+  /** Cradling the bundle — for whoever is home in the period shown. */
   holding?: boolean;
-  babyCount?: number;
 }) {
-  const tone = second ? "--scene-ink-2" : "--scene-ink";
-  const bundles =
-    BUNDLE_LAYOUT[Math.min(Math.max(babyCount, 1), 4) - 1] ?? BUNDLE_LAYOUT[0];
-  // Same world coordinates as the scene, framed on the one figure.
-  const s = 1;
-  const camera = `translate(${VIEW_W / 2 - s * F1X}px, ${VIEW_H / 2 - s * 274}px) scale(${s})`;
+  const src = second
+    ? holding
+      ? "/Caregiver2.png"
+      : "/Caregiver2_empty.png"
+    : holding
+      ? "/Caregiver1.png"
+      : "/Caregiver1_handover.png";
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      aria-hidden
+    // eslint-disable-next-line @next/next/no-img-element -- static export, no image optimizer to defer to; a plain decorative illustration
+    <img
+      src={src}
+      alt=""
       data-caregiver-portrait
-      preserveAspectRatio="xMidYMid meet"
-      className="pointer-events-none h-full w-full select-none"
-    >
-      <rect
-        x="0"
-        y="0"
-        width={VIEW_W}
-        height={VIEW_H}
-        rx="16"
-        fill="var(--scene-bg)"
-      />
-      <g style={{ transform: camera }}>
-        <FigureBody cx={F1X} tone={tone} />
-        {holding &&
-          bundles.map((b, i) => (
-            <g
-              key={i}
-              style={{
-                transform: `translate(${BABY_AT.one.x + b.dx}px, ${BABY_AT.one.y + b.dy}px) scale(${b.scale})`,
-              }}
-            >
-              <Baby />
-            </g>
-          ))}
-        <FigureArm cx={F1X} tone={tone} holding={holding} />
-      </g>
-    </svg>
+      className="pointer-events-none size-full object-contain select-none"
+    />
   );
 }
 

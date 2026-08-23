@@ -1132,11 +1132,11 @@ describe("<Planner /> caregiver quick-edit dialog", () => {
     expect(dialog.getByText("Vårdnadshavare A")).toBeTruthy();
     expect(dialog.queryByText("Vårdnadshavare B")).toBeNull();
 
-    fireEvent.click(dialog.getByRole("button", { name: "Klar" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Spara" }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("edits income and a fixed-length goal live, and Klar leaves them on the plan", () => {
+  it("edits income and a fixed-length goal live, and Spara leaves them on the plan", () => {
     const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
@@ -1151,10 +1151,56 @@ describe("<Planner /> caregiver quick-edit dialog", () => {
       container.querySelector<HTMLInputElement>('dialog input[type="date"]')!,
       { target: { value: futureIso(200) } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Klar" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Spara" }));
 
     expect(screen.getAllByText(/40 000/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Hemma till/).length).toBeGreaterThan(0);
+  });
+
+  it("Avbryt discards every change made since the dialog opened", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(editButtons()[0]);
+    fireEvent.change(
+      container.querySelector<HTMLInputElement>('dialog input[type="number"]')!,
+      { target: { value: "40000" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Bestämd längd" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Avbryt" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // Neither the income edit nor the goal-mode switch survived.
+    expect(screen.queryAllByText(/40 000/).length).toBe(0);
+    expect(screen.queryAllByText(/Hemma till/).length).toBe(0);
+
+    fireEvent.click(editButtons()[0]);
+    expect(
+      container.querySelector<HTMLInputElement>('dialog input[type="number"]')!
+        .value,
+    ).not.toBe("40000");
+  });
+
+  it("keeps the advanced fields collapsed until the chevron is opened", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(editButtons()[0]);
+    expect(screen.queryByText("Jobbar deltid under ledigheten")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Avancerat" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("Jobbar deltid under ledigheten")).toBeTruthy();
+    fireEvent.click(dialog.getByLabelText("Jobbar deltid under ledigheten"));
+    fireEvent.click(dialog.getByRole("button", { name: "Spara" }));
+
+    fireEvent.click(editButtons()[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Avancerat" }));
+    expect(
+      container.querySelector<HTMLInputElement>(`#edit-A-parttime`)?.checked,
+    ).toBe(true);
   });
 });
 

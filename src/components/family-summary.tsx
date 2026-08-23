@@ -13,18 +13,16 @@ import { CaregiverSummary, type CaregiverInfo } from "@/components/caregiver-sum
 export function FamilySummary({
   first,
   second,
-  babyCount,
 }: {
   first: CaregiverInfo;
   /** Null in solo mode. */
   second: CaregiverInfo | null;
-  babyCount: number;
 }) {
   if (!second) {
     return (
       <div className="flex items-stretch gap-3">
         <div className="aspect-[15/22] w-16 shrink-0 self-start">
-          <CaregiverPortrait second={false} holding babyCount={babyCount} />
+          <CaregiverPortrait second={false} holding />
         </div>
         <div className="min-w-0 flex-1">
           <CaregiverSummary {...first} second={false} />
@@ -40,10 +38,10 @@ export function FamilySummary({
       </div>
       <div className="order-1 flex shrink-0 items-end justify-center gap-1.5 sm:order-2">
         <div className="aspect-[15/22] w-20 sm:w-[4.5rem]">
-          <CaregiverPortrait second={false} holding babyCount={babyCount} />
+          <CaregiverPortrait second={false} holding />
         </div>
         <div className="aspect-[15/22] w-20 sm:w-[4.5rem]">
-          <CaregiverPortrait second holding={false} babyCount={babyCount} />
+          <CaregiverPortrait second holding={false} />
         </div>
       </div>
       <div className="order-3 min-w-0 sm:flex-1">

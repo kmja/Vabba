@@ -211,7 +211,6 @@ export function Results({
           <FamilySummary
             first={infoFor(order[0])}
             second={second ? infoFor(second) : null}
-            babyCount={plan.childrenInBirth}
           />
         );
       })()}
