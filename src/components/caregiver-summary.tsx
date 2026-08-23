@@ -1,10 +1,7 @@
 import { IconPencil } from "@tabler/icons-react";
 
-import { Button } from "@/components/ui/button";
 import type { MonthlyRow } from "@/components/monthly-estimate";
-import { CG_BAR } from "@/components/timeline";
-import { formatDays, formatSek } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatSek } from "@/lib/format";
 
 export interface CaregiverInfo {
   name: string;
@@ -18,60 +15,39 @@ export interface CaregiverInfo {
 }
 
 /**
- * Who a caregiver is in this plan: what they earn, what they have to spend
- * and what they are aiming for — with a way straight back to their own
- * settings. The portrait these used to carry now sits with the other
- * caregiver's, grouped as one family — see `FamilySummary`.
+ * Who a caregiver is in this plan, as plain text beside the family
+ * portrait (see `FamilySummary`) rather than a card of its own: their
+ * name with a small edit affordance, what they earn, and what they're
+ * aiming for.
  */
 export function CaregiverSummary({
   name,
   salary,
   row,
   goalText,
-  second,
   onEdit,
-}: CaregiverInfo & {
-  /** Second caregiver — picks the other figure tone and bar colour. */
-  second: boolean;
-}) {
-  const facts: string[] = [];
-  if (salary > 0) facts.push(`${formatSek(salary)}/mån`);
-  if (row && row.days > 0) facts.push(formatDays(row.days));
-  if (row?.supplement) {
-    facts.push(
-      `föräldralön i ca ${String(row.supplement.months).replace(".", ",")} mån`,
-    );
-  }
-  if (row?.savedDays) facts.push(`sparar ${formatDays(row.savedDays)}`);
-
+}: CaregiverInfo) {
   return (
-    <div className="bg-card h-full space-y-1 rounded-lg border p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2 font-semibold">
-          <span
-            className={cn(
-              "size-2.5 shrink-0 rounded-sm",
-              CG_BAR[(second ? 1 : 0) % CG_BAR.length],
-            )}
-          />
-          <span className="truncate">{name}</span>
-        </span>
-        <Button
+    <div className="space-y-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <h3 className="truncate text-2xl leading-tight font-semibold">
+          {name}
+        </h3>
+        <button
           type="button"
-          size="sm"
-          variant="ghost"
-          className="-mt-1 -mr-1 shrink-0"
           onClick={onEdit}
+          aria-label={`Ändra ${name}s uppgifter`}
+          className="text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0 rounded-md p-1.5"
         >
-          <IconPencil /> Ändra
-        </Button>
+          <IconPencil className="size-4" />
+        </button>
       </div>
-      {facts.length > 0 && (
-        <p className="text-muted-foreground text-xs tabular-nums">
-          {facts.join(" · ")}
+      {salary > 0 && (
+        <p className="text-muted-foreground tabular-nums">
+          {formatSek(salary)}/mån
         </p>
       )}
-      <p className="text-sm">
+      <p className="text-muted-foreground">
         {goalText ?? row?.goalLabel ?? "Full takt — justera i perioderna."}
       </p>
     </div>

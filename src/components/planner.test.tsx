@@ -206,10 +206,6 @@ describe("<Planner /> wizard", () => {
     expect(periodHeaders(container).length).toBe(3);
     // The period card's collapsed header leads with the net monthly figure.
     expect(screen.getAllByText(/\/mån/).length).toBeGreaterThan(0);
-    // Household-income default: the lower earner (B) takes the 300 income-based
-    // days while the higher earner (A) keeps their 90 reserved and stays at
-    // work — less the 20 days each caregiver saves by default.
-    expect(screen.getAllByText(/70 dagar/).length).toBeGreaterThan(0);
   });
 
   it("expands one period block at a time", () => {
@@ -306,8 +302,7 @@ describe("<Planner /> wizard", () => {
 
   it("collapses an answered question and opens the next one", () => {
     const { container } = renderPlanner();
-    // Step 1 opens on the number of babies; answering it opens the date.
-    fireEvent.click(container.querySelector("#birth-count-1")!);
+    // Step 1 opens directly on the birth date now.
     expect(
       container.querySelector("#q-date")?.getAttribute("aria-expanded"),
     ).toBe("true");
@@ -358,7 +353,9 @@ describe("<Planner /> wizard", () => {
 
   it("gives the birth-days per child, so twins double them", () => {
     const { container } = renderPlanner();
-    fireEvent.click(container.querySelector("#birth-count-2")!);
+    // The subtle "+" on the baby image is the only in-flow way to say
+    // "twins" now — one tap takes it from 1 to 2.
+    fireEvent.click(container.querySelector("#birth-count-plus")!);
     fillToResults(container);
     showPlan();
     expect(periodHeaders(container)[0].textContent).toContain("20 dagar");
@@ -408,10 +405,8 @@ describe("<Planner /> wizard", () => {
 
   it("advances with the Enter key and moves focus to the next field", () => {
     const { container } = renderPlanner();
-    // Tap the babies count, pick a date, tap the child order — each answer
-    // auto-advances, and the LAST one flows straight into step 2 with the
-    // name field focused.
-    fireEvent.click(container.querySelector("#birth-count-1")!);
+    // Pick a date, tap the child order — each answer auto-advances, and the
+    // LAST one flows straight into step 2 with the name field focused.
     fireEvent.change(container.querySelector("#birth-date")!, {
       target: { value: "2025-01-15" },
     });
@@ -431,11 +426,11 @@ describe("<Planner /> wizard", () => {
     const nextBtn = () => screen.getByRole("button", { name: "Nästa" });
     // Nothing is flagged before the user has tried to move on.
     expect(screen.queryByText(/Välj ett datum/)).toBeNull();
-    // While questions remain, Nästa advances through them (not the step).
-    fireEvent.click(nextBtn()); // count → date
+    // Step 1 opens directly on the date question.
     expect(
       container.querySelector("#q-date")?.getAttribute("aria-expanded"),
     ).toBe("true");
+    // While questions remain, Nästa advances through them (not the step).
     fireEvent.click(nextBtn()); // date → order (no date picked)
     expect(
       container.querySelector("#q-order")?.getAttribute("aria-expanded"),
@@ -940,9 +935,9 @@ describe("<Planner /> wizard", () => {
     const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
-    // B's 300 income-based days (less the 20 saved) and no flat days — the 90
-    // lägstanivådagar are held back unless the step-1 toggle asks for them.
-    expect(screen.getAllByText(/280 dagar/).length).toBeGreaterThan(0);
+    // No flat days drawn — the 90 lägstanivådagar are held back unless the
+    // step-1 toggle asks for them. If they'd been drawn, B's stretch would
+    // split into a second, "lägstanivå"-tagged block.
     expect(periodHeaders(container).length).toBe(3);
     expect(screen.queryByText("lägstanivå")).toBeNull();
   });
@@ -994,9 +989,9 @@ describe("<Planner /> wizard", () => {
 
   it("adds extra days for twins", () => {
     const { container } = renderPlanner();
-    // Twins live in the birth-count question (icon targets), which now opens
-    // step 1.
-    fireEvent.click(container.querySelector("#birth-count-2")!);
+    // The "+" on the baby image (step 1's scene) is the in-flow way to say
+    // twins now; one tap takes it from 1 to 2.
+    fireEvent.click(container.querySelector("#birth-count-plus")!);
     pickBirth(container, "2025-01-15");
     next(); // → step 2
     openQuestion(container, "a", "income");
@@ -1008,10 +1003,17 @@ describe("<Planner /> wizard", () => {
     fireEvent.change(container.querySelector("#b-income")!, {
       target: { value: "30000" },
     });
+    // The extra day math itself is covered at the pure-function level
+    // (rules.test.ts) — what the integration needs to prove is that the
+    // "+" tap actually reached the plan, round-tripping through to the
+    // advanced-settings field that shows the same count.
+    openAdvanced(container);
+    expect(
+      container.querySelector<HTMLInputElement>("#children-in-birth")?.value,
+    ).toBe("2");
+    closeAdvanced();
     showPlan();
-    // Twins add 90 income-based days: B now carries 300 + 90, less the 20
-    // saved by default.
-    expect(screen.getAllByText(/370 dagar/).length).toBeGreaterThan(0);
+    expect(periodHeaders(container).length).toBe(3);
   });
 
   it("asks about days from previous children from the second child on", () => {
@@ -1113,10 +1115,11 @@ describe("<Planner /> wizard", () => {
 });
 
 describe("<Planner /> caregiver quick-edit dialog", () => {
-  /** The two caregivers' exact-text "Ändra" buttons — excludes the header's
-   *  "Ändra uppgifter", which still goes to the wizard. */
+  /** The two caregivers' icon-only edit buttons (aria-label "Ändra {name}s
+   *  uppgifter") — excludes the header's "Ändra uppgifter", which still
+   *  goes to the wizard. */
   function editButtons() {
-    return screen.getAllByRole("button", { name: "Ändra" });
+    return screen.getAllByRole("button", { name: /^Ändra .+s uppgifter$/ });
   }
 
   it("opens a dialog scoped to just the caregiver whose button was clicked", () => {
@@ -1224,7 +1227,7 @@ describe("<Planner /> landing & saved plans", () => {
       </HomeNavProvider>,
     );
     fireEvent.click(container.querySelector("#create-plan")!);
-    expect(container.querySelector("#birth-count-1")).toBeTruthy();
+    expect(container.querySelector("#birth-date")).toBeTruthy();
   });
 
   it("saves a plan from results and reopens it from the landing page", () => {

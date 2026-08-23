@@ -16,6 +16,7 @@ import {
   IconArrowRight,
   IconBabyCarriage,
   IconDeviceFloppy,
+  IconPlus,
   IconRefresh,
   IconX,
 } from "@tabler/icons-react";
@@ -280,7 +281,7 @@ export function Wizard({
   const formOnAdvancedOpen = useRef<ShareableState | null>(null);
   // The question currently in focus (its FlowQuestion id); "" = none.
   const [activeQ, setActiveQ] = useState(() => {
-    if (initialStep === 1) return "q-count";
+    if (initialStep === 1) return "q-date";
     // Step 2 is whoever is home first, step 3 the other one.
     const first = form.soloMode ? "A" : (form.firstCaregiver ?? "A");
     const id = initialStep === 2 ? first : first === "A" ? "B" : "A";
@@ -530,7 +531,7 @@ export function Wizard({
   };
 
   const flowOf = (s: number): string[] => {
-    if (s === 1) return ["q-count", "q-date", "q-order"];
+    if (s === 1) return ["q-date", "q-order"];
     if (s === 2) return cgFlow(firstId);
     return soloMode ? [] : cgFlow(secondId);
   };
@@ -646,6 +647,19 @@ export function Wizard({
   // -----------------------------------------------------------------------
 
   /** Household finances — affects every net figure in the plan. */
+  const birthCountAdvanced = (
+    <NumberField
+      id="children-in-birth"
+      label="Barn i den här förlossningen"
+      value={plan.childrenInBirth}
+      min={1}
+      max={4}
+      stepper
+      onChange={(n) => setPlan((p) => ({ ...p, childrenInBirth: n }))}
+      hint="Tvillingar, trillingar … Varje barn utöver det första ger 180 extra dagar utöver de 480."
+    />
+  );
+
   const taxAdvanced = (
     <NumberField
       id="municipal-rate"
@@ -784,41 +798,6 @@ export function Wizard({
 
   const babyFlow = (
     <div className="space-y-2">
-      <FlowQuestion
-        id="q-count"
-        label="Hur många barn väntar ni?"
-        value={
-          BIRTH_COUNTS.find((c) => c.value === plan.childrenInBirth)?.label ??
-          "Ett barn"
-        }
-        hero={!reopened}
-        open={activeQ === "q-count"}
-        answered={plan.childrenInBirth >= 2 || seen("q-count")}
-        visited={seen("q-count")}
-        onOpen={() => openQ("q-count", true)}
-      >
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {BIRTH_COUNTS.map((c) => (
-            <OptionCard
-              key={c.value}
-              id={`birth-count-${c.value}`}
-              selected={plan.childrenInBirth === c.value}
-              icon={<BabyIcons count={c.value} />}
-              label={c.label}
-              onSelect={() => {
-                setPlan((p) => ({ ...p, childrenInBirth: c.value }));
-                advanceQ("q-count");
-              }}
-            />
-          ))}
-        </div>
-        {plan.childrenInBirth >= 2 && (
-          <p className="text-muted-foreground text-xs">
-            Flerbarnsfödsel ger extra dagar utöver de 480.
-          </p>
-        )}
-      </FlowQuestion>
-
       <FlowQuestion
         id="q-date"
         label="Födelsedatum"
@@ -1535,6 +1514,15 @@ export function Wizard({
             <div className="space-y-6">
               <section className="space-y-3">
                 <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Barnet
+                </h3>
+                {birthCountAdvanced}
+              </section>
+
+              <Separator />
+
+              <section className="space-y-3">
+                <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                   Ekonomi
                 </h3>
                 {taxAdvanced}
@@ -1742,7 +1730,7 @@ export function Wizard({
               steps so the camera pans, the zoom-out and the handover animate
               between them. */}
           <div className="flex items-start gap-3">
-            <div className="aspect-[15/22] w-28 shrink-0 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden">
+            <div className="relative aspect-[15/22] w-28 shrink-0 sm:w-32 [@media(max-height:740px)]:w-24 [@media(max-height:560px)]:hidden">
               <FamilyScene
                 step={current}
                 soloMode={soloMode}
@@ -1750,6 +1738,26 @@ export function Wizard({
                 nameFirst={sceneName(firstId)}
                 nameSecond={soloMode ? "" : sceneName(secondId)}
               />
+              {/* A quiet way to say "twins, actually" without a whole
+                  question for it — precise control (and a way back down)
+                  stays in Avancerade inställningar. */}
+              {current === 1 && (
+                <button
+                  type="button"
+                  id="birth-count-plus"
+                  onClick={() =>
+                    setPlan((p) => ({
+                      ...p,
+                      childrenInBirth: p.childrenInBirth >= 4 ? 1 : p.childrenInBirth + 1,
+                    }))
+                  }
+                  aria-label="Fler än ett barn i den här förlossningen"
+                  title="Fler än ett barn i den här förlossningen"
+                  className="bg-background/90 text-foreground hover:bg-background absolute right-1 bottom-1 flex size-6 items-center justify-center rounded-full border shadow-sm active:scale-95"
+                >
+                  <IconPlus className="size-3.5" />
+                </button>
+              )}
             </div>
             <div className="min-w-0 flex-1 space-y-1.5">
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
