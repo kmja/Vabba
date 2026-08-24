@@ -1953,9 +1953,22 @@ export function Wizard({
           {/* Flow-aware: while a question is open, Nästa advances THROUGH the
               step's questions (same as Enter); reaching the step's last one
               hands off to the summary screen (reachedEnd, above) instead. */}
-          <Button type="button" onClick={primaryAction}>
-            Nästa <IconArrowRight />
-          </Button>
+          {(() => {
+            const blocked =
+              activeQ !== "" &&
+              flowOf(current).includes(activeQ) &&
+              needsAnswer(activeQ);
+            return (
+              <Button
+                type="button"
+                onClick={primaryAction}
+                aria-disabled={blocked}
+                className={blocked ? "cursor-not-allowed opacity-50" : undefined}
+              >
+                Nästa <IconArrowRight />
+              </Button>
+            );
+          })()}
         </div>
       </form>
     </Card>

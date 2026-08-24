@@ -160,8 +160,10 @@ export function FamilyScene({
           CLOSEUP_FOCUS.scale,
         )
       : two
-        ? // Both figures, close together mid-handover.
-          cam((F1X + F2X) / 2, figMidY, 0.46)
+        ? // The handover: caregiver 2 takes centre stage at the same framing
+          // as step 2 (caregiver 1 recedes, faded, to the left). Centering the
+          // midpoint left the subject off to the right and small.
+          cam(F2X, figMidY, 0.72)
         : cam(F1X, figMidY, 0.72);
 
   const fy = BASE - FIG_H;
