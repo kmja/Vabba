@@ -28,26 +28,26 @@ export function CaregiverSummary({
   onEdit,
 }: CaregiverInfo) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <div className="flex min-w-0 items-center gap-2">
-        <h3 className="truncate text-2xl leading-tight font-semibold">
+        <h3 className="truncate text-lg leading-tight font-semibold">
           {name}
         </h3>
         <button
           type="button"
           onClick={onEdit}
           aria-label={`Ändra ${name}s uppgifter`}
-          className="text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0 rounded-md p-1.5"
+          className="text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0 rounded-md p-1"
         >
-          <IconPencil className="size-4" />
+          <IconPencil className="size-3.5" />
         </button>
       </div>
       {salary > 0 && (
-        <p className="text-muted-foreground tabular-nums">
+        <p className="text-muted-foreground text-sm tabular-nums">
           {formatSek(salary)}/mån
         </p>
       )}
-      <p className="text-muted-foreground">
+      <p className="text-muted-foreground text-sm">
         {goalText ?? row?.goalLabel ?? "Full takt — justera i perioderna."}
       </p>
     </div>
