@@ -1,13 +1,9 @@
-import { useState } from "react";
-import { IconChevronDown } from "@tabler/icons-react";
-
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { AdjustPlanPanel } from "@/components/adjust-plan-panel";
 import type { ParentPayout } from "@/lib/optimizer";
 import { TIER_LABEL, lagstanivaDailyAmount } from "@/lib/rules";
 import { monthlyNet } from "@/lib/tax";
-import { approxMonthlyGross } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import {
   approxLeaveMonths,
   approxLeaveWeeks,
@@ -15,6 +11,7 @@ import {
   formatNumber,
   formatSek,
 } from "@/lib/format";
+import { approxMonthlyGross } from "@/lib/format";
 
 /** Results card for sole-custody planning — all the days belong to one parent. */
 export function SoloSummary({
@@ -33,7 +30,6 @@ export function SoloSummary({
   goalSummary: string | null;
   municipalRate: number;
 }) {
-  const [open, setOpen] = useState(false);
   // Their föräldrapenning is their whole income, so tax it as that — a
   // benefit-only month carries no jobbskatteavdrag.
   const monthlyBenefit = approxMonthlyGross(payout.dailyRate, daysPerWeek);
@@ -43,95 +39,68 @@ export function SoloSummary({
           payout.amount * (monthlyNet({ benefit: monthlyBenefit }, municipalRate) / monthlyBenefit),
         )
       : 0;
+
   return (
-    <section
-      className={cn(
-        "bg-card text-card-foreground ml-[calc(50%_-_50vw)] w-screen space-y-3 border-b py-3",
-        !open && "sticky top-0 z-30",
-      )}
+    <AdjustPlanPanel
+      collapsedSummary={goalSummary}
+      toggleLabelClosed="Fler inställningar"
+      toggleLabelOpen="Fler inställningar"
     >
-      <div className="flex items-center justify-between gap-2 px-4 sm:px-6">
-        <span className="font-semibold">Justera planen</span>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
-        >
-          Fler inställningar
-          <IconChevronDown
-            className={cn("size-4 transition-transform", open && "rotate-180")}
-          />
-        </button>
+      <p className="text-muted-foreground text-sm">
+        Som ensam vårdnadshavare har du rätt till alla dagarna.
+      </p>
+
+      <div className="bg-secondary/40 rounded-lg border p-4 text-center">
+        <div className="text-muted-foreground text-sm">
+          Total uppskattad ersättning
+        </div>
+        <div className="text-3xl font-bold tracking-tight tabular-nums">
+          {formatSek(payout.amount)}
+        </div>
+        <div className="text-muted-foreground text-xs">
+          ≈ {formatSek(netPayout)} efter skatt
+        </div>
       </div>
 
-      {/* Collapsed: the one line describing the solved plan. The dials live
-          on the period blocks below. */}
-      {!open && goalSummary && (
-        <p className="text-muted-foreground px-4 text-xs tabular-nums sm:px-6">
-          {goalSummary}
-        </p>
-      )}
-
-      {open && (
-        <div className="space-y-4 px-4 sm:px-6">
-          <p className="text-muted-foreground text-sm">
-            Som ensam vårdnadshavare har du rätt till alla dagarna.
-          </p>
-
-          <div className="bg-secondary/40 rounded-lg border p-4 text-center">
-            <div className="text-muted-foreground text-sm">
-              Total uppskattad ersättning
-            </div>
-            <div className="text-3xl font-bold tracking-tight tabular-nums">
-              {formatSek(payout.amount)}
-            </div>
-            <div className="text-muted-foreground text-xs">
-              ≈ {formatSek(netPayout)} efter skatt
-            </div>
-          </div>
-
-          <div className="space-y-3 rounded-lg border p-4">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium">{name}</span>
-              <Badge variant="secondary">
-                {approxLeaveMonths(total, daysPerWeek)}
-              </Badge>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold tabular-nums">
-                {formatDays(total)}
-              </div>
-              <div className="text-muted-foreground text-sm">
-                {formatNumber(payout.sjukpenningDays)}{" "}
-                {TIER_LABEL.sjukpenning.toLowerCase()} ·{" "}
-                {formatNumber(payout.lagstaDays)}{" "}
-                {TIER_LABEL.lagsta.toLowerCase()}
-              </div>
-              {daysPerWeek !== 7 && total > 0 && (
-                <div className="text-muted-foreground mt-1 text-xs">
-                  ≈ {approxLeaveWeeks(total, daysPerWeek)} veckor vid{" "}
-                  {daysPerWeek} dagar/vecka
-                </div>
-              )}
-            </div>
-            <Separator />
-            <p className="text-muted-foreground text-xs">
-              {formatSek(payout.dailyRate)}/dag på sjukpenningnivå ·{" "}
-              {formatSek(lagstanivaDailyAmount())}/dag på lägstanivå
-            </p>
-          </div>
-
-          <p className="text-muted-foreground text-xs">
-            Takt, deltid och längd finjusteras på varje period nedan.
-          </p>
-
-          <p className="text-muted-foreground text-xs">
-            Förslaget fördelar alla återstående dagar — du kan förstås ta ut
-            färre. Ersättningen är en uppskattning före skatt.
-          </p>
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-medium">{name}</span>
+          <Badge variant="secondary">
+            {approxLeaveMonths(total, daysPerWeek)}
+          </Badge>
         </div>
-      )}
-    </section>
+        <div>
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatDays(total)}
+          </div>
+          <div className="text-muted-foreground text-sm">
+            {formatNumber(payout.sjukpenningDays)}{" "}
+            {TIER_LABEL.sjukpenning.toLowerCase()} ·{" "}
+            {formatNumber(payout.lagstaDays)}{" "}
+            {TIER_LABEL.lagsta.toLowerCase()}
+          </div>
+          {daysPerWeek !== 7 && total > 0 && (
+            <div className="text-muted-foreground mt-1 text-xs">
+              ≈ {approxLeaveWeeks(total, daysPerWeek)} veckor vid{" "}
+              {daysPerWeek} dagar/vecka
+            </div>
+          )}
+        </div>
+        <Separator />
+        <p className="text-muted-foreground text-xs">
+          {formatSek(payout.dailyRate)}/dag på sjukpenningnivå ·{" "}
+          {formatSek(lagstanivaDailyAmount())}/dag på lägstanivå
+        </p>
+      </div>
+
+      <p className="text-muted-foreground text-xs">
+        Takt, deltid och längd finjusteras på varje period nedan.
+      </p>
+
+      <p className="text-muted-foreground text-xs">
+        Förslaget fördelar alla återstående dagar — du kan förstås ta ut färre.
+        Ersättningen är en uppskattning före skatt.
+      </p>
+    </AdjustPlanPanel>
   );
 }
