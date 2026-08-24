@@ -19,6 +19,10 @@ const sample: ShareableState = {
   soloMode: false,
   hasUsedDays: true,
   detailedUsed: false,
+  parents: {
+    A: { goalMode: "untilDate", saveDays: 20, supplementPct: 90 },
+    B: { goalMode: "budget", saveDays: 10 },
+  },
 };
 
 describe("share encode/decode", () => {
@@ -53,5 +57,10 @@ describe("share encode/decode", () => {
     expect(decodeState("")).toBeNull();
     expect(decodeState("@@not-base64@@")).toBeNull();
     expect(decodeState(encodeState({ ...sample, plan: undefined } as never))).toBeNull();
+  });
+
+  it("rejects a state in the old flat format (no nested parents)", () => {
+    const oldFlat = { ...sample, parents: undefined };
+    expect(decodeState(encodeState(oldFlat as never))).toBeNull();
   });
 });

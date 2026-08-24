@@ -12,7 +12,20 @@ import { IncomeField } from "@/components/income-field";
 import { NumberField } from "@/components/number-field";
 import { DEFAULT_SAVE_DAYS } from "@/components/wizard";
 import { cn } from "@/lib/utils";
-import type { ShareableState } from "@/lib/share";
+import type { ParentId } from "@/lib/calc";
+import type { ShareParentPrefs, ShareableState } from "@/lib/share";
+
+/** Set one caregiver's preferences immutably. */
+function withParentPref(
+  f: ShareableState,
+  id: ParentId,
+  patch: Partial<ShareParentPrefs>,
+): ShareableState {
+  return {
+    ...f,
+    parents: { ...f.parents, [id]: { ...f.parents[id], ...patch } },
+  };
+}
 
 /**
  * Every choice about one caregiver, in one dialog instead of the wizard's
@@ -39,15 +52,15 @@ export function CaregiverEditDialog({
 }) {
   const isA = id === "A";
   const parent = form.plan.parents[id];
-  const goalMode = (isA ? form.goalModeA : form.goalModeB) ?? "budget";
-  const goalDate = (isA ? form.goalDateA : form.goalDateB) ?? "";
-  const supplementOn = (isA ? form.supplementA : form.supplementB) ?? true;
+  const goalMode = (isA ? form.parents.A.goalMode : form.parents.B.goalMode) ?? "budget";
+  const goalDate = (isA ? form.parents.A.goalDate : form.parents.B.goalDate) ?? "";
+  const supplementOn = (isA ? form.parents.A.supplement : form.parents.B.supplement) ?? true;
   const supplementMonths =
-    (isA ? form.supplementMonthsA : form.supplementMonthsB) ?? 6;
+    (isA ? form.parents.A.supplementMonths : form.parents.B.supplementMonths) ?? 6;
   const supplementPct =
-    (isA ? form.supplementPctA : form.supplementPctB) ?? 90;
-  const worksPartTime = (isA ? form.worksPartTimeA : form.worksPartTimeB) ?? false;
-  const saveDays = (isA ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
+    (isA ? form.parents.A.supplementPct : form.parents.B.supplementPct) ?? 90;
+  const worksPartTime = (isA ? form.parents.A.worksPartTime : form.parents.B.worksPartTime) ?? false;
+  const saveDays = (isA ? form.parents.A.saveDays : form.parents.B.saveDays) ?? DEFAULT_SAVE_DAYS;
   const meets240 = parent.meets240DayRule !== false;
 
   // Captured once, the moment this dialog instance is created — a fresh
@@ -118,9 +131,7 @@ export function CaregiverEditDialog({
               type="button"
               onClick={() =>
                 setForm((f) =>
-                  isA
-                    ? { ...f, goalModeA: "budget" }
-                    : { ...f, goalModeB: "budget" },
+                  withParentPref(f, isA ? "A" : "B", { goalMode: "budget" }),
                 )
               }
               className={cn(
@@ -136,9 +147,10 @@ export function CaregiverEditDialog({
               type="button"
               onClick={() =>
                 setForm((f) =>
-                  isA
-                    ? { ...f, goalModeA: "untilDate", goalMonthsA: undefined }
-                    : { ...f, goalModeB: "untilDate", goalMonthsB: undefined },
+                  withParentPref(f, isA ? "A" : "B", {
+                    goalMode: "untilDate",
+                    goalMonths: undefined,
+                  }),
                 )
               }
               className={cn(
@@ -160,17 +172,10 @@ export function CaregiverEditDialog({
                 value={goalDate}
                 onChange={(e) =>
                   setForm((f) =>
-                    isA
-                      ? {
-                          ...f,
-                          goalDateA: e.target.value,
-                          goalMonthsA: undefined,
-                        }
-                      : {
-                          ...f,
-                          goalDateB: e.target.value,
-                          goalMonthsB: undefined,
-                        },
+                    withParentPref(f, isA ? "A" : "B", {
+                      goalDate: e.target.value,
+                      goalMonths: undefined,
+                    }),
                   )
                 }
               />
@@ -186,9 +191,9 @@ export function CaregiverEditDialog({
               checked={supplementOn}
               onChange={(e) =>
                 setForm((f) =>
-                  isA
-                    ? { ...f, supplementA: e.target.checked }
-                    : { ...f, supplementB: e.target.checked },
+                  withParentPref(f, isA ? "A" : "B", {
+                    supplement: e.target.checked,
+                  }),
                 )
               }
             />
@@ -202,9 +207,7 @@ export function CaregiverEditDialog({
                 value={supplementMonths}
                 onChange={(n) =>
                   setForm((f) =>
-                    isA
-                      ? { ...f, supplementMonthsA: n }
-                      : { ...f, supplementMonthsB: n },
+                    withParentPref(f, isA ? "A" : "B", { supplementMonths: n }),
                   )
                 }
                 min={0}
@@ -216,9 +219,7 @@ export function CaregiverEditDialog({
                 value={supplementPct}
                 onChange={(n) =>
                   setForm((f) =>
-                    isA
-                      ? { ...f, supplementPctA: n }
-                      : { ...f, supplementPctB: n },
+                    withParentPref(f, isA ? "A" : "B", { supplementPct: n }),
                   )
                 }
                 min={0}
@@ -251,7 +252,7 @@ export function CaregiverEditDialog({
                 checked={worksPartTime}
                 onChange={(b) =>
                   setForm((f) =>
-                    isA ? { ...f, worksPartTimeA: b } : { ...f, worksPartTimeB: b },
+                    withParentPref(f, isA ? "A" : "B", { worksPartTime: b }),
                   )
                 }
               >
@@ -270,7 +271,7 @@ export function CaregiverEditDialog({
                 sliderMax={200}
                 onChange={(n) =>
                   setForm((f) =>
-                    isA ? { ...f, saveDaysA: n } : { ...f, saveDaysB: n },
+                    withParentPref(f, isA ? "A" : "B", { saveDays: n }),
                   )
                 }
                 hint={`Till klämdagar, lov och inskolning. ${DEFAULT_SAVE_DAYS} dagar räcker ungefär till inskolning och några lov. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen.`}

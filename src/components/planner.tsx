@@ -19,6 +19,7 @@ import {
   defaultPlanInput,
   emptyTierCount,
   planDeadlines,
+  type ParentId,
   type PlanInput,
 } from "@/lib/calc";
 import {
@@ -46,7 +47,6 @@ import {
   partTimeSalaryAt,
   solvePlan,
   type CaregiverPlanSpec,
-  type GoalMode,
 } from "@/lib/goal-seek";
 import {
   computeSupplement,
@@ -55,7 +55,12 @@ import {
 import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
-import { decodeState, encodeState, type ShareableState } from "@/lib/share";
+import {
+  decodeState,
+  encodeState,
+  type ShareParentPrefs,
+  type ShareableState,
+} from "@/lib/share";
 import {
   ACTIVE_SAVED_PLAN_KEY,
   SAVED_PLANS_KEY,
@@ -73,55 +78,61 @@ const DEFAULT_STATE: ShareableState = {
   detailedUsed: false,
   daysPerWeek: 7,
   doubleDays: 0,
-  minMonthlyA: 20000,
-  minMonthlyB: 20000,
-  paceModeA: "full",
-  paceModeB: "full",
-  switchAt1A: false,
-  switchAt1B: false,
-  phase1A: 3,
-  phase1B: 3,
-  phase2A: 5,
-  phase2B: 5,
-  worksPartTimeA: false,
-  worksPartTimeB: false,
-  childNumber: 1,
-  // "Så länge som möjligt" — needs no follow-up, so it's the friction-free
-  // default (a floor of 0 always holds, spreading the days as far as the
-  // rules allow). "Justera själv" is no longer offered in the wizard.
-  goalModeA: "budget",
-  goalModeB: "budget",
-  goalDateA: "",
-  goalDateB: "",
-  goalBudgetA: 0,
-  goalBudgetB: 0,
-  saveDaysA: DEFAULT_SAVE_DAYS,
-  saveDaysB: DEFAULT_SAVE_DAYS,
+  parents: {
+    A: defaultParentPrefs(),
+    B: defaultParentPrefs(),
+  },
   customSplitA: 0.5,
+  childNumber: 1,
   includeLagsta: false,
   firstCaregiver: "A",
-  supplementA: true,
-  supplementB: true,
-  supplementMonthsA: 6,
-  supplementMonthsB: 6,
-  supplementPctA: 90,
-  supplementPctB: 90,
   // Taking these is the norm, and they sit on top of the 480 — so they are
   // in the plan unless someone says otherwise. Who takes them and how many
   // are derived from the birth (see birthDays below), so no defaults here.
   birthDaysEnabled: true,
   hasExtraDays: false,
-  extraDaysA: 0,
-  extraDaysB: 0,
   vabEnabled: false,
   vabChildren: 1,
   vabDaysUsedThisYear: 0,
   submitted: false,
 };
 
+/** The per-caregiver defaults — "Så länge som möjligt" (budget floor 0) and a
+ *  non-committal 20 saved days. */
+function defaultParentPrefs(): ShareParentPrefs {
+  return {
+    minMonthly: 20000,
+    paceMode: "full",
+    switchAt1: false,
+    phase1: 3,
+    phase2: 5,
+    worksPartTime: false,
+    goalMode: "budget",
+    goalDate: "",
+    goalBudget: 0,
+    saveDays: DEFAULT_SAVE_DAYS,
+    supplement: true,
+    supplementMonths: 6,
+    supplementPct: 90,
+    extraDays: 0,
+  };
+}
+
+/** Set one caregiver's preferences immutably. */
+function withParentPref(
+  f: ShareableState,
+  id: ParentId,
+  patch: Partial<ShareParentPrefs>,
+): ShareableState {
+  return {
+    ...f,
+    parents: { ...f.parents, [id]: { ...f.parents[id], ...patch } },
+  };
+}
+
 export function Planner() {
-  const [form, setForm] = useLocalStorage<ShareableState>(
-    "foraldradagar.fp.v2",
+  const [form, setForm] =     useLocalStorage<ShareableState>(
+    "foraldradagar.fp.v3",
     DEFAULT_STATE,
   );
   const [asOf, setAsOf] = useState<Date | null>(null);
@@ -200,8 +211,8 @@ export function Planner() {
   const { plan, objective, soloMode, hasUsedDays } = form;
   const daysPerWeek = form.daysPerWeek ?? 7;
   const doubleDays = form.doubleDays ?? 0;
-  const minMonthlyA = form.minMonthlyA ?? form.minMonthly ?? 20000;
-  const minMonthlyB = form.minMonthlyB ?? form.minMonthly ?? 20000;
+  const minMonthlyA = form.parents.A.minMonthly ?? 20000;
+  const minMonthlyB = form.parents.B.minMonthly ?? 20000;
   const customSplitA = form.customSplitA ?? 0.5;
   const includeLagsta = form.includeLagsta ?? false;
   const firstCaregiver = form.firstCaregiver ?? "A";
@@ -209,8 +220,8 @@ export function Planner() {
   // (Older links used a separate hasExtraDays checkbox — honour it too.)
   const childNumber =
     form.childNumber ?? ((form.hasExtraDays ?? false) ? 2 : 1);
-  const extraA = childNumber >= 2 ? (form.extraDaysA ?? 0) : 0;
-  const extraB = childNumber >= 2 ? (form.extraDaysB ?? 0) : 0;
+  const extraA = childNumber >= 2 ? (form.parents.A.extraDays ?? 0) : 0;
+  const extraB = childNumber >= 2 ? (form.parents.B.extraDays ?? 0) : 0;
   // Kommunalskatt drives every net figure on the results page and the budget
   // solver's floor, so it travels with the plan.
   const municipalRate =
@@ -245,15 +256,15 @@ export function Planner() {
   // Which goals this floor belongs to. Change any of them and the old floor
   // is dropped rather than over-allocating against a target nobody set.
   const goalKey = [
-    form.goalModeA,
-    form.goalModeB,
-    form.goalDateA,
-    form.goalDateB,
-    form.goalMonthsA,
-    form.goalMonthsB,
+    form.parents.A.goalMode,
+    form.parents.B.goalMode,
+    form.parents.A.goalDate,
+    form.parents.B.goalDate,
+    form.parents.A.goalMonths,
+    form.parents.B.goalMonths,
     form.firstCaregiver,
-    form.saveDaysA,
-    form.saveDaysB,
+    form.parents.A.saveDays,
+    form.parents.B.saveDays,
     // The incomes decide the split the floor is measured against, so a floor
     // worked out before the second caregiver was asked must not survive them.
     plan.parents.A.grossMonthlyIncome,
@@ -313,8 +324,8 @@ export function Planner() {
   // Each caregiver sets their own pace goal: take days at the full step-3
   // schedule, or stretch them to their own monthly floor ("förläng").
   // (Older shared links used a single "minMonthly" objective for both.)
-  const paceModeA = form.paceModeA ?? (objective === "minMonthly" ? "prolong" : "full");
-  const paceModeB = form.paceModeB ?? (objective === "minMonthly" ? "prolong" : "full");
+  const paceModeA = form.parents.A.paceMode ?? (objective === "minMonthly" ? "prolong" : "full");
+  const paceModeB = form.parents.B.paceMode ?? (objective === "minMonthly" ? "prolong" : "full");
   const paceA =
     paceModeA === "prolong" && rateA > 0
       ? paceForMonthlyTarget(rateA, minMonthlyA)
@@ -325,36 +336,26 @@ export function Planner() {
       : daysPerWeek;
 
   // Optional second leave period: switch pace at the child's 1st birthday.
-  const switchA = form.switchAt1A ?? false;
-  const switchB = form.switchAt1B ?? false;
-  const phase1A = form.phase1A ?? 3;
-  const phase1B = form.phase1B ?? 3;
-  const phase2A = form.phase2A ?? 5;
-  const phase2B = form.phase2B ?? 5;
+  const switchA = form.parents.A.switchAt1 ?? false;
+  const switchB = form.parents.B.switchAt1 ?? false;
+  const phase1A = form.parents.A.phase1 ?? 3;
+  const phase1B = form.parents.B.phase1 ?? 3;
+  const phase2A = form.parents.A.phase2 ?? 5;
+  const phase2B = form.parents.B.phase2 ?? 5;
   // Whether each caregiver works the rest of the week during a slow leave.
-  const worksPartTimeA = form.worksPartTimeA ?? false;
-  const worksPartTimeB = form.worksPartTimeB ?? false;
+  const worksPartTimeA = form.parents.A.worksPartTime ?? false;
+  const worksPartTimeB = form.parents.B.worksPartTime ?? false;
 
   // Per-caregiver goal: a fixed length/date, or as long as possible (budget
-  // floor 0). Legacy links carried ONE global goal — migrate it: a global
-  // date goal targeted the end of the whole leave (the last caregiver), a
-  // budget goal applied to everyone. Anything else defaults to "budget" —
-  // "manual" (unconstrained pace) is no longer offered by the wizard.
-  const lastId: "A" | "B" = soloMode || firstCaregiver === "B" ? "A" : "B";
-  const migrated = (id: "A" | "B"): GoalMode => {
-    const legacy = form.goalMode;
-    if (legacy === "budget") return "budget";
-    if (legacy === "untilDate" && id === lastId) return "untilDate";
-    return "budget";
-  };
-  const goalModeA = form.goalModeA ?? migrated("A");
-  const goalModeB = form.goalModeB ?? migrated("B");
-  const goalDateStrA = form.goalDateA ?? form.goalDate ?? "";
-  const goalDateStrB = form.goalDateB ?? form.goalDate ?? "";
-  const goalBudgetA = form.goalBudgetA ?? form.goalBudget ?? 25000;
-  const goalBudgetB = form.goalBudgetB ?? form.goalBudget ?? 25000;
-  const saveDaysA = form.saveDaysA ?? DEFAULT_SAVE_DAYS;
-  const saveDaysB = form.saveDaysB ?? DEFAULT_SAVE_DAYS;
+  // floor 0). "manual" (unconstrained pace) is no longer offered by the wizard.
+  const goalModeA = form.parents.A.goalMode ?? "budget";
+  const goalModeB = form.parents.B.goalMode ?? "budget";
+  const goalDateStrA = form.parents.A.goalDate ?? "";
+  const goalDateStrB = form.parents.B.goalDate ?? "";
+  const goalBudgetA = form.parents.A.goalBudget ?? 25000;
+  const goalBudgetB = form.parents.B.goalBudget ?? 25000;
+  const saveDaysA = form.parents.A.saveDays ?? DEFAULT_SAVE_DAYS;
+  const saveDaysB = form.parents.B.saveDays ?? DEFAULT_SAVE_DAYS;
   const goalTargetA = useMemo(
     () => (isValidIsoDate(goalDateStrA) ? parseIsoDate(goalDateStrA) : null),
     [goalDateStrA],
@@ -363,8 +364,8 @@ export function Planner() {
     () => (isValidIsoDate(goalDateStrB) ? parseIsoDate(goalDateStrB) : null),
     [goalDateStrB],
   );
-  const periodStartStrA = form.periodStartA ?? "";
-  const periodStartStrB = form.periodStartB ?? "";
+  const periodStartStrA = form.parents.A.periodStart ?? "";
+  const periodStartStrB = form.parents.B.periodStart ?? "";
   const periodStartA = useMemo(
     () => (isValidIsoDate(periodStartStrA) ? parseIsoDate(periodStartStrA) : null),
     [periodStartStrA],
@@ -400,42 +401,44 @@ export function Planner() {
   // The results-page levers set a caregiver's target monthly pay, which drives
   // their pace (months ↔ kr/månad are two views of the same dial).
   const setTargetA = (minMonthly: number) =>
-    setForm((f) => ({
-      ...f,
-      minMonthlyA: Math.max(1, Math.round(minMonthly)),
-      paceModeA: "prolong",
-    }));
+    setForm((f) =>
+      withParentPref(f, "A", {
+        minMonthly: Math.max(1, Math.round(minMonthly)),
+        paceMode: "prolong",
+      }),
+    );
   const setTargetB = (minMonthly: number) =>
-    setForm((f) => ({
-      ...f,
-      minMonthlyB: Math.max(1, Math.round(minMonthly)),
-      paceModeB: "prolong",
-    }));
+    setForm((f) =>
+      withParentPref(f, "B", {
+        minMonthly: Math.max(1, Math.round(minMonthly)),
+        paceMode: "prolong",
+      }),
+    );
 
   // The per-person "byt takt vid 1 år" controls (results page).
   const phaseA = {
     on: switchA,
     phase1: phase1A,
     phase2: phase2A,
-    onToggle: (on: boolean) => setForm((f) => ({ ...f, switchAt1A: on })),
-    onSetPhase1: (n: number) => setForm((f) => ({ ...f, phase1A: n })),
-    onSetPhase2: (n: number) => setForm((f) => ({ ...f, phase2A: n })),
+    onToggle: (on: boolean) => setForm((f) => withParentPref(f, "A", { switchAt1: on })),
+    onSetPhase1: (n: number) => setForm((f) => withParentPref(f, "A", { phase1: n })),
+    onSetPhase2: (n: number) => setForm((f) => withParentPref(f, "A", { phase2: n })),
   };
   const phaseB = {
     on: switchB,
     phase1: phase1B,
     phase2: phase2B,
-    onToggle: (on: boolean) => setForm((f) => ({ ...f, switchAt1B: on })),
-    onSetPhase1: (n: number) => setForm((f) => ({ ...f, phase1B: n })),
-    onSetPhase2: (n: number) => setForm((f) => ({ ...f, phase2B: n })),
+    onToggle: (on: boolean) => setForm((f) => withParentPref(f, "B", { switchAt1: on })),
+    onSetPhase1: (n: number) => setForm((f) => withParentPref(f, "B", { phase1: n })),
+    onSetPhase2: (n: number) => setForm((f) => withParentPref(f, "B", { phase2: n })),
   };
   const partTimeA = {
     works: worksPartTimeA,
-    onToggle: (works: boolean) => setForm((f) => ({ ...f, worksPartTimeA: works })),
+    onToggle: (works: boolean) => setForm((f) => withParentPref(f, "A", { worksPartTime: works })),
   };
   const partTimeB = {
     works: worksPartTimeB,
-    onToggle: (works: boolean) => setForm((f) => ({ ...f, worksPartTimeB: works })),
+    onToggle: (works: boolean) => setForm((f) => withParentPref(f, "B", { worksPartTime: works })),
   };
 
   // Employer top-up ("föräldralön" from a kollektivavtal), per caregiver.
@@ -518,7 +521,7 @@ export function Planner() {
         targetDate: mode === "untilDate" ? (isA ? goalTargetA : goalTargetB) : null,
         targetMonths:
           mode === "untilDate"
-            ? (isA ? form.goalMonthsA : form.goalMonthsB) ?? null
+            ? (isA ? form.parents.A.goalMonths : form.parents.B.goalMonths) ?? null
             : null,
         budgetFloor: isA ? goalBudgetA : goalBudgetB,
         saveDays: isA ? saveDaysA : saveDaysB,
@@ -564,7 +567,7 @@ export function Planner() {
       return null;
     }
     return solvePlan(deadlines.birth, start, specs, municipalRate);
-  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate, form.goalMonthsA, form.goalMonthsB, birthDays]);
+  }, [asOf, deadlines, remaining, soloMode, solo, twoParent, soloName, nameA, nameB, rateA, rateB, extraA, extraB, firstCaregiver, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB, saveDaysA, saveDaysB, periodStartA, periodStartB, paceA, paceB, switchA, switchB, phase1A, phase1B, phase2A, phase2B, worksPartTimeA, worksPartTimeB, salaryA, salaryB, householdBaseA, householdBaseB, municipalRate, form.parents.A.goalMonths, form.parents.B.goalMonths, birthDays]);
 
   /**
    * The pace föräldralön is actually paid at: how much of the week this
@@ -584,31 +587,31 @@ export function Planner() {
 
   const supplementA = useMemo(
     () =>
-      (form.supplementA ?? true)
+      (form.parents.A.supplement ?? true)
         ? computeSupplement({
             grossMonthlySalary: plan.parents.A.grossMonthlyIncome,
             incomeAboveCap: aboveCapA,
-            pct: form.supplementPctA ?? 90,
-            months: form.supplementMonthsA ?? 6,
+            pct: form.parents.A.supplementPct ?? 90,
+            months: form.parents.A.supplementMonths ?? 6,
             fkDailyRate: rateA,
             pace: solvedPaceA,
           })
         : null,
-    [form.supplementA, form.supplementPctA, form.supplementMonthsA, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, solvedPaceA],
+    [form.parents.A.supplement, form.parents.A.supplementPct, form.parents.A.supplementMonths, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, solvedPaceA],
   );
   const supplementB = useMemo(
     () =>
-      !soloMode && (form.supplementB ?? true)
+      !soloMode && (form.parents.B.supplement ?? true)
         ? computeSupplement({
             grossMonthlySalary: plan.parents.B.grossMonthlyIncome,
             incomeAboveCap: aboveCapB,
-            pct: form.supplementPctB ?? 90,
-            months: form.supplementMonthsB ?? 6,
+            pct: form.parents.B.supplementPct ?? 90,
+            months: form.parents.B.supplementMonths ?? 6,
             fkDailyRate: rateB,
             pace: solvedPaceB,
           })
         : null,
-    [soloMode, form.supplementB, form.supplementPctB, form.supplementMonthsB, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, solvedPaceB],
+    [soloMode, form.parents.B.supplement, form.parents.B.supplementPct, form.parents.B.supplementMonths, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, solvedPaceB],
   );
 
   // Employer top-up at full-time pace, so the levers can fold it into the
@@ -616,10 +619,10 @@ export function Planner() {
   // months are what's fixed), so this is stable however supplementA/B above
   // are derived.
   const bonusFullA = supplementA
-    ? Math.round(supplementA.total / (form.supplementMonthsA ?? 6))
+    ? Math.round(supplementA.total / (form.parents.A.supplementMonths ?? 6))
     : 0;
   const bonusFullB = supplementB
-    ? Math.round(supplementB.total / (form.supplementMonthsB ?? 6))
+    ? Math.round(supplementB.total / (form.parents.B.supplementMonths ?? 6))
     : 0;
 
   /**
@@ -818,8 +821,8 @@ export function Planner() {
               apply: () =>
                 setForm((f) =>
                   isA
-                    ? { ...f, goalDateA: toIsoDate(reach) }
-                    : { ...f, goalDateB: toIsoDate(reach) },
+                    ? withParentPref(f, "A", { goalDate: toIsoDate(reach) })
+                    : withParentPref(f, "B", { goalDate: toIsoDate(reach) }),
                 ),
             },
           });
@@ -845,8 +848,8 @@ export function Planner() {
                   apply: () =>
                     setForm((f) =>
                       isA
-                        ? { ...f, goalBudgetA: best }
-                        : { ...f, goalBudgetB: best },
+                        ? withParentPref(f, "A", { goalBudget: best })
+                        : withParentPref(f, "B", { goalBudget: best }),
                     ),
                 }
               : undefined,
@@ -869,8 +872,8 @@ export function Planner() {
               apply: () =>
                 setForm((f) =>
                   id === "A"
-                    ? { ...f, saveDaysA: own - excess }
-                    : { ...f, saveDaysB: own - excess },
+                    ? withParentPref(f, "A", { saveDays: own - excess })
+                    : withParentPref(f, "B", { saveDays: own - excess }),
                 ),
             }
           : undefined,
@@ -998,7 +1001,7 @@ export function Planner() {
   const goalText = (id: "A" | "B"): string | null => {
     const mode = id === "A" ? goalModeA : goalModeB;
     const target = id === "A" ? goalTargetA : goalTargetB;
-    const months = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
+    const months = (id === "A" ? form.parents.A.goalMonths : form.parents.B.goalMonths) ?? 0;
     const floor = id === "A" ? goalBudgetA : goalBudgetB;
     if (mode === "untilDate" && months > 0) {
       return months === 12 ? "Hemma i 1 år" : `Hemma i ${months} månader`;
@@ -1163,8 +1166,8 @@ export function Planner() {
           onStartDate: (id, iso) =>
             setForm((f) =>
               id === "A"
-                ? { ...f, periodStartA: iso ?? undefined }
-                : { ...f, periodStartB: iso ?? undefined },
+                ? withParentPref(f, "A", { periodStart: iso ?? undefined })
+                : withParentPref(f, "B", { periodStart: iso ?? undefined }),
             ),
         }}
         monthlyRows={monthlyRows}

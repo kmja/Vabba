@@ -52,7 +52,7 @@ import {
   parseIsoDate,
   toIsoDate,
 } from "@/lib/dates";
-import type { ShareableState } from "@/lib/share";
+import type { ShareParentPrefs, ShareableState } from "@/lib/share";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,6 +67,18 @@ const scrollArea = () =>
 /** Fields the flow can focus — excludes toggles and the hidden date hook. */
 const FIELD_SELECTOR =
   'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([disabled]):not([tabindex="-1"]), select';
+
+/** Set one caregiver's preferences immutably. */
+function withParentPref(
+  f: ShareableState,
+  id: ParentId,
+  patch: Partial<ShareParentPrefs>,
+): ShareableState {
+  return {
+    ...f,
+    parents: { ...f.parents, [id]: { ...f.parents[id], ...patch } },
+  };
+}
 
 /**
  * Days each caregiver holds back by default. Few families take every day in
@@ -300,7 +312,7 @@ export function Wizard({
     if (!(value.incomeAboveCap ?? false) && value.grossMonthlyIncome <= 0)
       return `${p}-q-income`;
     const supplementEnabled =
-      (id === "A" ? form.supplementA : form.supplementB) ?? true;
+      (id === "A" ? form.parents.A.supplement : form.parents.B.supplement) ?? true;
     return supplementEnabled ? `${p}-q-supplement` : `${p}-q-goal`;
   });
   // Whether the open question was REOPENED to edit an existing answer (an
@@ -493,17 +505,17 @@ export function Wizard({
   const includeLagsta = form.includeLagsta ?? false;
   const firstCaregiver = form.firstCaregiver ?? "A";
   const supplementA = {
-    enabled: form.supplementA ?? true,
-    months: form.supplementMonthsA ?? 6,
-    pct: form.supplementPctA ?? 90,
+    enabled: form.parents.A.supplement ?? true,
+    months: form.parents.A.supplementMonths ?? 6,
+    pct: form.parents.A.supplementPct ?? 90,
   };
   const supplementB = {
-    enabled: form.supplementB ?? true,
-    months: form.supplementMonthsB ?? 6,
-    pct: form.supplementPctB ?? 90,
+    enabled: form.parents.B.supplement ?? true,
+    months: form.parents.B.supplementMonths ?? 6,
+    pct: form.parents.B.supplementPct ?? 90,
   };
-  const extraDaysA = form.extraDaysA ?? 0;
-  const extraDaysB = form.extraDaysB ?? 0;
+  const extraDaysA = form.parents.A.extraDays ?? 0;
+  const extraDaysB = form.parents.B.extraDays ?? 0;
   const vabEnabled = form.vabEnabled ?? false;
   const vabChildren = form.vabChildren ?? 1;
   const vabDaysUsedThisYear = form.vabDaysUsedThisYear ?? 0;
@@ -573,7 +585,7 @@ export function Wizard({
   /** The ordered question ids of a caregiver's flow. */
   const cgFlow = (id: ParentId): string[] => {
     const p = id.toLowerCase();
-    const goal = (id === "A" ? form.goalModeA : form.goalModeB) ?? "budget";
+    const goal = (id === "A" ? form.parents.A.goalMode : form.parents.B.goalMode) ?? "budget";
     const supp = id === "A" ? supplementA : supplementB;
     return [
       `${p}-q-name`,
@@ -606,8 +618,8 @@ export function Wizard({
     const id: ParentId = qid.startsWith("a-") ? "A" : "B";
     const value = plan.parents[id];
     const supplement = id === "A" ? supplementA : supplementB;
-    const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
-    const goalMonths = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
+    const dateStr = (id === "A" ? form.parents.A.goalDate : form.parents.B.goalDate) ?? "";
+    const goalMonths = (id === "A" ? form.parents.A.goalMonths : form.parents.B.goalMonths) ?? 0;
     const extraDays = id === "A" ? extraDaysA : extraDaysB;
     const suffix = qid.slice(2);
     if (suffix === "q-name") return !!value.name?.trim();
@@ -636,8 +648,8 @@ export function Wizard({
     if (qid.endsWith("-q-income"))
       return !(value.incomeAboveCap ?? false) && value.grossMonthlyIncome <= 0;
     if (qid.endsWith("-q-goaldetail")) {
-      const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
-      const months = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
+      const dateStr = (id === "A" ? form.parents.A.goalDate : form.parents.B.goalDate) ?? "";
+      const months = (id === "A" ? form.parents.A.goalMonths : form.parents.B.goalMonths) ?? 0;
       return !(months > 0 || isValidIsoDate(dateStr));
     }
     return false;
@@ -741,19 +753,11 @@ export function Wizard({
     s: { enabled: boolean; months: number; pct: number },
   ) =>
     setForm((f) =>
-      id === "A"
-        ? {
-            ...f,
-            supplementA: s.enabled,
-            supplementMonthsA: s.months,
-            supplementPctA: s.pct,
-          }
-        : {
-            ...f,
-            supplementB: s.enabled,
-            supplementMonthsB: s.months,
-            supplementPctB: s.pct,
-          },
+      withParentPref(f, id, {
+        supplement: s.enabled,
+        supplementMonths: s.months,
+        supplementPct: s.pct,
+      }),
     );
 
   // -----------------------------------------------------------------------
@@ -988,10 +992,10 @@ export function Wizard({
     const aboveCap = value.incomeAboveCap ?? false;
     const rate = sjukpenningnivaDailyAmount(income);
     const supplement = id === "A" ? supplementA : supplementB;
-    const mode = (id === "A" ? form.goalModeA : form.goalModeB) ?? "budget";
-    const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
-    const goalMonths = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
-    const saveDays = (id === "A" ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
+    const mode = (id === "A" ? form.parents.A.goalMode : form.parents.B.goalMode) ?? "budget";
+    const dateStr = (id === "A" ? form.parents.A.goalDate : form.parents.B.goalDate) ?? "";
+    const goalMonths = (id === "A" ? form.parents.A.goalMonths : form.parents.B.goalMonths) ?? 0;
+    const saveDays = (id === "A" ? form.parents.A.saveDays : form.parents.B.saveDays) ?? DEFAULT_SAVE_DAYS;
     const extraDays = id === "A" ? extraDaysA : extraDaysB;
     const displayName =
       value.name?.trim() || (soloMode ? "Du" : `Vårdnadshavare ${id}`);
@@ -1010,27 +1014,13 @@ export function Wizard({
       months?: number;
     }) =>
       setForm((f) =>
-        id === "A"
-          ? {
-              ...f,
-              ...(patch.mode !== undefined ? { goalModeA: patch.mode } : {}),
-              ...(patch.dateStr !== undefined
-                ? { goalDateA: patch.dateStr }
-                : {}),
-              ...(patch.months !== undefined
-                ? { goalMonthsA: patch.months || undefined }
-                : {}),
-            }
-          : {
-              ...f,
-              ...(patch.mode !== undefined ? { goalModeB: patch.mode } : {}),
-              ...(patch.dateStr !== undefined
-                ? { goalDateB: patch.dateStr }
-                : {}),
-              ...(patch.months !== undefined
-                ? { goalMonthsB: patch.months || undefined }
-                : {}),
-            },
+        withParentPref(f, id, {
+          ...(patch.mode !== undefined ? { goalMode: patch.mode } : {}),
+          ...(patch.dateStr !== undefined ? { goalDate: patch.dateStr } : {}),
+          ...(patch.months !== undefined
+            ? { goalMonths: patch.months || undefined }
+            : {}),
+        }),
       );
 
     // Where this caregiver's own stretch begins — after the first caregiver,
@@ -1364,9 +1354,7 @@ export function Wizard({
             slider
             sliderMax={200}
             onChange={(n) =>
-              setForm((f) =>
-                id === "A" ? { ...f, saveDaysA: n } : { ...f, saveDaysB: n },
-              )
+              setForm((f) => withParentPref(f, id, { saveDays: n }))
             }
             hint={`Till klämdagar, lov och inskolning. ${DEFAULT_SAVE_DAYS} dagar räcker ungefär till inskolning och några lov. Högst 96 dagar totalt får finnas kvar efter 4-årsdagen.`}
           />
@@ -1391,11 +1379,7 @@ export function Wizard({
               slider
               sliderMax={200}
               onChange={(n) =>
-                setForm((f) =>
-                  id === "A"
-                    ? { ...f, extraDaysA: n }
-                    : { ...f, extraDaysB: n },
-                )
+                setForm((f) => withParentPref(f, id, { extraDays: n }))
               }
               hint="De följer det äldre barnets tidsgränser — inkomstbaserade tas ut innan det barnet fyller 4 år."
             />
@@ -1542,7 +1526,7 @@ export function Wizard({
     const p = plan.parents[id];
     const supp = id === "A" ? supplementA : supplementB;
     const save =
-      (id === "A" ? form.saveDaysA : form.saveDaysB) ?? DEFAULT_SAVE_DAYS;
+      (id === "A" ? form.parents.A.saveDays : form.parents.B.saveDays) ?? DEFAULT_SAVE_DAYS;
     const income =
       p.grossMonthlyIncome > 0
         ? `${formatSek(p.grossMonthlyIncome)}/mån`

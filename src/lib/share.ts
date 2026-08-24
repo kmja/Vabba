@@ -1,6 +1,46 @@
-import type { PlanInput } from "@/lib/calc";
+import type { PlanInput, ParentId } from "@/lib/calc";
 import type { Objective } from "@/lib/optimizer";
 import type { GoalMode } from "@/lib/goal-seek";
+
+/**
+ * Per-caregiver planning preferences, keyed by parent. The old flat `goalModeA`
+ * / `goalModeB` … fields live here now, under one map — so the two caregivers
+ * never drift apart in naming.
+ */
+export interface ShareParentPrefs {
+  /** Target gross monthly for the "förläng ledigheten" goal. */
+  minMonthly?: number;
+  /** Take days at the full schedule ("full") or stretch to a floor ("prolong"). */
+  paceMode?: "full" | "prolong";
+  /** Optional second leave period: switch pace at the child's 1st birthday. */
+  switchAt1?: boolean;
+  /** Days/week during the first year (when `switchAt1`). */
+  phase1?: number;
+  /** Days/week after the 1st birthday (when `switchAt1`). */
+  phase2?: number;
+  /** Works the rest of the week while on reduced-pace leave. */
+  worksPartTime?: boolean;
+  /** Adjust paces manually, be home until a date, or the longest leave in budget. */
+  goalMode?: GoalMode;
+  /** ISO date (yyyy-mm-dd) for the "hemma till ett datum" goal. */
+  goalDate?: string;
+  /** UntilDate as a length — this many months from where the stretch begins. */
+  goalMonths?: number;
+  /** Net kr/month floor for the "längsta ledighet inom budget" goal. */
+  goalBudget?: number;
+  /** Days deliberately saved for later (klämdagar, lov …). */
+  saveDays?: number;
+  /** Optional later start of the period (ISO). */
+  periodStart?: string;
+  /** Employer top-up applies. */
+  supplement?: boolean;
+  /** How many months the employer top-up runs. */
+  supplementMonths?: number;
+  /** Percent of salary the top-up brings it to. */
+  supplementPct?: number;
+  /** Föräldrapenning days carried over from previous children. */
+  extraDays?: number;
+}
 
 /**
  * The full planner state we can put in a shareable URL, so one partner can fill
@@ -13,39 +53,12 @@ export interface ShareableState {
   soloMode: boolean;
   hasUsedDays: boolean;
   detailedUsed: boolean;
+  /** Per-caregiver preferences (goal, pace, save-days, föräldralön …). */
+  parents: Record<ParentId, ShareParentPrefs>;
   /** Benefit days drawn per week — stretches the leave's calendar duration. */
   daysPerWeek?: number;
   /** Requested dubbeldagar (both parents home the same day). */
   doubleDays?: number;
-  /** Legacy single target (kept so older links/storage still decode). */
-  minMonthly?: number;
-  /** Per-caregiver target gross monthly for the "förläng ledigheten" goal. */
-  minMonthlyA?: number;
-  minMonthlyB?: number;
-  /**
-   * Each caregiver's pace goal, set independently: take days at the full
-   * schedule ("full") or stretch them out to a monthly floor ("prolong").
-   */
-  paceModeA?: "full" | "prolong";
-  paceModeB?: "full" | "prolong";
-  /**
-   * Optional second leave period: switch pace at the child's 1st birthday
-   * (the SGI milestone). `phase1*` is the days/week during the first year,
-   * `phase2*` after it.
-   */
-  switchAt1A?: boolean;
-  switchAt1B?: boolean;
-  phase1A?: number;
-  phase1B?: number;
-  phase2A?: number;
-  phase2B?: number;
-  /**
-   * Whether each caregiver works the rest of the week while on a reduced-pace
-   * leave (earning that share of salary). Default on — realistic, and what the
-   * SGI 5-day rule assumes after the child turns 1.
-   */
-  worksPartTimeA?: boolean;
-  worksPartTimeB?: boolean;
   /** Share of the days to caregiver A (0–1) for the "egen fördelning" goal. */
   customSplitA?: number;
   /**
@@ -55,35 +68,6 @@ export interface ShareableState {
    */
   childNumber?: number;
   /**
-   * Per-caregiver goal: adjust paces manually, be home until a target date,
-   * or the longest leave that keeps household net income above a floor.
-   */
-  goalModeA?: GoalMode;
-  goalModeB?: GoalMode;
-  /** ISO date (yyyy-mm-dd) for the "hemma till ett datum" goal. */
-  goalDateA?: string;
-  /**
-   * untilDate as a length instead: this many months from where that
-   * caregiver's own stretch begins. Takes precedence over the date, and
-   * survives the plan shifting around it.
-   */
-  goalMonthsA?: number;
-  goalMonthsB?: number;
-  goalDateB?: string;
-  /** Net kr/month floor for the "längsta ledighet inom budget" goal. */
-  goalBudgetA?: number;
-  goalBudgetB?: number;
-  /** Days each caregiver deliberately saves for later (klämdagar, lov …). */
-  saveDaysA?: number;
-  saveDaysB?: number;
-  /** Optional later start of a caregiver's period (ISO), from the pager. */
-  periodStartA?: string;
-  periodStartB?: string;
-  /** Legacy single goal (pre per-caregiver); migrated on load. */
-  goalMode?: GoalMode;
-  goalDate?: string;
-  goalBudget?: number;
-  /**
    * Whether to spend the 90 flat lägstanivå days (180 kr) in the plan. When
    * false they're saved and the leave ends as the income-based days run out.
    */
@@ -91,27 +75,13 @@ export interface ShareableState {
   /** Which caregiver takes their leave first (affects the timeline order). */
   firstCaregiver?: "A" | "B";
   /**
-   * Employer top-up during leave (föräldralön / föräldrapenningtillägg from a
-   * kollektivavtal), per caregiver: whether it applies, for how many months, and
-   * the percent of salary it tops up to.
-   */
-  supplementA?: boolean;
-  supplementB?: boolean;
-  supplementMonthsA?: number;
-  supplementMonthsB?: number;
-  supplementPctA?: number;
-  supplementPctB?: number;
-  /**
    * "10-dagar": tillfällig föräldrapenning the other parent draws around
-   * birth, on top of the 480. On unless turned off; who takes them follows
-   * from the leave order, and left unset the whole entitlement is taken.
+   * birth, on top of the 480. On unless turned off.
    */
   birthDaysEnabled?: boolean;
   birthDaysCount?: number;
   /** Leftover föräldrapenning days carried over from previous children. */
   hasExtraDays?: boolean;
-  extraDaysA?: number;
-  extraDaysB?: number;
   /**
    * Kommunalskatt where they live, as a percentage. Rates run 28,93–35 %, and
    * at a 63 000 kr salary that is a spread of some 3 300 kr a month — so the
@@ -157,7 +127,7 @@ export function decodeState(encoded: string): ShareableState | null {
   if (!encoded) return null;
   try {
     const parsed = JSON.parse(fromBase64Url(encoded));
-    if (!parsed || typeof parsed !== "object" || !parsed.plan) return null;
+    if (typeof parsed !== "object" || !parsed?.plan || !parsed?.parents) return null;
     return parsed as ShareableState;
   } catch {
     return null;
