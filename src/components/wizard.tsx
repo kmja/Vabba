@@ -622,6 +622,27 @@ export function Wizard({
     return seen(qid);
   };
 
+  /**
+   * A question that must actually be answered before the flow moves on.
+   * These are the ones with no usable default, so "Nästa" (or Enter) must
+   * not skip them empty. Namn is optional, and the choice/default questions
+   * (q-order, q-supplement, q-suppdetail, q-goal, q-save, q-extra) already
+   * carry a sensible value, so only these gate advancement.
+   */
+  const needsAnswer = (qid: string): boolean => {
+    if (qid === "q-date") return !valid;
+    const id: ParentId = qid.startsWith("b-") ? "B" : "A";
+    const value = plan.parents[id];
+    if (qid.endsWith("-q-income"))
+      return !(value.incomeAboveCap ?? false) && value.grossMonthlyIncome <= 0;
+    if (qid.endsWith("-q-goaldetail")) {
+      const dateStr = (id === "A" ? form.goalDateA : form.goalDateB) ?? "";
+      const months = (id === "A" ? form.goalMonthsA : form.goalMonthsB) ?? 0;
+      return !(months > 0 || isValidIsoDate(dateStr));
+    }
+    return false;
+  };
+
   /** The first unanswered question of a step, or "" once it's all done. */
   const firstUnansweredOf = (s: number): string =>
     flowOf(s).find((q) => !isAnswered(q)) ?? "";
@@ -668,6 +689,12 @@ export function Wizard({
   const primaryAction = () => {
     const flow = flowOf(current);
     if (activeQ && flow.includes(activeQ)) {
+      // Don't skip the open question empty — the browser/Enter path and the
+      // Nästa button both land here, so the guard lives once.
+      if (needsAnswer(activeQ)) {
+        setTriedNext(true);
+        return;
+      }
       advanceQ(activeQ);
       return;
     }
@@ -1576,7 +1603,7 @@ export function Wizard({
 
   if (page === "advanced") {
     return (
-      <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
+      <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0 max-sm:border-t-0">
         <form
           className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col"
           onSubmit={(e) => e.preventDefault()}
@@ -1702,7 +1729,7 @@ export function Wizard({
       }
     };
     return (
-      <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
+      <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0 max-sm:border-t-0">
         <div className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col">
           <div
             data-wizard-scroll
@@ -1795,7 +1822,7 @@ export function Wizard({
     (activeQ === "q-date" || activeQ === "a-q-name" || activeQ === "b-q-name");
 
   return (
-    <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0">
+    <Card className="mx-auto max-w-2xl gap-0 py-0 max-sm:-mx-4 max-sm:flex max-sm:h-full max-sm:min-h-0 max-sm:flex-col max-sm:rounded-none max-sm:border-x-0 max-sm:border-t-0">
       <form
         className="max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col"
         onSubmit={(e) => e.preventDefault()}

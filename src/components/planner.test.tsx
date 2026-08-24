@@ -132,6 +132,18 @@ function pickBirth(container: HTMLElement, iso: string) {
   });
 }
 
+/**
+ * Reach a caregiver's income question and fill it. Since the latest flow fix
+ * the wizard won't let "Nästa" skip past an empty salary, so any test that
+ * wants to get beyond the income question answers it first.
+ */
+function setIncome(container: HTMLElement, prefix: "a" | "b", value = "45000") {
+  openQuestion(container, prefix, "income");
+  fireEvent.change(container.querySelector(`#${prefix}-income`)!, {
+    target: { value },
+  });
+}
+
 /** Fill the wizard to the LAST step (both incomes set), without submitting. */
 function fillToResults(
   container: HTMLElement,
@@ -570,11 +582,12 @@ describe("<Planner /> wizard", () => {
     fireEvent.keyDown(container.querySelector("#a-name")!, { key: "Enter" });
     expect(document.activeElement?.id).toBe("a-income");
     // Reaching a later question also lands focus in its first field.
+    setIncome(container, "a");
     openQ(container, "a-q-save");
     expect(document.activeElement?.id).toBe("a-save-days");
   });
 
-  it("walks the questions with Nästa and explains a missing date", () => {
+  it("won't advance past an unanswered required question and explains a missing date", () => {
     const { container } = renderPlanner();
     const nextBtn = () => screen.getByRole("button", { name: "Nästa" });
     // Nothing is flagged before the user has tried to move on.
@@ -583,25 +596,27 @@ describe("<Planner /> wizard", () => {
     expect(
       container.querySelector("#q-date")?.getAttribute("aria-expanded"),
     ).toBe("true");
-    // While questions remain, Nästa advances through them (not the step).
-    fireEvent.click(nextBtn()); // date → order (no date picked)
-    expect(
-      container.querySelector("#q-order")?.getAttribute("aria-expanded"),
-    ).toBe("true");
-    fireEvent.click(nextBtn()); // order → flow done
-    fireEvent.click(nextBtn()); // tries the step → blocked, and says why
+    // Nästa can't skip the empty birth-date question — it stays put and says why.
+    fireEvent.click(nextBtn());
     expect(screen.getByText(/Välj ett datum/)).toBeTruthy();
-    // It also takes the user back to the question that needs answering.
     expect(
       container.querySelector("#q-date")?.getAttribute("aria-expanded"),
     ).toBe("true");
     expect(container.querySelector("#a-income")).toBeNull();
+    // Answering it lets the flow move on to the next question.
+    fireEvent.change(container.querySelector("#birth-date")!, {
+      target: { value: "2025-01-15" },
+    });
+    expect(
+      container.querySelector("#q-order")?.getAttribute("aria-expanded"),
+    ).toBe("true");
   });
 
   it("asks how much föräldralön right after saying yes", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
+    setIncome(container, "a");
     openQuestion(container, "a", "supplement");
     // The terms aren't asked until there is a yes to configure.
     expect(container.querySelector("#a-supp-months")).toBeNull();
@@ -617,6 +632,7 @@ describe("<Planner /> wizard", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
+    setIncome(container, "a");
     openQuestion(container, "a", "supplement");
     fireEvent.click(container.querySelector("#a-supplement-yes")!);
     // Answer the terms question (defaults are fine) and move past it.
@@ -633,6 +649,7 @@ describe("<Planner /> wizard", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
+    setIncome(container, "a");
     openQuestion(container, "a", "supplement");
     fireEvent.click(container.querySelector("#a-supplement-no")!);
     expect(container.querySelector("#a-q-suppdetail")).toBeNull();
@@ -712,6 +729,7 @@ describe("<Planner /> wizard", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
+    setIncome(container, "a");
     openQuestion(container, "a", "goal");
     // Substep 1: only the two goal choices — no date input yet.
     expect(container.querySelector("#a-goal-untilDate")).not.toBeNull();
@@ -745,6 +763,7 @@ describe("<Planner /> wizard", () => {
     const { container } = renderPlanner();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
+    setIncome(container, "a");
     openQuestion(container, "a", "goal");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
     fireEvent.click(container.querySelector("#a-goal-preset-6man")!);
@@ -805,6 +824,11 @@ describe("<Planner /> wizard", () => {
     openQuestion(container, "a", "goal");
     fireEvent.click(container.querySelector("#a-goal-untilDate")!);
     const aSix = container.querySelector("#a-goal-preset-6man")!.textContent;
+    // Answer A's goal with a DIFFERENT length than the 6 months being compared:
+    // a 6-month A leave would push B's own "6 månader" onto the child's 1st
+    // birthday landmark, where the goal-detail dedupes it away in favour of
+    // "Barnet fyller 1". 3 months keeps both 6-month presets on screen.
+    fireEvent.click(container.querySelector("#a-goal-preset-3man")!); // answer it
     next(); // → step 3
     openQuestion(container, "b", "income");
     fireEvent.change(container.querySelector("#b-income")!, {
