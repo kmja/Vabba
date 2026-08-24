@@ -3,6 +3,7 @@ import { IconBriefcase, IconHourglass } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { approxMonthlyGross, formatSek } from "@/lib/format";
+import { partTimeSalaryAt } from "@/lib/goal-seek";
 
 /** Practical longest stretch the duration slider allows. */
 const MONTHS_CAP = 36;
@@ -24,7 +25,10 @@ function partTimeMonthly(
   works: boolean,
 ): number {
   if (!works || salary <= 0) return 0;
-  return Math.round((salary * (7 - clamp(pace, 0, 7))) / 7);
+  // Same SGI frame as the solver (goal-seek's partTimeSalaryAt): a 5-day work
+  // week, so pace >= 5 means a full week on benefit and no part-time pay. A
+  // separate /7 copy of this drifted from it — keep one source of truth.
+  return Math.round(partTimeSalaryAt(salary, pace));
 }
 
 /** Household income while this caregiver is on leave at `pace`. */
