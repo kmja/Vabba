@@ -108,11 +108,18 @@ export function sceneAspect(step: number): string {
 export function CaregiverPortrait({
   second = false,
   holding = false,
+  cover = false,
 }: {
   /** The second caregiver's artwork rather than the first's. */
   second?: boolean;
   /** Cradling the bundle — for whoever is home in the period shown. */
   holding?: boolean;
+  /**
+   * Fill the box (crop the artwork's transparent side padding) so the two
+   * portraits can stand close and overlap. Off by default — the animated
+   * scene sizes the figures itself.
+   */
+  cover?: boolean;
 }) {
   const src = second
     ? holding
@@ -127,7 +134,9 @@ export function CaregiverPortrait({
       src={src}
       alt=""
       data-caregiver-portrait
-      className="pointer-events-none size-full object-contain select-none"
+      className={`pointer-events-none size-full select-none ${
+        cover ? "object-cover" : "object-contain"
+      }`}
     />
   );
 }
