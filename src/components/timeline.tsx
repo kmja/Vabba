@@ -19,19 +19,12 @@ export interface LeaveProjection {
   segments: LeaveInterval[];
 }
 
-export const CG_BAR = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4"];
-const CG_BORDER_L = [
-  "border-l-chart-1",
-  "border-l-chart-2",
-  "border-l-chart-3",
-  "border-l-chart-4",
-];
-const CG_BORDER_R = [
-  "border-r-chart-1",
-  "border-r-chart-2",
-  "border-r-chart-3",
-  "border-r-chart-4",
-];
+// Caregiver colours, indexed by their order in the plan (0 = the first/home
+// caregiver, coral; 1 = the second, blue) — matching the illustrated
+// portraits so each person keeps their own colour everywhere.
+export const CG_BAR = ["bg-caregiver-a", "bg-caregiver-b"];
+const CG_BORDER_L = ["border-l-caregiver-a", "border-l-caregiver-b"];
+const CG_BORDER_R = ["border-r-caregiver-a", "border-r-caregiver-b"];
 
 /**
  * Where the money in a stretch comes from, one row per source: label, brutto
