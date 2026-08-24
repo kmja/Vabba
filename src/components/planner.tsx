@@ -381,16 +381,6 @@ export function Planner() {
     [periodStartStrB],
   );
 
-  // The split the results slider shows: the chosen custom share, or the share
-  // the current objective happens to produce (so dragging continues naturally).
-  const displaySplitA = useMemo(() => {
-    if (objective === "custom") return customSplitA;
-    const rec = twoParent?.recommended;
-    if (!rec) return 0.5;
-    const total = rec.allocatedTotals.A + rec.allocatedTotals.B;
-    return total > 0 ? rec.allocatedTotals.A / total : 0.5;
-  }, [objective, customSplitA, twoParent]);
-
   // Label by the actual pace, not the stored mode (the results levers may set a
   // prolong target that still works out to ~full speed, or vice versa).
   const goalA = switchA
@@ -902,21 +892,6 @@ export function Planner() {
     setForm,
   ]);
 
-  // One-line result of the solved plan, shown in the "Justera" section.
-  const goalSummary = useMemo(() => {
-    if (!planSolve || !planSolve.endsAt) return null;
-    const bits = [`Ledig till ${formatDate(planSolve.endsAt)}`];
-    if (planSolve.savedTotal >= 1) {
-      bits.push(`${Math.round(planSolve.savedTotal)} dagar sparas till senare`);
-    }
-    if (planSolve.minHouseholdNet != null) {
-      bits.push(
-        `hushållet som lägst ≈ ${formatSek(planSolve.minHouseholdNet)}/mån efter skatt`,
-      );
-    }
-    return bits.join(" · ");
-  }, [planSolve]);
-
   const monthlyRows: MonthlyRow[] = useMemo(() => {
     if (!planSolve) return [];
     const outcomeFor = (name: string) =>
@@ -1137,18 +1112,11 @@ export function Planner() {
       <>
       <Results
         soloMode={soloMode}
-        objective={objective}
         plan={plan}
         soloName={soloName}
-        twoParent={twoParent}
-        solo={solo}
         deadlines={deadlines}
         paceA={paceA}
         paceB={paceB}
-        splitA={displaySplitA}
-        onSplitChange={(v) =>
-          setForm((f) => ({ ...f, objective: "custom", customSplitA: v }))
-        }
         onSetTargetA={setTargetA}
         onSetTargetB={setTargetB}
         phaseA={phaseA}
@@ -1161,13 +1129,6 @@ export function Planner() {
         salaryB={salaryB}
         partTimeA={partTimeA}
         partTimeB={partTimeB}
-        goalSummary={
-          goalTextA != null ||
-          goalTextB != null ||
-          (planSolve?.savedTotal ?? 0) >= 1
-            ? goalSummary
-            : null
-        }
         goalTextA={goalTextA}
         goalTextB={goalTextB}
         periodEdit={{

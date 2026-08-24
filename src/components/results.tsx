@@ -10,8 +10,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { FamilySummary } from "@/components/family-summary";
-import { SplitSuggestion } from "@/components/split-suggestion";
-import { SoloSummary } from "@/components/solo-summary";
 import type {
   PeriodControls,
   PhaseControls,
@@ -24,27 +22,17 @@ import { WarningsList } from "@/components/warnings-list";
 import type { LeaveProjection } from "@/components/timeline";
 import type { PlanSolve } from "@/lib/goal-seek";
 import type { PlanDeadlines, PlanInput } from "@/lib/calc";
-import type {
-  Objective,
-  OptimizeResult,
-  PlanWarning,
-  SoloResult,
-} from "@/lib/optimizer";
+import type { PlanWarning } from "@/lib/optimizer";
 import type { VabResult } from "@/lib/vab";
 import type { BirthDaysResult } from "@/lib/birth-days";
 
 export function Results({
   soloMode,
-  objective,
   plan,
   soloName,
-  twoParent,
-  solo,
   deadlines,
   paceA,
   paceB,
-  splitA,
-  onSplitChange,
   onSetTargetA,
   onSetTargetB,
   phaseA,
@@ -57,7 +45,6 @@ export function Results({
   salaryB,
   partTimeA,
   partTimeB,
-  goalSummary,
   goalTextA,
   goalTextB,
   periodEdit,
@@ -81,16 +68,11 @@ export function Results({
   saved,
 }: {
   soloMode: boolean;
-  objective: Objective;
   plan: PlanInput;
   soloName: string;
-  twoParent: OptimizeResult | null;
-  solo: SoloResult | null;
   deadlines: PlanDeadlines;
   paceA: number;
   paceB: number;
-  splitA: number;
-  onSplitChange: (splitA: number) => void;
   onSetTargetA: (minMonthly: number) => void;
   onSetTargetB: (minMonthly: number) => void;
   phaseA: PhaseControls;
@@ -103,8 +85,6 @@ export function Results({
   salaryB: number;
   partTimeA: PartTime;
   partTimeB: PartTime;
-  /** One-line result of the solved plan (end date, saved days, lowest net). */
-  goalSummary: string | null;
   /** Per-caregiver goal description; null = manual (the sliders apply). */
   goalTextA: string | null;
   goalTextB: string | null;
@@ -215,56 +195,31 @@ export function Results({
         );
       })()}
 
-      {/* The adjust controls stay pinned above the timeline (and release once
-          the timeline scrolls past), so you can drag and watch it shift. */}
-      <div>
-        {soloMode && solo ? (
-          <SoloSummary
-            payout={solo.payout}
-            total={solo.allocatedTotal}
-            name={soloName}
-            daysPerWeek={paceA}
-            goalSummary={goalSummary}
-            municipalRate={municipalRate}
-          />
-        ) : twoParent ? (
-          <SplitSuggestion
-            result={twoParent}
-            objective={objective}
-            plan={plan}
-            splitA={splitA}
-            onSplitChange={onSplitChange}
-            goalSummary={goalSummary}
-            municipalRate={municipalRate}
-          />
-        ) : null}
-
-        {/* The centrepiece: each stretch of leave as a block to flip through,
-            with directly editable dates. */}
-        <PeriodPager
-          projection={projection ?? undefined}
-          rows={monthlyRows}
-          deadlines={deadlines}
-          editing={periodEdit}
-          levers={levers}
-          municipalRate={municipalRate}
-          oneYear={oneYear}
-          sgiLiftedNames={sgiLiftedNames}
-          birthDays={
-            birthDays && birthDays.days > 0
-              ? {
-                  result: birthDays,
-                  name: birthDaysName,
-                  // The days go to whoever is not home first, and are taxed
-                  // at the margin of the salary they sit on top of.
-                  salary: firstCaregiver === "A" ? salaryB : salaryA,
-                  municipalRate,
-                }
-              : undefined
-          }
-          doubleDaysWindow={doubleDaysWindow ?? undefined}
-        />
-      </div>
+      {/* The centrepiece: each stretch of leave as a block to flip through,
+          with directly editable dates. */}
+      <PeriodPager
+        projection={projection ?? undefined}
+        rows={monthlyRows}
+        deadlines={deadlines}
+        editing={periodEdit}
+        levers={levers}
+        municipalRate={municipalRate}
+        oneYear={oneYear}
+        sgiLiftedNames={sgiLiftedNames}
+        birthDays={
+          birthDays && birthDays.days > 0
+            ? {
+                result: birthDays,
+                name: birthDaysName,
+                // The days go to whoever is not home first, and are taxed
+                // at the margin of the salary they sit on top of.
+                salary: firstCaregiver === "A" ? salaryB : salaryA,
+                municipalRate,
+              }
+            : undefined
+        }
+        doubleDaysWindow={doubleDaysWindow ?? undefined}
+      />
 
       {vabResult && (
         <VabResultCard

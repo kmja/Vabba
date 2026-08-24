@@ -223,7 +223,6 @@ describe("<Planner /> wizard", () => {
     fillToResults(container);
     showPlan();
 
-    expect(screen.getByText("Justera planen")).toBeTruthy();
     expect(screen.getByText("Perioder")).toBeTruthy();
     // The 10-dagar around the birth, then one block per caregiver.
     expect(periodHeaders(container).length).toBe(3);
@@ -499,7 +498,6 @@ describe("<Planner /> wizard", () => {
     // The second caregiver's fields disappear.
     expect(container.querySelector("#b-income")).toBeNull();
     showPlan();
-    expect(screen.getByText("Justera planen")).toBeTruthy();
     expect(periodHeaders(container).length).toBe(1);
   });
 
@@ -1032,27 +1030,25 @@ describe("<Planner /> wizard", () => {
       target: { value: "30" },
     });
     showPlan();
-    expect(screen.getAllByText(/till senare/).length).toBeGreaterThan(0);
+    // Reopen the plan and confirm the saved days stuck (their one-line
+    // summary lived in the removed "Justera planen" section, so read the
+    // field back instead).
+    fireEvent.click(screen.getByRole("button", { name: /Ändra uppgifter/ }));
+    for (
+      let i = 0;
+      i < 25 && !container.querySelector("#b-q-save");
+      i++
+    ) {
+      fireEvent.click(screen.getByRole("button", { name: "Nästa" }));
+    }
+    expect(
+      (container.querySelector("#b-save-days") as HTMLInputElement).value,
+    ).toBe("30");
   });
 
   // The inline end-date edit this test exercised (period-end-N + "Släpp
   // slutdatumet") was removed from the period card — a fixed length is now
   // only ever set as a goal from the wizard's "Bestämd längd" option.
-
-  it("has a live split slider on the results page that updates the numbers", () => {
-    const { container } = renderPlanner();
-    fillToResults(container, { incomeA: "50000", incomeB: "50000" });
-    showPlan();
-    // The day-split slider lives in the expanded "Justera" controls.
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
-    const slider = container.querySelector("#results-split");
-    expect(slider).not.toBeNull();
-    // Equal (capped) rates → maxPayout splits the 390 income-based days 50/50.
-    expect(screen.getAllByText(/195 dagar/).length).toBeGreaterThanOrEqual(1);
-    // Drag to give caregiver A 75% of the days → numbers update live.
-    fireEvent.change(slider!, { target: { value: "75" } });
-    expect(screen.getAllByText(/293 dagar/).length).toBeGreaterThan(0);
-  });
 
   it("does not offer pace dials on a stretch the solver drives", () => {
     const { container } = renderPlanner();
@@ -1061,7 +1057,6 @@ describe("<Planner /> wizard", () => {
     // Both caregivers default to a goal now — the solver drives the pace for
     // both, so neither offers the manual pace dials. They'd write to
     // settings the solver overrides.
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
     expect(
       screen.queryByRole("checkbox", {
         name: /Byt takt vid 1 år – Vårdnadshavare B/,
@@ -1093,8 +1088,8 @@ describe("<Planner /> wizard", () => {
     const { container } = renderPlanner();
     fillToResults(container, { incomeA: "45000", incomeB: "30000" });
     showPlan();
-    // Open the collapsible "Justera" controls to reach the per-person levers.
-    fireEvent.click(screen.getByRole("button", { name: /Fler inställningar/ }));
+    // Open A's block to reach its per-person levers.
+    fireEvent.click(periodHeaders(container)[1]);
     // A defaults to "as long as possible" — a slow pace that just spreads
     // föräldrapenningen thinner. By default we do NOT assume they work, so
     // no deltidslön shows up.
@@ -1423,7 +1418,7 @@ describe("<Planner /> landing & saved plans", () => {
     expect(screen.getByText("Namnlös plan")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Namnlös plan"));
-    expect(screen.getByText("Justera planen")).toBeTruthy();
+    expect(screen.getByText("Perioder")).toBeTruthy();
     expect(periodHeaders(container).length).toBe(3);
   });
 
