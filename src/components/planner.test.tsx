@@ -199,16 +199,6 @@ function clickLogo() {
 }
 
 /**
- * Save from the results page: the header "Spara" opens a name dialog, which
- * must be confirmed before the plan lands in the saved list.
- */
-function save() {
-  fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
-  const dlg = screen.getByRole("dialog");
-  fireEvent.click(within(dlg).getByRole("button", { name: /^Spara$/ }));
-}
-
-/**
  * Render the app and dismiss the landing page via "Skapa ny plan" — every
  * wizard/results test starts from a blank plan and doesn't care about it.
  *
