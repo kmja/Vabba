@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { IconDeviceFloppy } from "@tabler/icons-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CaregiverEditDialog } from "@/components/caregiver-edit-dialog";
 import { useHomeNav } from "@/lib/home-nav";
 import {
@@ -141,6 +144,9 @@ export function Planner() {
   const [editStep, setEditStep] = useState(1);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  // The "Spara" dialog asks for a name before writing the plan to the list.
+  const [saveNameOpen, setSaveNameOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
   // The landing page is always the entry point; a shared link (#p=…) skips
   // straight past it below.
   const [view, setView] = useState<"landing" | "plan">("landing");
@@ -1038,8 +1044,11 @@ export function Planner() {
   };
 
   // Any real answer means there's something worth offering to resume — the
-  // birth date is the first thing step 1 asks for.
-  const hasProgress = plan.birthDate !== "";
+  // birth date is the first thing step 1 asks for. Once the working plan is a
+  // saved one (or was opened from the saved list), it belongs in "Sparade
+  // planer"; offering it again as "Fortsätt" would be redundant.
+  const hasProgress =
+    plan.birthDate !== "" && activeSavedPlanId == null;
   const progressLabel = planLabel(form);
 
   const resetPlan = () => {
@@ -1067,11 +1076,11 @@ export function Planner() {
     if (activeSavedPlanId === id) setActiveSavedPlanId(null);
   };
 
-  const savePlan = () => {
+  const savePlan = (name: string) => {
     const id = activeSavedPlanId ?? newPlanId();
     const entry: SavedPlan = {
       id,
-      name: planLabel(form),
+      name: name.trim() || planLabel(form),
       savedAt: new Date().toISOString(),
       state: form,
     };
@@ -1083,8 +1092,15 @@ export function Planner() {
       return updated;
     });
     setActiveSavedPlanId(id);
+    setSaveNameOpen(false);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
+  };
+
+  /** Open the save dialog, prefilled with the derived label. */
+  const openSaveDialog = () => {
+    setSaveName(planLabel(form));
+    setSaveNameOpen(true);
   };
 
   if (view === "landing") {
@@ -1190,7 +1206,7 @@ export function Planner() {
         onReset={resetPlan}
         onShare={share}
         copied={copied}
-        onSave={savePlan}
+        onSave={openSaveDialog}
         saved={saved}
       />
       {quickEditId && (
@@ -1203,6 +1219,46 @@ export function Planner() {
           setForm={setForm}
         />
       )}
+      <Dialog
+        open={saveNameOpen}
+        onClose={() => setSaveNameOpen(false)}
+        title="Spara plan"
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setSaveNameOpen(false)}
+            >
+              Avbryt
+            </Button>
+            <Button type="button" onClick={() => savePlan(saveName)}>
+              <IconDeviceFloppy /> Spara
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="save-plan-name">Namn på planen</Label>
+          <Input
+            id="save-plan-name"
+            autoFocus
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                savePlan(saveName);
+              }
+            }}
+            placeholder="Namnlös plan"
+          />
+          <p className="text-muted-foreground text-xs">
+            Ger planen ett namn i ”Sparade planer” — annars används namnet på
+            vårdnadshavarna.
+          </p>
+        </div>
+      </Dialog>
       </>
     );
   }

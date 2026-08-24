@@ -199,6 +199,16 @@ function clickLogo() {
 }
 
 /**
+ * Save from the results page: the header "Spara" opens a name dialog, which
+ * must be confirmed before the plan lands in the saved list.
+ */
+function save() {
+  fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+  const dlg = screen.getByRole("dialog");
+  fireEvent.click(within(dlg).getByRole("button", { name: /^Spara$/ }));
+}
+
+/**
  * Render the app and dismiss the landing page via "Skapa ny plan" — every
  * wizard/results test starts from a blank plan and doesn't care about it.
  *
@@ -1412,7 +1422,10 @@ describe("<Planner /> landing & saved plans", () => {
     fillToResults(container);
     showPlan();
 
-    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(document.querySelector("#save-plan-name")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
     expect(screen.getByText("Sparad!")).toBeTruthy();
 
     clickLogo();
@@ -1429,12 +1442,14 @@ describe("<Planner /> landing & saved plans", () => {
     fillToResults(container);
     showPlan();
 
-    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
     clickLogo();
     fireEvent.click(screen.getByText("Namnlös plan"));
 
     // Back on results for the same plan — saving again should not duplicate it.
     fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
     clickLogo();
     expect(screen.getAllByText("Namnlös plan").length).toBe(1);
   });
@@ -1443,7 +1458,8 @@ describe("<Planner /> landing & saved plans", () => {
     const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
-    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
     clickLogo();
     expect(screen.getByText("Namnlös plan")).toBeTruthy();
 
