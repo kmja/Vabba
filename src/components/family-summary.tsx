@@ -31,21 +31,24 @@ export function FamilySummary({
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex items-center justify-center gap-3 sm:gap-6">
+      {/* Each caregiver's facts on their own side. */}
+      <div className="min-w-0 flex-1">
+        <CaregiverSummary {...first} />
+      </div>
       {/* The two figures stand close and overlap — one family huddled
-          together. `object-cover` crops the artwork's transparent padding so
-          the figures themselves meet, and the narrow box keeps them slender. */}
-      <div className="flex items-end justify-center">
-        <div className="aspect-[15/38] w-20 sm:w-28">
+          together. `cover` crops the artwork's transparent padding so the
+          figures meet; the first (holding the baby) is in front, the second
+          behind. Equal-height boxes keep the pair level. */}
+      <div className="flex shrink-0 items-end">
+        <div className="relative z-10 h-44 w-20 sm:h-56 sm:w-28">
           <CaregiverPortrait second={false} holding cover />
         </div>
-        <div className="aspect-[15/38] w-20 -ml-5 sm:w-28 sm:-ml-6">
+        <div className="relative -ml-5 h-44 w-20 sm:h-56 sm:-ml-6 sm:w-28">
           <CaregiverPortrait second holding={false} cover />
         </div>
       </div>
-      {/* Each caregiver's facts on their own side, under their own figure. */}
-      <div className="grid w-full max-w-2xl grid-cols-2 items-start gap-x-6 gap-y-3">
-        <CaregiverSummary {...first} />
+      <div className="min-w-0 flex-1">
         <CaregiverSummary {...second} />
       </div>
     </div>
