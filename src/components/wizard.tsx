@@ -728,6 +728,27 @@ export function Wizard({
     }
   };
 
+  /**
+   * "Börja om": clear everything and go back to the very first question. The
+   * form data is cleared by `onReset`; this resets the wizard's own navigation
+   * state too — otherwise `visited`/`activeQ`/`step` keep the old answers on
+   * screen even though the underlying plan is blank.
+   */
+  const restart = () => {
+    flushSync(() => {
+      setStep(1);
+      setPage("wizard");
+      setActiveQ("q-date");
+      setReopened(false);
+      setVisited(new Set());
+      setTriedNext(false);
+      setCalendarFor({});
+      setHoldSceneUntil(0);
+    });
+    formOnAdvancedOpen.current = null;
+    onReset();
+  };
+
   // Enter walks through the fields like a checkout: focus the next visible
   // field first; when there is none, run the primary action.
   const onFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
@@ -1937,7 +1958,7 @@ export function Wizard({
           <Button
             type="button"
             variant="ghost"
-            onClick={current === 1 ? onReset : () => goTo(current - 1)}
+            onClick={current === 1 ? restart : () => goTo(current - 1)}
           >
             {current === 1 ? (
               <>
