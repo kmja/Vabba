@@ -61,6 +61,7 @@ import { useLocalStorage } from "@/lib/use-local-storage";
 import {
   decodeState,
   encodeState,
+  plansEqual,
   type ShareParentPrefs,
   type ShareableState,
 } from "@/lib/share";
@@ -1059,10 +1060,16 @@ export function Planner() {
   };
 
   const savePlan = (name: string) => {
-    const id = activeSavedPlanId ?? newPlanId();
+    const cleanName = name.trim() || planLabel(form);
+    // Same name as the plan being edited → update it in place; a different
+    // name is a NEW plan (the old one stays put).
+    const active = activeSavedPlanId
+      ? savedPlans.find((p) => p.id === activeSavedPlanId)
+      : null;
+    const id = active && cleanName === active.name ? active.id : newPlanId();
     const entry: SavedPlan = {
       id,
-      name: name.trim() || planLabel(form),
+      name: cleanName,
       savedAt: new Date().toISOString(),
       state: form,
     };
@@ -1079,11 +1086,22 @@ export function Planner() {
     window.setTimeout(() => setSaved(false), 2000);
   };
 
-  /** Open the save dialog, prefilled with the derived label. */
+  /** Open the save dialog, prefilled with the saved plan's name (or the
+   *  derived label for a not-yet-saved plan). */
   const openSaveDialog = () => {
-    setSaveName(planLabel(form));
+    const active = activeSavedPlanId
+      ? savedPlans.find((p) => p.id === activeSavedPlanId)
+      : null;
+    setSaveName(active?.name ?? planLabel(form));
     setSaveNameOpen(true);
   };
+
+  // The save button is disabled while the plan matches its saved copy — a
+  // change re-enables it.
+  const activeSaved = activeSavedPlanId
+    ? savedPlans.find((p) => p.id === activeSavedPlanId)
+    : null;
+  const canSave = !activeSaved || !plansEqual(form, activeSaved.state);
 
   if (view === "landing") {
     return (
@@ -1179,6 +1197,7 @@ export function Planner() {
         onShare={share}
         copied={copied}
         onSave={openSaveDialog}
+        canSave={canSave}
         saved={saved}
       />
       {quickEditId && (

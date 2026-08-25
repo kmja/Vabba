@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { decodeState, encodeState, type ShareableState } from "@/lib/share";
+import { decodeState, encodeState, plansEqual, type ShareableState } from "@/lib/share";
 import { defaultPlanInput } from "@/lib/calc";
 
 const sample: ShareableState = {
@@ -62,5 +62,13 @@ describe("share encode/decode", () => {
   it("rejects a state in the old flat format (no nested parents)", () => {
     const oldFlat = { ...sample, parents: undefined };
     expect(decodeState(encodeState(oldFlat as never))).toBeNull();
+  });
+
+  it("plansEqual ignores key order but detects real changes", () => {
+    const clone = structuredClone(sample);
+    expect(plansEqual(sample, clone)).toBe(true);
+    const changed = structuredClone(sample);
+    changed.parents.A.saveDays = 99;
+    expect(plansEqual(sample, changed)).toBe(false);
   });
 });

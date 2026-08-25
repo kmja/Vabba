@@ -1424,7 +1424,7 @@ describe("<Planner /> landing & saved plans", () => {
     expect(periodHeaders(container).length).toBe(3);
   });
 
-  it("re-saving an opened plan updates it instead of duplicating", () => {
+  it("re-saving an opened plan with the same name updates it instead of duplicating", () => {
     const { container } = renderPlanner();
     fillToResults(container);
     showPlan();
@@ -1434,11 +1434,49 @@ describe("<Planner /> landing & saved plans", () => {
     clickLogo();
     fireEvent.click(screen.getByText("Namnlös plan"));
 
-    // Back on results for the same plan — saving again should not duplicate it.
+    // Change A's income via the quick-edit pencil so save re-enables.
+    fireEvent.click(screen.getByRole("button", { name: /Ändra Vårdnadshavare A/ }));
+    fireEvent.change(container.querySelector("#edit-A-name")!, {
+      target: { value: "Anders" },
+    });
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }),
+    );
+    // Saving with the SAME name updates in place — no second entry.
     fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
     clickLogo();
     expect(screen.getAllByText("Namnlös plan").length).toBe(1);
+  });
+
+  it("saving an edited plan under a new name keeps the original", () => {
+    const { container } = renderPlanner();
+    fillToResults(container);
+    showPlan();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Spara$/ }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
+    clickLogo();
+    fireEvent.click(screen.getByText("Namnlös plan"));
+
+    // Change the plan, then save under a NEW name.
+    fireEvent.click(screen.getByRole("button", { name: /Ändra Vårdnadshavare A/ }));
+    fireEvent.change(container.querySelector("#edit-A-name")!, {
+      target: { value: "Anders" },
+    });
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Spara/ }));
+    const nameInput = screen.getByRole("textbox", {
+      name: "Namn på planen",
+    }) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "Reviderad" } });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
+    clickLogo();
+    // Both the original and the new-named plan are present.
+    expect(screen.getByText("Namnlös plan")).toBeTruthy();
+    expect(screen.getByText("Reviderad")).toBeTruthy();
   });
 
   it("deletes a saved plan from the landing page", () => {

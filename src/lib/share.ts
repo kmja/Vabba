@@ -133,3 +133,27 @@ export function decodeState(encoded: string): ShareableState | null {
     return null;
   }
 }
+
+/**
+ * Deep equality for two planner states, ignoring key order. Used to know
+ * whether the working plan still matches the saved one (so the save button
+ * can disable when there's nothing new to save).
+ */
+export function plansEqual(a: ShareableState, b: ShareableState): boolean {
+  return deepEqual(a, b);
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null)
+    return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+      return false;
+  }
+  return true;
+}

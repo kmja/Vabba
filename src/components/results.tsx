@@ -64,6 +64,7 @@ export function Results({
   onShare,
   copied,
   onSave,
+  canSave,
   saved,
 }: {
   soloMode: boolean;
@@ -114,6 +115,8 @@ export function Results({
   copied: boolean;
   /** Save (or update) this plan in the saved-plans list. */
   onSave: () => void;
+  /** Whether the working plan differs from the saved copy (so it can be saved). */
+  canSave: boolean;
   saved: boolean;
 }) {
   // The dials each period block drives, keyed by caregiver.
@@ -152,8 +155,9 @@ export function Results({
             variant="outline"
             size="sm"
             onClick={onSave}
+            disabled={!canSave}
             aria-label={saved ? "Sparad" : "Spara"}
-            title={saved ? "Sparad" : "Spara"}
+            title={saved ? "Sparad" : canSave ? "Spara" : "Redan sparad"}
           >
             {saved ? <IconCheck /> : <IconDeviceFloppy />}
           </Button>
