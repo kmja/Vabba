@@ -81,7 +81,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT }} />
         <HomeNavProvider>
           <SiteHeader />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-10">
+          <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-4 pb-8 sm:px-6 sm:pt-6 sm:pb-10">
             {children}
           </main>
         </HomeNavProvider>

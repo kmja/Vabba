@@ -4,7 +4,7 @@ import {
   IconCheck,
   IconDeviceFloppy,
   IconPencil,
-  IconRefresh,
+  IconPlus,
   IconShare2,
 } from "@tabler/icons-react";
 
@@ -147,9 +147,6 @@ export function Results({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Er plan</h2>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" onClick={() => onEdit(1)}>
-            <IconPencil /> Ändra uppgifter
-          </Button>
           <Button type="button" variant="outline" size="sm" onClick={onSave}>
             {saved ? <IconCheck /> : <IconDeviceFloppy />}
             {saved ? "Sparad!" : "Spara"}
@@ -158,8 +155,14 @@ export function Results({
             {copied ? <IconCheck /> : <IconShare2 />}
             {copied ? "Kopierad!" : "Dela"}
           </Button>
+          {/* The pencil buttons edit one caregiver at a time; this is the
+              only way back to the wizard for the plan-wide bits (birth date,
+              number of children, tax, vab …), so it stays — but secondary. */}
+          <Button type="button" variant="ghost" size="sm" onClick={() => onEdit(1)}>
+            <IconPencil /> Ändra uppgifter
+          </Button>
           <Button type="button" variant="ghost" size="sm" onClick={onReset}>
-            <IconRefresh /> Börja om
+            <IconPlus /> Ny plan
           </Button>
         </div>
       </div>
