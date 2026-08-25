@@ -1121,6 +1121,11 @@ export function Planner() {
         soloMode={soloMode}
         plan={plan}
         soloName={soloName}
+        planName={
+          activeSavedPlanId
+            ? savedPlans.find((p) => p.id === activeSavedPlanId)?.name ?? null
+            : null
+        }
         deadlines={deadlines}
         paceA={paceA}
         paceB={paceB}

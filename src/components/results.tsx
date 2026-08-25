@@ -29,6 +29,7 @@ export function Results({
   soloMode,
   plan,
   soloName,
+  planName,
   deadlines,
   paceA,
   paceB,
@@ -68,6 +69,8 @@ export function Results({
   soloMode: boolean;
   plan: PlanInput;
   soloName: string;
+  /** The saved plan's name, when this plan is (or was) a saved one. */
+  planName?: string | null;
   deadlines: PlanDeadlines;
   paceA: number;
   paceB: number;
@@ -142,7 +145,7 @@ export function Results({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Er plan</h2>
+        <h2 className="text-lg font-semibold">{planName ?? "Er plan"}</h2>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
