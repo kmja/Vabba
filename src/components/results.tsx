@@ -4,7 +4,6 @@ import {
   IconCheck,
   IconDeviceFloppy,
   IconPencil,
-  IconPlus,
   IconShare2,
 } from "@tabler/icons-react";
 
@@ -61,7 +60,6 @@ export function Results({
   warnings,
   onEdit,
   onQuickEdit,
-  onReset,
   onShare,
   copied,
   onSave,
@@ -109,7 +107,6 @@ export function Results({
   onEdit: (step?: number) => void;
   /** Opens that caregiver's quick-edit dialog. */
   onQuickEdit: (id: "A" | "B") => void;
-  onReset: () => void;
   onShare: () => void;
   copied: boolean;
   /** Save (or update) this plan in the saved-plans list. */
@@ -147,9 +144,15 @@ export function Results({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Er plan</h2>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onSave}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onSave}
+            aria-label={saved ? "Sparad" : "Spara"}
+            title={saved ? "Sparad" : "Spara"}
+          >
             {saved ? <IconCheck /> : <IconDeviceFloppy />}
-            {saved ? "Sparad!" : "Spara"}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onShare}>
             {copied ? <IconCheck /> : <IconShare2 />}
@@ -157,12 +160,16 @@ export function Results({
           </Button>
           {/* The pencil buttons edit one caregiver at a time; this is the
               only way back to the wizard for the plan-wide bits (birth date,
-              number of children, tax, vab …), so it stays — but secondary. */}
-          <Button type="button" variant="ghost" size="sm" onClick={() => onEdit(1)}>
-            <IconPencil /> Ändra uppgifter
-          </Button>
-          <Button type="button" variant="ghost" size="sm" onClick={onReset}>
-            <IconPlus /> Ny plan
+              number of children, tax, vab …), so it stays — icon only. */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(1)}
+            aria-label="Ändra uppgifter"
+            title="Ändra uppgifter"
+          >
+            <IconPencil />
           </Button>
         </div>
       </div>

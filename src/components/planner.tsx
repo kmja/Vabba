@@ -184,7 +184,7 @@ export function Planner() {
   const [homeConfirmOpen, setHomeConfirmOpen] = useState(false);
   // Which caregiver's quick-edit dialog is open, if any.
   const [quickEditId, setQuickEditId] = useState<"A" | "B" | null>(null);
-  const { setGoHome } = useHomeNav();
+  const { setGoHome, setNewPlan } = useHomeNav();
   useEffect(() => {
     const handler = () => {
       if (wizardVisible) setHomeConfirmOpen(true);
@@ -1037,6 +1037,13 @@ export function Planner() {
     setView("plan");
   };
 
+  // The header's "+" starts a fresh plan — register the handler with it.
+  useEffect(() => {
+    setNewPlan(() => startNewPlan);
+    return () => setNewPlan(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startNewPlan is recreated each render but only wraps stable setters
+  }, [setNewPlan]);
+
   const openSavedPlan = (id: string) => {
     const found = savedPlans.find((p) => p.id === id);
     if (!found) return;
@@ -1164,7 +1171,6 @@ export function Planner() {
           setForm((f) => ({ ...f, submitted: false }));
         }}
         onQuickEdit={setQuickEditId}
-        onReset={resetPlan}
         onShare={share}
         copied={copied}
         onSave={openSaveDialog}

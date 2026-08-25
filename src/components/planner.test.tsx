@@ -1411,7 +1411,9 @@ describe("<Planner /> landing & saved plans", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(document.querySelector("#save-plan-name")).toBeTruthy();
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Spara$/ }));
-    expect(screen.getByText("Sparad!")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^Sparad$/ }),
+    ).toBeTruthy();
 
     clickLogo();
     expect(screen.getByText("Sparade planer")).toBeTruthy();
