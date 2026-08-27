@@ -300,19 +300,23 @@ describe("<Planner /> wizard", () => {
     expect(heading()).toBe("Namn");
   });
 
-  it("shows the portrait large while naming a caregiver, then shrinks it once answered", () => {
+  it("keeps the portrait the same size once it slides beside the summary", () => {
     const { container } = renderPlanner();
     const sceneBox = () =>
       container.querySelector("[data-family-scene]")!.parentElement!;
+    const stage = () => sceneBox().parentElement!;
     pickBirth(container, "2025-01-15");
     next(); // → step 2, opens on a-q-name (hero, first pass)
-    expect(sceneBox().className).toContain("w-[78%]");
+    expect(sceneBox().className).toContain("w-[55%]");
+    expect(stage().className).toContain("justify-center");
     fireEvent.change(container.querySelector("#a-name")!, {
       target: { value: "Kim" },
     });
     openQuestion(container, "a", "income"); // advances past name
-    expect(sceneBox().className).toContain("w-[45%]");
-    expect(sceneBox().className).not.toContain("w-[78%]");
+    // Same width — not shrunk — but the stage is no longer centred, so the
+    // summary can sit beside the portrait.
+    expect(sceneBox().className).toContain("w-[55%]");
+    expect(stage().className).not.toContain("justify-center");
   });
 
   it("scrolls a focused field clear of the keyboard once the visible area shrinks", () => {

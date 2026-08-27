@@ -1846,19 +1846,17 @@ export function Wizard({
           style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
-          {/* The stage is always centred: only its size (and the camera inside
-              it) changes between steps, so the zoom-out and handover read as
-              one continuous move rather than the image snapping from the
-              compact left spot to the centred hero one. A step's first
-              question gets it big; answered questions' summary sits below it. */}
-          <div className="flex flex-col items-center gap-3">
+          {/* The stage keeps one size and never shrinks: centred while a
+              question is open (no summary), and slid to the left once there's
+              something to show beside it. Only the camera moves between the
+              story steps. */}
+          <div className={cn("flex items-center gap-3", heroStage && "justify-center")}>
             <div
               style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative shrink-0 transition-[width,aspect-ratio] duration-1000 ease-[cubic-bezier(0.45,0,0.15,1)] motion-reduce:transition-none",
-                heroStage
-                  ? "w-[78%] [@media(max-height:740px)]:w-[62%] [@media(max-height:560px)]:w-[50%]"
-                  : "w-[45%] [@media(max-height:740px)]:w-[36%] [@media(max-height:560px)]:hidden",
+                "relative w-[55%] shrink-0 transition-[width,aspect-ratio] duration-1000 ease-[cubic-bezier(0.45,0,0.15,1)] motion-reduce:transition-none",
+                !heroStage &&
+                  "[@media(max-height:740px)]:hidden [@media(max-height:560px)]:hidden",
               )}
             >
               <FamilyScene
@@ -1887,7 +1885,7 @@ export function Wizard({
                 </button>
               )}
             </div>
-            <div className={cn("w-full min-w-0 space-y-1.5", heroStage && "hidden")}>
+            <div className={cn("min-w-0 flex-1 space-y-1.5", heroStage && "hidden")}>
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
             </div>
           </div>
