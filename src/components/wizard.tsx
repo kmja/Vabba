@@ -1846,12 +1846,12 @@ export function Wizard({
           style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
-          {/* The stage sits beside the answered questions; it persists across
-              steps so the camera pans, the zoom-out and the handover animate
-              between them. A step's first question gets it big — the
-              summary beside it is empty at that point anyway — then it
-              shrinks back once there's something to sit beside. */}
-          <div className={cn("flex items-start gap-3", heroStage && "justify-center")}>
+          {/* The stage is always centred: only its size (and the camera inside
+              it) changes between steps, so the zoom-out and handover read as
+              one continuous move rather than the image snapping from the
+              compact left spot to the centred hero one. A step's first
+              question gets it big; answered questions' summary sits below it. */}
+          <div className="flex flex-col items-center gap-3">
             <div
               style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
@@ -1887,7 +1887,7 @@ export function Wizard({
                 </button>
               )}
             </div>
-            <div className={cn("min-w-0 flex-1 space-y-1.5", heroStage && "hidden")}>
+            <div className={cn("w-full min-w-0 space-y-1.5", heroStage && "hidden")}>
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
             </div>
           </div>
