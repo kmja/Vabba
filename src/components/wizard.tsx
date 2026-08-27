@@ -1855,7 +1855,7 @@ export function Wizard({
             <div
               style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative shrink-0 transition-[width,aspect-ratio] duration-700 ease-[cubic-bezier(0.32,0.8,0.3,1)] motion-reduce:transition-none",
+                "relative shrink-0 transition-[width,aspect-ratio] duration-1000 ease-[cubic-bezier(0.45,0,0.15,1)] motion-reduce:transition-none",
                 heroStage
                   ? "w-[78%] [@media(max-height:740px)]:w-[62%] [@media(max-height:560px)]:w-[50%]"
                   : "w-[45%] [@media(max-height:740px)]:w-[36%] [@media(max-height:560px)]:hidden",

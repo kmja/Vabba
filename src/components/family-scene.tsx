@@ -16,8 +16,10 @@
  * the bottom edge. Decorative only for assistive tech.
  */
 
-const EASE = "cubic-bezier(0.32, 0.8, 0.3, 1)";
-const DUR = "850ms";
+// A slow, even glide for the camera and figure moves so the story reads as
+// one continuous shot — fast-in curves make a pan feel like a snap.
+const EASE = "cubic-bezier(0.45, 0, 0.15, 1)";
+const DUR = "1000ms";
 
 // The frame — just a coordinate space for the camera math below, no visible
 // bounds of its own.
