@@ -300,23 +300,27 @@ describe("<Planner /> wizard", () => {
     expect(heading()).toBe("Namn");
   });
 
-  it("keeps the portrait the same size once it slides beside the summary", () => {
+  it("keeps the portrait centred and expands the summary beside it", () => {
     const { container } = renderPlanner();
     const sceneBox = () =>
       container.querySelector("[data-family-scene]")!.parentElement!;
-    const stage = () => sceneBox().parentElement!;
+    const summary = () => sceneBox().nextElementSibling!;
     pickBirth(container, "2025-01-15");
     next(); // → step 2, opens on a-q-name (hero, first pass)
     expect(sceneBox().className).toContain("w-[55%]");
-    expect(stage().className).toContain("justify-center");
+    // Hero: the summary is collapsed (no width/opacity) while the question is
+    // being asked, so the image is centred alone.
+    expect(summary().className).toContain("max-w-0");
+    expect(summary().className).toContain("opacity-0");
     fireEvent.change(container.querySelector("#a-name")!, {
       target: { value: "Kim" },
     });
     openQuestion(container, "a", "income"); // advances past name
-    // Same width — not shrunk — but the stage is no longer centred, so the
-    // summary can sit beside the portrait.
+    // Same image width; the summary now expands in beside it (which slides
+    // the image left), instead of the image snapping left↔centre.
     expect(sceneBox().className).toContain("w-[55%]");
-    expect(stage().className).not.toContain("justify-center");
+    expect(summary().className).toContain("max-w-full");
+    expect(summary().className).toContain("opacity-100");
   });
 
   it("scrolls a focused field clear of the keyboard once the visible area shrinks", () => {

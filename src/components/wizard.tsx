@@ -1846,11 +1846,12 @@ export function Wizard({
           style={{ scrollPaddingBottom: kbInset }}
           className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
         >
-          {/* The stage keeps one size and never shrinks: centred while a
-              question is open (no summary), and slid to the left once there's
-              something to show beside it. Only the camera moves between the
-              story steps. */}
-          <div className={cn("flex items-center gap-3", heroStage && "justify-center")}>
+          {/* The stage keeps one size and the container is always centred:
+              the question/answer summary expands in beside it (its width and
+              opacity animate) so the image slides left smoothly rather than
+              snapping from a left-aligned spot to the centre. Only the camera
+              moves between the story steps. */}
+          <div className="flex items-center justify-center gap-3">
             <div
               style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
@@ -1883,7 +1884,12 @@ export function Wizard({
                 </button>
               )}
             </div>
-            <div className={cn("min-w-0 flex-1 space-y-1.5", heroStage && "hidden")}>
+            <div
+              className={cn(
+                "min-w-0 flex-1 space-y-1.5 overflow-hidden transition-[max-width,opacity] duration-1000 ease-[cubic-bezier(0.45,0,0.15,1)] motion-reduce:transition-none",
+                heroStage ? "max-w-0 opacity-0" : "max-w-full opacity-100",
+              )}
+            >
               <FlowSlot slot="summary">{stepQuestions}</FlowSlot>
             </div>
           </div>
