@@ -43,9 +43,9 @@ const F2X = 400; // caregiver 2 (blue), 270 world-units over
 const BUNDLE_AT = { fx: 0.558, fy: 0.394 };
 
 /** Where the step-1 close-up camera centres and how tight it zooms — tuned
- *  by hand against the real artwork (not the same point as BUNDLE_AT: this
- *  frames a little more of the chest below the bundle, by choice). */
-const CLOSEUP_FOCUS = { fx: 0.5, fy: 0.582, scale: 1.17 };
+ *  (against the 15:22 stage frame) to frame the bundle in the caregiver's
+ *  arms, zoomed in enough to feel personal but keeping the arms. */
+const CLOSEUP_FOCUS = { fx: 0.545, fy: 0.48, scale: 1.5 };
 
 const STEP_BACK_DX = (F2X - F1X) * 0.35;
 const STEP_BACK_DY = -20;
@@ -194,7 +194,6 @@ export function FamilyScene({
       };
 
   const f = fadeOf(step);
-  const vis = f.bottom - f.top;
 
   return (
     <svg
@@ -206,17 +205,13 @@ export function FamilyScene({
       style={{
         maskImage: gradientOf(f),
         WebkitMaskImage: gradientOf(f),
-        // The faded-out margins are invisible but would still take up room,
-        // so the scene is blown up and pulled through its parent until only
-        // the part that's actually visible fills it — see `sceneAspect`.
+        // The stage frame is a constant 15:22 (matching the viewBox), so the
+        // scene fills it exactly and never resizes between steps — the camera
+        // zooms/pans and the fade trims the edges.
         position: "absolute",
-        left: 0,
+        inset: 0,
         width: "100%",
-        height: `${(100 / vis).toFixed(3)}%`,
-        top: `${((-100 * f.top) / vis).toFixed(3)}%`,
-        transitionProperty: "height, top",
-        transitionDuration: DUR,
-        transitionTimingFunction: EASE,
+        height: "100%",
       }}
     >
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">

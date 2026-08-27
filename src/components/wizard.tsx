@@ -1853,9 +1853,9 @@ export function Wizard({
               moves between the story steps. */}
           <div className="flex items-center justify-center gap-3">
             <div
-              style={{ aspectRatio: sceneAspect(current) }}
+              style={{ aspectRatio: "15 / 22" }}
               className={cn(
-                "relative w-[55%] shrink-0 transition-[width,aspect-ratio] duration-1000 ease-[cubic-bezier(0.45,0,0.15,1)] motion-reduce:transition-none",
+                "relative w-[55%] shrink-0",
               )}
             >
               <FamilyScene
