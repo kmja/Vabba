@@ -386,22 +386,21 @@ describe("<Planner /> wizard", () => {
     expect(scrollBy).toHaveBeenCalled();
   });
 
-  it("keeps the scene in a constant 15:22 frame so the camera tells the story", () => {
+  it("sizes the scene's box to the visible artwork, not the faded-out margins", () => {
     const { container } = renderPlanner();
     const scene = () => container.querySelector("[data-family-scene]")!;
     const sceneBox = () => scene().parentElement!;
 
-    // The stage keeps one constant frame on every step (so it never resizes
-    // vertically mid-transition); the camera's zoom and the fade crop to the
-    // current view. The scene is scaled up and pulled through the box so the
-    // visible band still fills it exactly — no invisible margins pushing the
-    // following question down.
-    expect(sceneBox().style.aspectRatio).toBe("15 / 22");
+    // Step 1's close-up fades out well before its own bottom edge (it's
+    // mostly torso down there). The box must be trimmed to just the part
+    // that's actually visible, or the invisible remainder pushes whatever
+    // follows — the "Födelsedatum" question — far down the page.
+    expect(sceneBox().style.aspectRatio).toBe("15 / 12.100");
     expect(scene().getAttribute("style")).toContain("height: 181.818%");
 
     pickBirth(container, "2025-01-15");
-    next(); // → step 2
-    expect(sceneBox().style.aspectRatio).toBe("15 / 22");
+    next(); // → step 2: standing figures, which only fade at the ground line
+    expect(sceneBox().style.aspectRatio).toBe("15 / 16.500");
     expect(scene().getAttribute("style")).toContain("height: 133.333%");
   });
 
