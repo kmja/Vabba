@@ -1855,8 +1855,6 @@ export function Wizard({
               style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
                 "relative w-[55%] shrink-0 transition-[width,aspect-ratio] duration-1000 ease-[cubic-bezier(0.45,0,0.15,1)] motion-reduce:transition-none",
-                !heroStage &&
-                  "[@media(max-height:740px)]:hidden [@media(max-height:560px)]:hidden",
               )}
             >
               <FamilyScene
