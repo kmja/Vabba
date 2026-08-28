@@ -45,13 +45,18 @@ const BUNDLE_AT = { fx: 0.558, fy: 0.394 };
 /** Where the step-1 close-up camera centres and how tight it zooms — tuned
  *  (against the 15:22 stage frame) to centre the bundle in the caregiver's
  *  arms, so the baby reads as the subject. */
-const CLOSEUP_FOCUS = { fx: 0.558, fy: 0.394, scale: 1.4 };
+const CLOSEUP_FOCUS = { fx: 0.501, fy: 0.443, scale: 1.61 };
 
-const STEP_BACK_DX = (F2X - F1X) * 0.35;
-const STEP_BACK_DY = -20;
-/** Where caregiver 1 recedes to once they've handed the baby over: toward
- *  the frame's centre, smaller — the vanishing point. */
-const STEP_BACK = `translate(${STEP_BACK_DX}px, ${STEP_BACK_DY}px) scale(0.6)`;
+/**
+ * Step-3 handover layout: where each caregiver stands (their feet, in world
+ * coords) and the camera framing. Tuned with the scene framer
+ * (public/frame-tool.html) so the two figures can be composed precisely.
+ */
+const HANDOVER = {
+  cam: { fx: F2X, fy: BASE - FIG_H * 0.5, scale: 0.78 },
+  c1: { x: F1X + (F2X - F1X) * 0.35, y: BASE - 20, scale: 0.6 },
+  c2: { x: F2X, y: BASE, scale: 1 },
+};
 
 const move = {
   transitionProperty: "transform, opacity",
@@ -75,7 +80,7 @@ const move = {
  * clear air above their heads, so only the ground line needs softening.
  */
 const FADES = {
-  closeup: { top: 0.05, solidFrom: 0.3, solidTo: 0.62, bottom: 0.85 },
+  closeup: { top: 0.11, solidFrom: 0.3, solidTo: 0.595, bottom: 0.8 },
   figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75 },
 } as const;
 
@@ -171,11 +176,10 @@ export function FamilyScene({
           CLOSEUP_FOCUS.scale,
         )
       : two
-        ? // The handover: caregiver 2 takes centre stage at the same framing
-          // as step 2 (caregiver 1 recedes, faded, to the left). Centering the
-          // midpoint left the subject off to the right and small.
-          cam(F2X, figMidY, 0.78)
-        : cam(F1X, figMidY, 0.78);
+        ? // The handover: caregiver 2 takes centre stage (caregiver 1 recedes,
+          // faded), composed via HANDOVER above.
+          cam(HANDOVER.cam.fx, HANDOVER.cam.fy, HANDOVER.cam.scale)
+        : cam(F1X, figMidY, 0.92);
 
   const fy = BASE - FIG_H;
   const fx1 = F1X - FIG_W / 2;
@@ -222,7 +226,9 @@ export function FamilyScene({
           style={{
             ...move,
             opacity: two ? 0.4 : 1,
-            transform: two ? STEP_BACK : "none",
+            transform: two
+              ? `translate(${HANDOVER.c1.x - F1X}px, ${HANDOVER.c1.y - BASE}px) scale(${HANDOVER.c1.scale})`
+              : "none",
             transformOrigin: `${F1X}px ${BASE}px`,
           }}
           className="motion-reduce:transition-none!"
@@ -249,7 +255,17 @@ export function FamilyScene({
 
         {/* Caregiver 2 (blue) — offstage until the handover (never in solo
             mode), already holding once they arrive. */}
-        <g style={{ ...move, opacity: two ? 1 : 0 }} className="motion-reduce:transition-none!">
+        <g
+          style={{
+            ...move,
+            opacity: two ? 1 : 0,
+            transform: two
+              ? `translate(${HANDOVER.c2.x - F2X}px, ${HANDOVER.c2.y - BASE}px) scale(${HANDOVER.c2.scale})`
+              : "none",
+            transformOrigin: `${F2X}px ${BASE}px`,
+          }}
+          className="motion-reduce:transition-none!"
+        >
           <image href="/Caregiver2.png" x={fx2} y={fy} width={FIG_W} height={FIG_H} />
         </g>
 

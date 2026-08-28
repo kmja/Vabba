@@ -16,10 +16,11 @@
   .stage{display:grid;place-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px}
   canvas{max-width:100%;max-height:360px;height:auto;background:var(--bg)}
   .panel{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px}
-  .row{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .group{font-size:12px;font-weight:600;color:var(--mut);margin:10px 0 2px;text-transform:uppercase;letter-spacing:.03em}
+  .row{display:flex;align-items:center;gap:10px;margin:6px 0}
   .row label{width:96px;color:var(--mut);font-size:12px;flex-shrink:0}
   .row input[type=range]{flex:1;accent-color:#2b2926}
-  .row output{width:56px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
+  .row output{width:58px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
   .out{background:#faf9f7;border:1px dashed var(--line);border-radius:8px;padding:10px;font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap;margin-top:12px;min-height:20px}
   .btn{margin-top:8px;padding:9px 12px;border:0;border-radius:8px;background:#2b2926;color:#fff;font:inherit;cursor:pointer}
   .note{color:var(--mut);font-size:11px;margin-top:8px}
@@ -29,7 +30,7 @@
 <div class="wrap">
   <header><h1>Scene framer</h1><p>Dra i reglagen tills bilden ser rätt ut — “Kopiera” ger värdena att klistra in i <code>family-scene.tsx</code>.</p></header>
   <div class="tabs">
-    <button data-step="1" class="on">1. Bebis (närbild)</button>
+    <button data-step="1" class="on">1. Bebis</button>
     <button data-step="2">2. Vårdnadshavare</button>
     <button data-step="3">3. Överlämning</button>
   </div>
@@ -38,127 +39,146 @@
 
   <div class="panel">
     <div class="row"><label>Zoom</label><input id="scale" type="range" min="0.4" max="2.2" step="0.01"><output id="scaleV"></output></div>
-    <div id="focusRowX"><div class="row"><label>Fokus X</label><input id="fx" type="range" min="0" max="1" step="0.001"><output id="fxV"></output></div></div>
-    <div id="focusRowY"><div class="row"><label>Fokus Y</label><input id="fy" type="range" min="0" max="1" step="0.001"><output id="fyV"></output></div></div>
-    <div class="row"><label>Fade topp</label><input id="ftop" type="range" min="0" max="0.4" step="0.005"><output id="ftopV"></output></div>
-    <div class="row"><label>Fade fr.</label><input id="fsolidFrom" type="range" min="0" max="0.8" step="0.005"><output id="fsolidFromV"></output></div>
-    <div class="row"><label>Fade till</label><input id="fsolidTo" type="range" min="0" max="0.9" step="0.005"><output id="fsolidToV"></output></div>
-    <div class="row"><label>Fade botten</label><input id="fbottom" type="range" min="0" max="1" step="0.005"><output id="fbottomV"></output></div>
+    <div id="step1rows" hidden>
+      <div class="row"><label>Fokus X</label><input id="fx" type="range" min="0" max="1" step="0.001"><output id="fxV"></output></div>
+      <div class="row"><label>Fokus Y</label><input id="fy" type="range" min="0" max="1" step="0.001"><output id="fyV"></output></div>
+    </div>
+    <div id="step3rows" hidden>
+      <div class="group">Kamera</div>
+      <div class="row"><label>Kamera X</label><input id="camFx" type="range" min="-100" max="520" step="1"><output id="camFxV"></output></div>
+      <div class="row"><label>Kamera Y</label><input id="camFy" type="range" min="-100" max="520" step="1"><output id="camFyV"></output></div>
+      <div class="group">Vårdnadshavare 1 (röd)</div>
+      <div class="row"><label>X</label><input id="c1x" type="range" min="-100" max="560" step="1"><output id="c1xV"></output></div>
+      <div class="row"><label>Y</label><input id="c1y" type="range" min="0" max="700" step="1"><output id="c1yV"></output></div>
+      <div class="row"><label>Storlek</label><input id="c1scale" type="range" min="0.3" max="1.1" step="0.01"><output id="c1scaleV"></output></div>
+      <div class="group">Vårdnadshavare 2 (blå)</div>
+      <div class="row"><label>X</label><input id="c2x" type="range" min="-100" max="560" step="1"><output id="c2xV"></output></div>
+      <div class="row"><label>Y</label><input id="c2y" type="range" min="0" max="700" step="1"><output id="c2yV"></output></div>
+      <div class="row"><label>Storlek</label><input id="c2scale" type="range" min="0.3" max="1.1" step="0.01"><output id="c2scaleV"></output></div>
+    </div>
+    <div class="group">Fade</div>
+    <div class="row"><label>Topp</label><input id="ftop" type="range" min="0" max="0.4" step="0.005"><output id="ftopV"></output></div>
+    <div class="row"><label>Från</label><input id="fsolidFrom" type="range" min="0" max="0.8" step="0.005"><output id="fsolidFromV"></output></div>
+    <div class="row"><label>Till</label><input id="fsolidTo" type="range" min="0" max="0.9" step="0.005"><output id="fsolidToV"></output></div>
+    <div class="row"><label>Botten</label><input id="fbottom" type="range" min="0" max="1" step="0.005"><output id="fbottomV"></output></div>
   </div>
 
   <button class="btn" id="copy">Kopiera inställningar</button>
   <div class="out" id="out"></div>
-  <p class="note">Laddar bilder…</p>
+  <p class="note" id="status">Laddar bilder…</p>
 </div>
 
 <script>
 const VIEW_W=300, VIEW_H=440, BASE=445, FIG_H=500;
 const FIG_W=FIG_H*1024/1536, F1X=130, F2X=400;
-const SCALE=1.2; // canvas 360x528 = 300x440 * 1.2
+const SCALE=1.2;
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-
-const imgs={
-  c1h:new Image(), c1:new Image(), c2:new Image(),
-};
+const imgs={ c1h:new Image(), c1:new Image(), c2:new Image() };
 imgs.c1h.src='/Caregiver1_handover.png';
 imgs.c1.src='/Caregiver1.png';
 imgs.c2.src='/Caregiver2.png';
 let loaded=0;
-for(const k in imgs){ imgs[k].onload=()=>{ if(++loaded>=3) render(); }; }
+for(const k in imgs){ imgs[k].onload=()=>{ if(++loaded>=3){ render(); document.getElementById('status').textContent=''; } }; }
 
 let step=1;
-const s={scale:1.4, fx:0.558, fy:0.394, ftop:0.05, fsolidFrom:0.3, fsolidTo:0.62, fbottom:0.85};
-const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const s={
+  scale:1.61, fx:0.501, fy:0.443,
+  camFx:F2X, camFy:BASE-FIG_H*0.5,
+  c1x:F1X+(F2X-F1X)*0.35, c1y:BASE-20, c1scale:0.6,
+  c2x:F2X, c2y:BASE, c2scale:1,
+  ftop:0.11, fsolidFrom:0.3, fsolidTo:0.595, fbottom:0.8,
+};
+
+function drawFig(img,x,y,w,h,alpha){ ctx.globalAlpha=alpha; ctx.drawImage(img,x,y,w,h); ctx.globalAlpha=1; }
 
 function render(){
   const two=step>=3;
   const sc=s.scale;
-  let cxW, cyW;
-  if(step<=1){ cxW=F1X-FIG_W/2+FIG_W*s.fx; cyW=(BASE-FIG_H)+FIG_H*s.fy; }
-  else { cxW=(two?F2X:F1X); cyW=BASE-FIG_H*0.5; }
-
   ctx.setTransform(SCALE,0,0,SCALE,0,0);
   ctx.clearRect(0,0,cv.width,cv.height);
-
   // camera: world -> screen
-  ctx.translate(VIEW_W/2 - sc*cxW, VIEW_H/2 - sc*cyW);
+  const camFx = step<=1 ? (F1X-FIG_W/2+FIG_W*s.fx) : (two? s.camFx : F1X);
+  const camFy = step<=1 ? ((BASE-FIG_H)+FIG_H*s.fy) : (two? s.camFy : BASE-FIG_H*0.5);
+  ctx.translate(VIEW_W/2 - sc*camFx, VIEW_H/2 - sc*camFy);
   ctx.scale(sc,sc);
 
-  const fy=BASE-FIG_H, fx1=F1X-FIG_W/2, fx2=F2X-FIG_W/2;
-  // caregiver 1 (coral): crossfade hold/handover, steps back on step 3
-  const bx=fx1, by=fy, bw=FIG_W, bh=FIG_H;
-  if(two){
-    ctx.save();
-    ctx.globalAlpha=0.4;
-    ctx.translate((F2X-F1X)*0.35, -20);
-    ctx.scale(0.6,0.6);
-    ctx.drawImage(imgs.c1h, bx,by,bw,bh);
-    ctx.restore();
+  if(step===1){
+    drawFig(imgs.c1, F1X-FIG_W/2, BASE-FIG_H, FIG_W, FIG_H, 1);
+  } else if(step===2){
+    drawFig(imgs.c1, F1X-FIG_W/2, BASE-FIG_H, FIG_W, FIG_H, 1);
   } else {
-    ctx.globalAlpha=1;
-    ctx.drawImage(imgs.c1, bx,by,bw,bh);
-  }
-  // caregiver 2 (blue) only on step 3
-  if(two){
-    ctx.globalAlpha=1;
-    ctx.drawImage(imgs.c2, fx2, fy, bw, bh);
+    // caregiver 1 (recedes, faded), caregiver 2 (the new holder)
+    drawFig(imgs.c1h, s.c1x - s.c1scale*FIG_W/2, s.c1y - s.c1scale*FIG_H, s.c1scale*FIG_W, s.c1scale*FIG_H, 0.4);
+    drawFig(imgs.c2,  s.c2x - s.c2scale*FIG_W/2, s.c2y - s.c2scale*FIG_H, s.c2scale*FIG_W, s.c2scale*FIG_H, 1);
   }
 
-  // fade: erase top/bottom per the fade fractions (destination-out)
+  // fade (destination-out)
   ctx.setTransform(1,0,0,1,0,0);
-  ctx.globalAlpha=1;
   ctx.globalCompositeOperation='destination-out';
   const g=ctx.createLinearGradient(0,0,0,cv.height);
   g.addColorStop(s.ftop,'rgba(0,0,0,1)');
   g.addColorStop(s.fsolidFrom,'rgba(0,0,0,0)');
   g.addColorStop(s.fsolidTo,'rgba(0,0,0,0)');
   g.addColorStop(s.fbottom,'rgba(0,0,0,1)');
-  ctx.fillStyle=g;
-  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.globalCompositeOperation='source-over';
-
   updateReadouts();
 }
 
-function updateReadouts(){
-  const id=(x)=>document.getElementById(x);
-  id('scale').value=s.scale; id('scaleV').textContent=s.scale.toFixed(2);
-  id('fx').value=s.fx; id('fxV').textContent=s.fx.toFixed(3);
-  id('fy').value=s.fy; id('fyV').textContent=s.fy.toFixed(3);
-  id('ftop').value=s.ftop; id('ftopV').textContent=s.ftop.toFixed(3);
-  id('fsolidFrom').value=s.fsolidFrom; id('fsolidFromV').textContent=s.fsolidFrom.toFixed(3);
-  id('fsolidTo').value=s.fsolidTo; id('fsolidToV').textContent=s.fsolidTo.toFixed(3);
-  id('fbottom').value=s.fbottom; id('fbottomV').textContent=s.fbottom.toFixed(3);
+function setV(id,v){ document.getElementById(id).value=v; }
+function setO(id,v){ document.getElementById(id).textContent=(typeof v==='number'? (Math.round(v*1000)/1000):v); }
 
-  const hasFocus=step<=1;
-  id('focusRowX').style.display=hasFocus?'':'none';
-  id('focusRowY').style.display=hasFocus?'':'none';
+function updateReadouts(){
+  setV('scale',s.scale); setO('scaleV',s.scale.toFixed(2));
+  setV('fx',s.fx); setO('fxV',s.fx.toFixed(3));
+  setV('fy',s.fy); setO('fyV',s.fy.toFixed(3));
+  setV('camFx',s.camFx); setO('camFxV',s.camFx.toFixed(0));
+  setV('camFy',s.camFy); setO('camFyV',s.camFy.toFixed(0));
+  setV('c1x',s.c1x); setO('c1xV',s.c1x.toFixed(0));
+  setV('c1y',s.c1y); setO('c1yV',s.c1y.toFixed(0));
+  setV('c1scale',s.c1scale); setO('c1scaleV',s.c1scale.toFixed(2));
+  setV('c2x',s.c2x); setO('c2xV',s.c2x.toFixed(0));
+  setV('c2y',s.c2y); setO('c2yV',s.c2y.toFixed(0));
+  setV('c2scale',s.c2scale); setO('c2scaleV',s.c2scale.toFixed(2));
+  setV('ftop',s.ftop); setO('ftopV',s.ftop.toFixed(3));
+  setV('fsolidFrom',s.fsolidFrom); setO('fsolidFromV',s.fsolidFrom.toFixed(3));
+  setV('fsolidTo',s.fsolidTo); setO('fsolidToV',s.fsolidTo.toFixed(3));
+  setV('fbottom',s.fbottom); setO('fbottomV',s.fbottom.toFixed(3));
+
+  document.getElementById('step1rows').hidden = step!==1;
+  document.getElementById('step3rows').hidden = step!==3;
 
   const out=document.getElementById('out');
-  if(hasFocus){
+  if(step===1){
     out.textContent=`// step 1 (close-up)
 CLOSEUP_FOCUS = { fx: ${s.fx.toFixed(3)}, fy: ${s.fy.toFixed(3)}, scale: ${s.scale.toFixed(2)} };
-// step 2/3 figures zoom (edit cam(...) calls)
-FIGURES_SCALE = 0.78;
 FADES.closeup = { top: ${s.ftop.toFixed(3)}, solidFrom: ${s.fsolidFrom.toFixed(3)}, solidTo: ${s.fsolidTo.toFixed(3)}, bottom: ${s.fbottom.toFixed(3)} };`;
+  } else if(step===2){
+    out.textContent=`// step 2 (figures)
+cam(F1X, figMidY, ${s.scale.toFixed(2)});`;
   } else {
-    out.textContent=`// step ${step} (figures)
-cam(F${step>=3?2:1}X, figMidY, ${s.scale.toFixed(2)});
-// (close-up settings unchanged)`;
+    out.textContent=`// step 3 (handover) — HANDOVER in family-scene.tsx
+HANDOVER = {
+  cam: { fx: ${s.camFx.toFixed(0)}, fy: ${s.camFy.toFixed(0)}, scale: ${s.scale.toFixed(2)} },
+  c1: { x: ${s.c1x.toFixed(0)}, y: ${s.c1y.toFixed(0)}, scale: ${s.c1scale.toFixed(2)} },
+  c2: { x: ${s.c2x.toFixed(0)}, y: ${s.c2y.toFixed(0)}, scale: ${s.c2scale.toFixed(2)} },
+};
+FADES.figures = { top: ${s.ftop.toFixed(3)}, solidFrom: ${s.fsolidFrom.toFixed(3)}, solidTo: ${s.fsolidTo.toFixed(3)}, bottom: ${s.fbottom.toFixed(3)} };`;
   }
 }
 
-for(const [id,key] of [['scale','scale'],['fx','fx'],['fy','fy'],['ftop','ftop'],['fsolidFrom','fsolidFrom'],['fsolidTo','fsolidTo'],['fbottom','fbottom']]){
-  const el=document.getElementById(id);
-  el.addEventListener('input',e=>{ s[key]=+e.target.value; render(); });
-}
+const bind=(id,key)=>{ const el=document.getElementById(id); el.addEventListener('input',e=>{ s[key]=+e.target.value; render(); }); };
+bind('scale','scale'); bind('fx','fx'); bind('fy','fy');
+bind('camFx','camFx'); bind('camFy','camFy');
+bind('c1x','c1x'); bind('c1y','c1y'); bind('c1scale','c1scale');
+bind('c2x','c2x'); bind('c2y','c2y'); bind('c2scale','c2scale');
+bind('ftop','ftop'); bind('fsolidFrom','fsolidFrom'); bind('fsolidTo','fsolidTo'); bind('fbottom','fbottom');
 
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   step=+b.dataset.step;
-  if(step<=1){s.scale=1.4; s.fx=0.558; s.fy=0.394;}
-  else {s.scale=0.78;}
+  if(step!==3){ s.scale = step===1?1.61:0.92; }
   render();
 }));
 

@@ -24,6 +24,7 @@ const FADES = {
   figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75 },
 };
 const fadeOf = (s) => (s <= 1 ? FADES.closeup : FADES.figures);
+void fadeOf;
 const cam = (fx, fy, s) =>
   `translate(${(VIEW_W / 2 - s * fx).toFixed(2)}, ${(VIEW_H / 2 - s * fy).toFixed(2)}) scale(${s})`;
 
