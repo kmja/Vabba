@@ -13,83 +13,110 @@
   .tabs{display:flex;gap:6px;margin-bottom:12px}
   .tabs button{flex:1;padding:8px;border:1px solid var(--line);background:#fff;border-radius:8px;font:inherit;cursor:pointer}
   .tabs button.on{background:#2b2926;color:#fff;border-color:#2b2926}
-  .stage{display:grid;place-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;min-height:340px}
-  .stage svg{max-width:100%;max-height:360px;height:auto}
+  .stage{display:grid;place-items:center;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px}
+  canvas{max-width:100%;max-height:360px;height:auto;background:var(--bg)}
   .panel{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px}
   .row{display:flex;align-items:center;gap:10px;margin:8px 0}
   .row label{width:96px;color:var(--mut);font-size:12px;flex-shrink:0}
-  .row input[type=range]{flex:1}
+  .row input[type=range]{flex:1;accent-color:#2b2926}
   .row output{width:56px;text-align:right;font-variant-numeric:tabular-nums;font-size:12px}
-  .out{background:#faf9f7;border:1px dashed var(--line);border-radius:8px;padding:10px;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;white-space:pre-wrap;margin-top:12px}
+  .out{background:#faf9f7;border:1px dashed var(--line);border-radius:8px;padding:10px;font-family:ui-monospace,monospace;font-size:11px;white-space:pre-wrap;margin-top:12px;min-height:20px}
   .btn{margin-top:8px;padding:9px 12px;border:0;border-radius:8px;background:#2b2926;color:#fff;font:inherit;cursor:pointer}
-  .btn.ghost{background:#fff;color:var(--fg);border:1px solid var(--line)}
   .note{color:var(--mut);font-size:11px;margin-top:8px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><h1>Scene framer</h1><p>Justera kameran tills bilden ser rätt ut — värdena längst ner kopierar du in i koden.</p></header>
+  <header><h1>Scene framer</h1><p>Dra i reglagen tills bilden ser rätt ut — “Kopiera” ger värdena att klistra in i <code>family-scene.tsx</code>.</p></header>
   <div class="tabs">
     <button data-step="1" class="on">1. Bebis (närbild)</button>
     <button data-step="2">2. Vårdnadshavare</button>
     <button data-step="3">3. Överlämning</button>
   </div>
 
-  <div class="stage"><div id="stage"></div></div>
+  <div class="stage"><canvas id="cv" width="360" height="528"></canvas></div>
 
   <div class="panel">
-    <div class="row"><label>Zoom (scale)</label><input id="scale" type="range" min="0.4" max="2.2" step="0.01"><output id="scaleV"></output></div>
-    <div id="focusRows" hidden>
-      <div class="row"><label>Fokus X</label><input id="fx" type="range" min="0" max="1" step="0.001"><output id="fxV"></output></div>
-      <div class="row"><label>Fokus Y</label><input id="fy" type="range" min="0" max="1" step="0.001"><output id="fyV"></output></div>
-    </div>
-    <div id="fadePanel">
-      <div class="row"><label>Fade topp</label><input id="ftop" type="range" min="0" max="0.4" step="0.005"><output id="ftopV"></output></div>
-      <div class="row"><label>Fade solid från</label><input id="fsolidFrom" type="range" min="0" max="0.8" step="0.005"><output id="fsolidFromV"></output></div>
-      <div class="row"><label>Fade solid till</label><input id="fsolidTo" type="range" min="0" max="0.9" step="0.005"><output id="fsolidToV"></output></div>
-      <div class="row"><label>Fade botten</label><input id="fbottom" type="range" min="0" max="1" step="0.005"><output id="fbottomV"></output></div>
-    </div>
+    <div class="row"><label>Zoom</label><input id="scale" type="range" min="0.4" max="2.2" step="0.01"><output id="scaleV"></output></div>
+    <div id="focusRowX"><div class="row"><label>Fokus X</label><input id="fx" type="range" min="0" max="1" step="0.001"><output id="fxV"></output></div></div>
+    <div id="focusRowY"><div class="row"><label>Fokus Y</label><input id="fy" type="range" min="0" max="1" step="0.001"><output id="fyV"></output></div></div>
+    <div class="row"><label>Fade topp</label><input id="ftop" type="range" min="0" max="0.4" step="0.005"><output id="ftopV"></output></div>
+    <div class="row"><label>Fade fr.</label><input id="fsolidFrom" type="range" min="0" max="0.8" step="0.005"><output id="fsolidFromV"></output></div>
+    <div class="row"><label>Fade till</label><input id="fsolidTo" type="range" min="0" max="0.9" step="0.005"><output id="fsolidToV"></output></div>
+    <div class="row"><label>Fade botten</label><input id="fbottom" type="range" min="0" max="1" step="0.005"><output id="fbottomV"></output></div>
   </div>
 
   <button class="btn" id="copy">Kopiera inställningar</button>
   <div class="out" id="out"></div>
-  <p class="note">När det ser rätt ut: tryck "Kopiera inställningar", så visas värdena att klistra in i <span style="font-family:monospace">family-scene.tsx</span>.</p>
+  <p class="note">Laddar bilder…</p>
 </div>
 
 <script>
 const VIEW_W=300, VIEW_H=440, BASE=445, FIG_H=500;
 const FIG_W=FIG_H*1024/1536, F1X=130, F2X=400;
-const P=["/Caregiver1_handover.png","/Caregiver1.png","/Caregiver2.png"];
-const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const SCALE=1.2; // canvas 360x528 = 300x440 * 1.2
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+
+const imgs={
+  c1h:new Image(), c1:new Image(), c2:new Image(),
+};
+imgs.c1h.src='/Caregiver1_handover.png';
+imgs.c1.src='/Caregiver1.png';
+imgs.c2.src='/Caregiver2.png';
+let loaded=0;
+for(const k in imgs){ imgs[k].onload=()=>{ if(++loaded>=3) render(); }; }
 
 let step=1;
 const s={scale:1.4, fx:0.558, fy:0.394, ftop:0.05, fsolidFrom:0.3, fsolidTo:0.62, fbottom:0.85};
-
-function cam(fx,fy,sc){return `translate(${(VIEW_W/2-sc*fx).toFixed(2)}px, ${(VIEW_H/2-sc*fy).toFixed(2)}px) scale(${sc})`;}
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 
 function render(){
   const two=step>=3;
   const sc=s.scale;
-  // Focus in WORLD coords -> normalize to figure fractions for the closeup;
-  // for steps 2/3 the figure is centred.
   let cxW, cyW;
   if(step<=1){ cxW=F1X-FIG_W/2+FIG_W*s.fx; cyW=(BASE-FIG_H)+FIG_H*s.fy; }
   else { cxW=(two?F2X:F1X); cyW=BASE-FIG_H*0.5; }
-  const camera=cam(cxW,cyW,sc);
-  const fy=BASE-FIG_H, fx1=F1X-FIG_W/2, fx2=F2X-FIG_W/2;
-  const fade=`linear-gradient(to bottom, transparent ${s.ftop*100}%, #000 ${s.fsolidFrom*100}%, #000 ${s.fsolidTo*100}%, transparent ${s.fbottom*100}%)`;
-  const stepBack=`translate(${(F2X-F1X)*0.35}px, -20px) scale(0.6)`;
 
-  const el=document.getElementById('stage');
-  el.innerHTML=`<svg width="300" height="440" viewBox="0 0 300 440" style="mask-image:${fade};-webkit-mask-image:${fade}">
-    <g transform="${camera}">
-      <g opacity="${two?0.4:1}" transform="${two?stepBack:'none'}" style="transform-origin:${F1X}px ${BASE}px">
-        <image href="${P[0]}" x="${fx1}" y="${fy}" width="${FIG_W}" height="${FIG_H}" opacity="${two?1:0}"/>
-        <image href="${P[1]}" x="${fx1}" y="${fy}" width="${FIG_W}" height="${FIG_H}" opacity="${two?0:1}"/>
-      </g>
-      <g opacity="${two?1:0}"><image href="${P[2]}" x="${fx2}" y="${fy}" width="${FIG_W}" height="${FIG_H}"/></g>
-    </g>
-  </svg>`;
+  ctx.setTransform(SCALE,0,0,SCALE,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+
+  // camera: world -> screen
+  ctx.translate(VIEW_W/2 - sc*cxW, VIEW_H/2 - sc*cyW);
+  ctx.scale(sc,sc);
+
+  const fy=BASE-FIG_H, fx1=F1X-FIG_W/2, fx2=F2X-FIG_W/2;
+  // caregiver 1 (coral): crossfade hold/handover, steps back on step 3
+  const bx=fx1, by=fy, bw=FIG_W, bh=FIG_H;
+  if(two){
+    ctx.save();
+    ctx.globalAlpha=0.4;
+    ctx.translate((F2X-F1X)*0.35, -20);
+    ctx.scale(0.6,0.6);
+    ctx.drawImage(imgs.c1h, bx,by,bw,bh);
+    ctx.restore();
+  } else {
+    ctx.globalAlpha=1;
+    ctx.drawImage(imgs.c1, bx,by,bw,bh);
+  }
+  // caregiver 2 (blue) only on step 3
+  if(two){
+    ctx.globalAlpha=1;
+    ctx.drawImage(imgs.c2, fx2, fy, bw, bh);
+  }
+
+  // fade: erase top/bottom per the fade fractions (destination-out)
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='destination-out';
+  const g=ctx.createLinearGradient(0,0,0,cv.height);
+  g.addColorStop(s.ftop,'rgba(0,0,0,1)');
+  g.addColorStop(s.fsolidFrom,'rgba(0,0,0,0)');
+  g.addColorStop(s.fsolidTo,'rgba(0,0,0,0)');
+  g.addColorStop(s.fbottom,'rgba(0,0,0,1)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.globalCompositeOperation='source-over';
+
   updateReadouts();
 }
 
@@ -104,29 +131,27 @@ function updateReadouts(){
   id('fbottom').value=s.fbottom; id('fbottomV').textContent=s.fbottom.toFixed(3);
 
   const hasFocus=step<=1;
-  id('focusRows').hidden=!hasFocus;
+  id('focusRowX').style.display=hasFocus?'':'none';
+  id('focusRowY').style.display=hasFocus?'':'none';
+
   const out=document.getElementById('out');
   if(hasFocus){
-    out.textContent=`// step 1 (close-up) — family-scene.tsx
+    out.textContent=`// step 1 (close-up)
 CLOSEUP_FOCUS = { fx: ${s.fx.toFixed(3)}, fy: ${s.fy.toFixed(3)}, scale: ${s.scale.toFixed(2)} };
-// step 2/3 figures zoom (used in cam(...))
-FIGURES_SCALE = 0.78;   // <— your current figure zoom, edit in cam() calls
+// step 2/3 figures zoom (edit cam(...) calls)
+FIGURES_SCALE = 0.78;
 FADES.closeup = { top: ${s.ftop.toFixed(3)}, solidFrom: ${s.fsolidFrom.toFixed(3)}, solidTo: ${s.fsolidTo.toFixed(3)}, bottom: ${s.fbottom.toFixed(3)} };`;
   } else {
-    out.textContent=`// step ${step} (figures) — family-scene.tsx
+    out.textContent=`// step ${step} (figures)
 cam(F${step>=3?2:1}X, figMidY, ${s.scale.toFixed(2)});
 // (close-up settings unchanged)`;
   }
 }
 
-// wire sliders
-document.getElementById('scale').addEventListener('input',e=>{s.scale=+e.target.value;render();});
-document.getElementById('fx').addEventListener('input',e=>{s.fx=+e.target.value;render();});
-document.getElementById('fy').addEventListener('input',e=>{s.fy=+e.target.value;render();});
-document.getElementById('ftop').addEventListener('input',e=>{s.ftop=+e.target.value;render();});
-document.getElementById('fsolidFrom').addEventListener('input',e=>{s.fsolidFrom=+e.target.value;render();});
-document.getElementById('fsolidTo').addEventListener('input',e=>{s.fsolidTo=+e.target.value;render();});
-document.getElementById('fbottom').addEventListener('input',e=>{s.fbottom=+e.target.value;render();});
+for(const [id,key] of [['scale','scale'],['fx','fx'],['fy','fy'],['ftop','ftop'],['fsolidFrom','fsolidFrom'],['fsolidTo','fsolidTo'],['fbottom','fbottom']]){
+  const el=document.getElementById(id);
+  el.addEventListener('input',e=>{ s[key]=+e.target.value; render(); });
+}
 
 document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));
