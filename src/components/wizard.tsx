@@ -31,6 +31,7 @@ import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
 import { FamilyScene, sceneAspect } from "@/components/family-scene";
+import { StepScene } from "@/components/step-scene";
 import { FlowQuestion, FlowSlot } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
@@ -1847,20 +1848,16 @@ export function Wizard({
           className="px-4 pt-3 pb-1 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:flex max-sm:flex-col sm:px-6 sm:pt-4 sm:pb-2"
         >
           {/* The stage yields: the question below keeps its full height and
-              the scene shrinks into whatever's left (and crops), so content
-              always fits — the image is the thing that gives way. */}
+              the step image shrinks into whatever's left (and crops), so
+              content always fits. It's one pre-framed image per step — the
+              same visual anchor every time. */}
           <div className="flex items-center justify-center gap-3 max-sm:min-h-0 max-sm:flex-1">
             <div
-              style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative w-[62%] shrink-0 max-sm:max-h-full",
+                "relative w-full shrink-0 overflow-hidden rounded-xl border max-sm:max-h-full sm:w-[42%] sm:aspect-[3/4]",
               )}
             >
-              <FamilyScene
-                step={current}
-                soloMode={soloMode}
-                babyCount={plan.childrenInBirth}
-              />
+              <StepScene step={current} />
               {/* A quiet way to say "twins, actually" without a whole
                   question for it — precise control (and a way back down)
                   stays in Avancerade inställningar. */}
