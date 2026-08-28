@@ -1855,7 +1855,7 @@ export function Wizard({
             <div
               style={{ aspectRatio: "15 / 22" }}
               className={cn(
-                "relative w-[62%] shrink-0",
+                "relative w-[62%] shrink-0 aspect-[15/22] max-h-[30vh] sm:max-h-[52vh]",
               )}
             >
               <FamilyScene

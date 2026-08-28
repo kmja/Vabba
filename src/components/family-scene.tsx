@@ -204,7 +204,7 @@ export function FamilyScene({
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       aria-hidden
       data-family-scene
-      preserveAspectRatio="xMidYMid meet"
+      preserveAspectRatio="xMidYMin slice"
       className="pointer-events-none select-none"
       style={{
         maskImage: gradientOf(f),
