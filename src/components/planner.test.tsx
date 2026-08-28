@@ -386,19 +386,18 @@ describe("<Planner /> wizard", () => {
     expect(scrollBy).toHaveBeenCalled();
   });
 
-  it("keeps the scene box in a constant frame so it never resizes vertically", () => {
+  it("trims the scene box to the visible artwork so it doesn't reserve padding", () => {
     const { container } = renderPlanner();
-    const scene = () => container.querySelector("[data-family-scene]")!;
-    const sceneBox = () => scene().parentElement!;
+    const sceneBox = () =>
+      container.querySelector("[data-family-scene]")!.parentElement!;
 
-    // The stage frame is a constant 15:22 (the artwork's own shape): the
-    // camera zooms/pans inside it, and the box never resizes between steps —
-    // which is what made the mid-transition "staged" vertical resize.
-    expect(sceneBox().style.aspectRatio).toBe("15 / 22");
+    // The box is trimmed to the visible (non-faded) band, so the fade doesn't
+    // leave transparent padding that pushes the question below the fold.
+    expect(sceneBox().style.aspectRatio).toBe("15 / 15.180");
 
     pickBirth(container, "2025-01-15");
     next(); // → step 2
-    expect(sceneBox().style.aspectRatio).toBe("15 / 22");
+    expect(sceneBox().style.aspectRatio).toBe("15 / 17.600");
   });
 
   it("reopens an answered question as an accordion, not the hero view", () => {

@@ -1844,7 +1844,7 @@ export function Wizard({
           data-wizard-scroll
           data-wizard-step={current}
           style={{ scrollPaddingBottom: kbInset }}
-          className="px-4 py-4 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:py-5 [@media(max-height:740px)]:py-2"
+          className="px-4 pt-3 pb-1 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:pt-4 sm:pb-2"
         >
           {/* The stage keeps one size and the container is always centred:
               the question/answer summary expands in beside it (its width and
@@ -1853,9 +1853,9 @@ export function Wizard({
               moves between the story steps. */}
           <div className="flex items-center justify-center gap-3">
             <div
-              style={{ aspectRatio: "15 / 22" }}
+              style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative w-[62%] shrink-0 aspect-[15/22] max-h-[30vh] sm:max-h-[52vh]",
+                "relative w-[62%] shrink-0",
               )}
             >
               <FamilyScene
@@ -1900,7 +1900,7 @@ export function Wizard({
 
           <div
             key={current}
-            className="animate-flow-in mt-4 space-y-5 [@media(max-height:740px)]:mt-2 [@media(max-height:740px)]:space-y-3"
+            className="animate-flow-in mt-2 space-y-3 [@media(max-height:740px)]:mt-1 [@media(max-height:740px)]:space-y-2"
           >
             {current === 1 && (
               <>
