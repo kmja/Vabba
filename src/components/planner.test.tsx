@@ -277,10 +277,10 @@ describe("<Planner /> wizard", () => {
     const img = () => container.querySelector("[data-step-scene]");
     expect(img()).not.toBeNull();
     // Step 1 is the baby; step 2 is caregiver 1 holding the baby.
-    expect(img()?.getAttribute("src")).toBe("/Baby.png");
+    expect(img()?.getAttribute("src")).toBe("/step-1.png");
     pickBirth(container, "2025-01-15");
     next(); // → step 2
-    expect(img()?.getAttribute("src")).toBe("/Caregiver1.png");
+    expect(img()?.getAttribute("src")).toBe("/step-2.png");
   });
 
   it("shows the step intro as the name question's heading, but plain \"Namn\" once reopened", () => {
@@ -305,7 +305,7 @@ describe("<Planner /> wizard", () => {
     const summary = () => sceneBox().nextElementSibling!;
     pickBirth(container, "2025-01-15");
     next(); // → step 2, opens on a-q-name (hero, first pass)
-    expect(sceneBox().className).toContain("aspect-[3/4]");
+    expect(sceneBox().className).toContain("aspect-[15/22]");
     // Hero: the summary is collapsed (no width/opacity) while the question is
     // being asked, so the image is centred alone.
     expect(summary().className).toContain("max-w-0");
@@ -315,7 +315,7 @@ describe("<Planner /> wizard", () => {
     });
     openQuestion(container, "a", "income"); // advances past name
     // Same image; the summary now expands in beside it.
-    expect(sceneBox().className).toContain("aspect-[3/4]");
+    expect(sceneBox().className).toContain("aspect-[15/22]");
     expect(summary().className).toContain("max-w-full");
     expect(summary().className).toContain("opacity-100");
   });
@@ -391,11 +391,11 @@ describe("<Planner /> wizard", () => {
     // One consistent image slot — fixed 3:4, cropped by object-cover — so the
     // image never changes size/aspect between steps and the question always
     // keeps its height.
-    expect(sceneBox().className).toContain("aspect-[3/4]");
+    expect(sceneBox().className).toContain("aspect-[15/22]");
 
     pickBirth(container, "2025-01-15");
     next(); // → step 2
-    expect(sceneBox().className).toContain("aspect-[3/4]");
+    expect(sceneBox().className).toContain("aspect-[15/22]");
   });
 
   it("reopens an answered question as an accordion, not the hero view", () => {

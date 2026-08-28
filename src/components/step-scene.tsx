@@ -15,7 +15,7 @@
  * cover) so trimming the box never distorts the artwork, just crops its edges.
  */
 export function StepScene({ step }: { step: number }) {
-  const src = step === 1 ? "/Baby.png" : step === 2 ? "/Caregiver1.png" : "/Caregiver2.png";
+  const src = step === 1 ? "/step-1.png" : step === 2 ? "/step-2.png" : "/step-3.png";
   return (
     // eslint-disable-next-line @next/next/no-img-element -- static export, no image optimizer to defer to; a plain decorative illustration
     <img
