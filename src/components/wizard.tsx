@@ -1844,18 +1844,16 @@ export function Wizard({
           data-wizard-scroll
           data-wizard-step={current}
           style={{ scrollPaddingBottom: kbInset }}
-          className="px-4 pt-3 pb-1 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:pt-4 sm:pb-2"
+          className="px-4 pt-3 pb-1 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:flex max-sm:flex-col sm:px-6 sm:pt-4 sm:pb-2"
         >
-          {/* The stage keeps one size and the container is always centred:
-              the question/answer summary expands in beside it (its width and
-              opacity animate) so the image slides left smoothly rather than
-              snapping from a left-aligned spot to the centre. Only the camera
-              moves between the story steps. */}
-          <div className="flex items-center justify-center gap-3">
+          {/* The stage yields: the question below keeps its full height and
+              the scene shrinks into whatever's left (and crops), so content
+              always fits — the image is the thing that gives way. */}
+          <div className="flex items-center justify-center gap-3 max-sm:min-h-0 max-sm:flex-1">
             <div
               style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative w-[62%] shrink-0",
+                "relative w-[62%] shrink-0 max-sm:max-h-full",
               )}
             >
               <FamilyScene
@@ -1900,7 +1898,7 @@ export function Wizard({
 
           <div
             key={current}
-            className="animate-flow-in mt-2 space-y-3 [@media(max-height:740px)]:mt-1 [@media(max-height:740px)]:space-y-2"
+            className="animate-flow-in mt-2 space-y-3 max-sm:shrink-0 [@media(max-height:740px)]:mt-1 [@media(max-height:740px)]:space-y-2"
           >
             {current === 1 && (
               <>
