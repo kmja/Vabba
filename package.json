@@ -1,6 +1,6 @@
 {
   "name": "foraldrapenning",
-  "version": "0.37.31",
+  "version": "0.37.32",
   "private": true,
   "scripts": {
     "dev": "next dev",

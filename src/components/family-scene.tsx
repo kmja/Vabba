@@ -53,9 +53,9 @@ const CLOSEUP_FOCUS = { fx: 0.501, fy: 0.443, scale: 1.61 };
  * (public/frame-tool.html) so the two figures can be composed precisely.
  */
 const HANDOVER = {
-  cam: { fx: F2X, fy: BASE - FIG_H * 0.5, scale: 0.78 },
-  c1: { x: F1X + (F2X - F1X) * 0.35, y: BASE - 20, scale: 0.6 },
-  c2: { x: F2X, y: BASE, scale: 1 },
+  cam: { fx: 344, fy: 195, scale: 0.92 },
+  c1: { x: 239, y: 425, scale: 0.77 },
+  c2: { x: 400, y: 445, scale: 1 },
 };
 
 const move = {
@@ -81,7 +81,7 @@ const move = {
  */
 const FADES = {
   closeup: { top: 0.11, solidFrom: 0.3, solidTo: 0.595, bottom: 0.8 },
-  figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75 },
+  figures: { top: 0, solidFrom: 0, solidTo: 0.595, bottom: 0.8 },
 } as const;
 
 type Fade = (typeof FADES)[keyof typeof FADES];
