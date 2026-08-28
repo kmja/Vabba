@@ -1854,7 +1854,7 @@ export function Wizard({
           <div className="flex items-center justify-center gap-3 max-sm:min-h-0 max-sm:flex-1">
             <div
               className={cn(
-                "relative w-full shrink-0 overflow-hidden rounded-xl border bg-[#efece8] max-sm:max-h-full sm:w-[38%] sm:aspect-[15/22]",
+                "relative shrink-0 overflow-hidden rounded-xl border bg-[#efece8] max-sm:h-full max-sm:aspect-[15/22] sm:w-[38%] sm:aspect-[15/22]",
               )}
             >
               <StepScene step={current} />

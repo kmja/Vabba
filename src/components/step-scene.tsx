@@ -23,7 +23,7 @@ export function StepScene({ step }: { step: number }) {
       alt=""
       aria-hidden
       data-step-scene
-      className="size-full object-cover object-top select-none"
+      className="size-full object-contain select-none"
       draggable={false}
     />
   );
