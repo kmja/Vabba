@@ -272,15 +272,17 @@ describe("<Planner /> wizard", () => {
     expect(periodHeaders(container)[1].textContent).toContain("Kim");
   });
 
-  it("shows a dedicated, pre-framed image per step", () => {
+  it("keeps the family scene mounted across steps (animated stage)", () => {
     const { container } = renderPlanner();
-    const img = () => container.querySelector("[data-step-scene]");
-    expect(img()).not.toBeNull();
-    // Step 1 is the baby; step 2 is caregiver 1 holding the baby.
-    expect(img()?.getAttribute("src")).toBe("/step-1.png");
+    const scene = () => container.querySelector("[data-family-scene]");
+    expect(scene()).not.toBeNull();
+    const el = scene();
     pickBirth(container, "2025-01-15");
     next(); // → step 2
-    expect(img()?.getAttribute("src")).toBe("/step-2.png");
+    // Same element instance — the camera can animate between steps.
+    expect(scene()).toBe(el);
+    // Caregiver 1's portrait is now in view.
+    expect(el?.innerHTML).toContain("Caregiver1.png");
   });
 
   it("shows the step intro as the name question's heading, but plain \"Namn\" once reopened", () => {
@@ -298,24 +300,24 @@ describe("<Planner /> wizard", () => {
     expect(heading()).toBe("Namn");
   });
 
-  it("keeps the image and expands the summary beside it", () => {
+  it("keeps the scene and expands the summary beside it", () => {
     const { container } = renderPlanner();
     const sceneBox = () =>
-      container.querySelector("[data-step-scene]")!.parentElement!;
+      container.querySelector("[data-family-scene]")!.parentElement!;
     const summary = () => sceneBox().nextElementSibling!;
     pickBirth(container, "2025-01-15");
     next(); // → step 2, opens on a-q-name (hero, first pass)
-    expect(sceneBox().className).toContain("aspect-[15/22]");
+    expect(sceneBox().className).toContain("w-[55%]");
     // Hero: the summary is collapsed (no width/opacity) while the question is
-    // being asked, so the image is centred alone.
+    // being asked, so the scene is centred alone.
     expect(summary().className).toContain("max-w-0");
     expect(summary().className).toContain("opacity-0");
     fireEvent.change(container.querySelector("#a-name")!, {
       target: { value: "Kim" },
     });
     openQuestion(container, "a", "income"); // advances past name
-    // Same image; the summary now expands in beside it.
-    expect(sceneBox().className).toContain("aspect-[15/22]");
+    // Same scene; the summary now expands in beside it.
+    expect(sceneBox().className).toContain("w-[55%]");
     expect(summary().className).toContain("max-w-full");
     expect(summary().className).toContain("opacity-100");
   });
@@ -383,19 +385,18 @@ describe("<Planner /> wizard", () => {
     expect(scrollBy).toHaveBeenCalled();
   });
 
-  it("keeps the image slot a consistent aspect across steps (no resize)", () => {
+  it("trims the scene box to the visible artwork so it has no padding", () => {
     const { container } = renderPlanner();
     const sceneBox = () =>
-      container.querySelector("[data-step-scene]")!.parentElement!;
+      container.querySelector("[data-family-scene]")!.parentElement!;
 
-    // One consistent image slot — fixed 3:4, cropped by object-cover — so the
-    // image never changes size/aspect between steps and the question always
-    // keeps its height.
-    expect(sceneBox().className).toContain("aspect-[15/22]");
+    // The box is trimmed to the fade's visible band (sceneAspect) so the image
+    // ends where the fade goes invisible — no empty padding top/bottom.
+    expect(sceneBox().style.aspectRatio).toBe("15 / 15.180");
 
     pickBirth(container, "2025-01-15");
     next(); // → step 2
-    expect(sceneBox().className).toContain("aspect-[15/22]");
+    expect(sceneBox().style.aspectRatio).toBe("15 / 17.600");
   });
 
   it("reopens an answered question as an accordion, not the hero view", () => {

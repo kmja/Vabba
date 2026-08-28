@@ -31,7 +31,6 @@ import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
 import { CheckRow } from "@/components/check-row";
 import { FamilyScene, sceneAspect } from "@/components/family-scene";
-import { StepScene } from "@/components/step-scene";
 import { FlowQuestion, FlowSlot } from "@/components/flow-question";
 import { InlineCalendar } from "@/components/inline-calendar";
 import { GoogleNameButton } from "@/components/google-name";
@@ -1845,19 +1844,23 @@ export function Wizard({
           data-wizard-scroll
           data-wizard-step={current}
           style={{ scrollPaddingBottom: kbInset }}
-          className="px-4 pt-3 pb-1 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto max-sm:flex max-sm:flex-col sm:px-6 sm:pt-4 sm:pb-2"
+          className="px-4 pt-3 pb-1 max-sm:min-h-0 max-sm:flex-1 max-sm:overflow-y-auto sm:px-6 sm:pt-4 sm:pb-2"
         >
-          {/* The stage yields: the question below keeps its full height and
-              the step image shrinks into whatever's left (and crops), so
-              content always fits. It's one pre-framed image per step — the
-              same visual anchor every time. */}
-          <div className="flex items-center justify-center gap-3 max-sm:min-h-0 max-sm:flex-1">
+          {/* The stage shows the runtime scene in a box trimmed to the fade's
+              visible band — the image's top/bottom end where the fade goes
+              invisible, so there's no empty padding. */}
+          <div className="flex items-center justify-center gap-3">
             <div
+              style={{ aspectRatio: sceneAspect(current) }}
               className={cn(
-                "relative shrink-0 overflow-hidden rounded-xl border bg-[#efece8] max-sm:h-full max-sm:aspect-[15/22] sm:w-[38%] sm:aspect-[15/22]",
+                "relative shrink-0 w-[55%]",
               )}
             >
-              <StepScene step={current} />
+              <FamilyScene
+                step={current}
+                soloMode={soloMode}
+                babyCount={plan.childrenInBirth}
+              />
               {/* A quiet way to say "twins, actually" without a whole
                   question for it — precise control (and a way back down)
                   stays in Avancerade inställningar. */}
@@ -1895,7 +1898,7 @@ export function Wizard({
 
           <div
             key={current}
-            className="animate-flow-in mt-2 space-y-3 max-sm:shrink-0 [@media(max-height:740px)]:mt-1 [@media(max-height:740px)]:space-y-2"
+            className="animate-flow-in mt-2 space-y-3 [@media(max-height:740px)]:mt-1 [@media(max-height:740px)]:space-y-2"
           >
             {current === 1 && (
               <>

@@ -198,24 +198,27 @@ export function FamilyScene({
       };
 
   const f = fadeOf(step);
+  const vis = f.bottom - f.top;
 
   return (
     <svg
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       aria-hidden
       data-family-scene
-      preserveAspectRatio="xMidYMid slice"
+      preserveAspectRatio="xMidYMid meet"
       className="pointer-events-none select-none"
       style={{
         maskImage: gradientOf(f),
         WebkitMaskImage: gradientOf(f),
-        // The stage frame is a constant 15:22 (matching the viewBox), so the
-        // scene fills it exactly and never resizes between steps — the camera
-        // zooms/pans and the fade trims the edges.
+        // The box is trimmed to the fade's visible band (sceneAspect), so the
+        // scene is blown up and pulled through until only that band fills it —
+        // the top/bottom ends exactly where the fade goes invisible, so no
+        // empty padding.
         position: "absolute",
-        inset: 0,
+        left: 0,
         width: "100%",
-        height: "100%",
+        height: `${(100 / vis).toFixed(3)}%`,
+        top: `${((-100 * f.top) / vis).toFixed(3)}%`,
       }}
     >
       <g style={{ ...move, transform: camera }} className="motion-reduce:transition-none!">
