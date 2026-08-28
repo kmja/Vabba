@@ -43,9 +43,9 @@ const F2X = 400; // caregiver 2 (blue), 270 world-units over
 const BUNDLE_AT = { fx: 0.558, fy: 0.394 };
 
 /** Where the step-1 close-up camera centres and how tight it zooms — tuned
- *  (against the 15:22 stage frame) to frame the bundle in the caregiver's
- *  arms, zoomed in enough to feel personal but keeping the arms. */
-const CLOSEUP_FOCUS = { fx: 0.545, fy: 0.48, scale: 1.5 };
+ *  (against the 15:22 stage frame) to centre the bundle in the caregiver's
+ *  arms, so the baby reads as the subject. */
+const CLOSEUP_FOCUS = { fx: 0.558, fy: 0.394, scale: 1.4 };
 
 const STEP_BACK_DX = (F2X - F1X) * 0.35;
 const STEP_BACK_DY = -20;
@@ -75,7 +75,7 @@ const move = {
  * clear air above their heads, so only the ground line needs softening.
  */
 const FADES = {
-  closeup: { top: 0.05, solidFrom: 0.2, solidTo: 0.4, bottom: 0.6 },
+  closeup: { top: 0.05, solidFrom: 0.3, solidTo: 0.62, bottom: 0.85 },
   figures: { top: 0, solidFrom: 0, solidTo: 0.45, bottom: 0.75 },
 } as const;
 
@@ -174,8 +174,8 @@ export function FamilyScene({
         ? // The handover: caregiver 2 takes centre stage at the same framing
           // as step 2 (caregiver 1 recedes, faded, to the left). Centering the
           // midpoint left the subject off to the right and small.
-          cam(F2X, figMidY, 0.72)
-        : cam(F1X, figMidY, 0.72);
+          cam(F2X, figMidY, 0.78)
+        : cam(F1X, figMidY, 0.78);
 
   const fy = BASE - FIG_H;
   const fx1 = F1X - FIG_W / 2;

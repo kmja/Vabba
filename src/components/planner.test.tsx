@@ -307,7 +307,7 @@ describe("<Planner /> wizard", () => {
     const summary = () => sceneBox().nextElementSibling!;
     pickBirth(container, "2025-01-15");
     next(); // → step 2, opens on a-q-name (hero, first pass)
-    expect(sceneBox().className).toContain("w-[55%]");
+    expect(sceneBox().className).toContain("w-[62%]");
     // Hero: the summary is collapsed (no width/opacity) while the question is
     // being asked, so the image is centred alone.
     expect(summary().className).toContain("max-w-0");
@@ -318,7 +318,7 @@ describe("<Planner /> wizard", () => {
     openQuestion(container, "a", "income"); // advances past name
     // Same image width; the summary now expands in beside it (which slides
     // the image left), instead of the image snapping left↔centre.
-    expect(sceneBox().className).toContain("w-[55%]");
+    expect(sceneBox().className).toContain("w-[62%]");
     expect(summary().className).toContain("max-w-full");
     expect(summary().className).toContain("opacity-100");
   });
