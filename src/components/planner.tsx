@@ -692,7 +692,7 @@ export function Planner() {
       periods: built.periods,
       unused: built.unused,
       warnings: built.warnings,
-      intervals: periodIntervals(built.periods, names, rateOf),
+      intervals: periodIntervals(built.periods, names, rateOf, lagstanivaDailyAmount()),
     };
   }, [form.periods, deadlines, nameA, nameB, rateA, rateB]);
 

@@ -22,6 +22,7 @@ describe("periodIntervals", () => {
       [p({ caregiver: "A" }), p({ caregiver: "B", days: 0 })],
       { A: "Niki", B: "Kalle" },
       () => 600,
+      180,
     );
     expect(r).toHaveLength(1); // the 0-day one is dropped
     expect(r[0].caregiver).toBe("Niki");
@@ -31,7 +32,18 @@ describe("periodIntervals", () => {
   });
 
   it("values the monthly from the caregiver's own rate", () => {
-    const r = periodIntervals([p({ caregiver: "B" })], { A: "Niki", B: "Kalle" }, () => 900);
+    const r = periodIntervals([p({ caregiver: "B" })], { A: "Niki", B: "Kalle" }, () => 900, 180);
     expect(r[0].monthly).toBe(Math.round((900 * 5 * 30.4) / 7));
+  });
+
+  it("uses the flat lägstanivå rate for a lagsta period", () => {
+    const r = periodIntervals(
+      [p({ tier: "lagsta", days: 30, pace: { phase1: 5, phase2: 5 } })],
+      { A: "Niki", B: "Kalle" },
+      () => 900,
+      180,
+    );
+    expect(r[0].tier).toBe("lagsta");
+    expect(r[0].monthly).toBe(Math.round((180 * 5 * 30.4) / 7));
   });
 });
