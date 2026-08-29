@@ -994,6 +994,42 @@ export function Planner() {
     return [];
   }, [planSolve, oneYear, soloMode, solo, twoParent, soloName, nameA, nameB, extraA, extraB, goalA, goalB, goalModeA, goalModeB, goalTargetA, goalTargetB, aboveCapA, aboveCapB, supplementA, supplementB, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB]);
 
+  // When the timeline is driven by the edited period list, the income rows are
+  // per active caregiver using their own rate/salary/supplement so the pager's
+  // per-period cards (computed from each segment) land on the right figures.
+  const periodRows: MonthlyRow[] = useMemo(() => {
+    if (!periodPlan) return [];
+    const rows: MonthlyRow[] = [];
+    for (const id of ["A", "B"] as const) {
+      const name = id === "A" ? nameA : nameB;
+      const cgPeriods = periodPlan.periods.filter((p) => p.caregiver === id);
+      if (cgPeriods.length === 0) continue;
+      const works = id === "A" ? worksPartTimeA : worksPartTimeB;
+      const salary = id === "A" ? salaryA : salaryB;
+      const rate = id === "A" ? rateA : rateB;
+      const totalDays = Math.round(cgPeriods.reduce((a, p) => a + p.days, 0));
+      const first = cgPeriods[0];
+      const last = cgPeriods[cgPeriods.length - 1];
+      rows.push({
+        name,
+        dailyRate: rate,
+        days: totalDays,
+        daysPerWeek: first.pace.phase2,
+        leaveMonths: Math.max(1, differenceInDays(first.startsAt, last.endsAt) / 30.4),
+        extraDays: id === "A" ? extraA : extraB,
+        goalLabel: "Perioder",
+        aboveCap: id === "A" ? aboveCapA : aboveCapB,
+        supplement: (id === "A" ? supplementA : supplementB) ?? undefined,
+        householdBase: id === "A" ? householdBaseA : householdBaseB,
+        partnerWorking: soloMode ? undefined : id === "A" ? nameB : nameA,
+        partTimeSalary: works ? Math.round(partTimeSalaryAt(salary, first.pace.phase2)) : 0,
+      });
+    }
+    return rows;
+  }, [periodPlan, nameA, nameB, rateA, rateB, extraA, extraB, aboveCapA, aboveCapB, supplementA, supplementB, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB, soloMode]);
+
+  const rows: MonthlyRow[] = periodPlan ? periodRows : monthlyRows;
+
   const vabResult = useMemo(
     () =>
       vabEnabled
@@ -1209,7 +1245,7 @@ export function Planner() {
                 : withParentPref(f, "B", { periodStart: iso ?? undefined }),
             ),
         }}
-        monthlyRows={monthlyRows}
+        monthlyRows={rows}
         projection={projection ?? undefined}
         vabResult={vabResult}
         birthDays={birthDays ?? undefined}
