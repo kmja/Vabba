@@ -31,7 +31,7 @@ import {
   optimizeSolo,
   type PlanWarning,
 } from "@/lib/optimizer";
-import { lagstanivaDailyAmount, MONEY } from "@/lib/rules";
+import { DAY_BUDGET, lagstanivaDailyAmount, MONEY } from "@/lib/rules";
 import { computeVab } from "@/lib/vab";
 import {
   addYears,
@@ -1200,6 +1200,14 @@ export function Planner() {
         onSave={openSaveDialog}
         canSave={canSave}
         saved={saved}
+        periods={form.periods ?? []}
+        onPeriodsChange={(p) =>
+          setForm((f) => ({ ...f, periods: p }))
+        }
+        periodBudgets={{
+          A: DAY_BUDGET.perParent.total,
+          B: DAY_BUDGET.perParent.total,
+        }}
       />
       {quickEditId && (
         <CaregiverEditDialog

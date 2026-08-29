@@ -9,6 +9,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { FamilySummary } from "@/components/family-summary";
+import { PeriodEditor } from "@/components/period-editor";
+import type { PeriodSpec } from "@/lib/share";
 import type {
   PeriodControls,
   PhaseControls,
@@ -66,6 +68,9 @@ export function Results({
   onSave,
   canSave,
   saved,
+  periods,
+  onPeriodsChange,
+  periodBudgets,
 }: {
   soloMode: boolean;
   plan: PlanInput;
@@ -118,6 +123,10 @@ export function Results({
   /** Whether the working plan differs from the saved copy (so it can be saved). */
   canSave: boolean;
   saved: boolean;
+  /** Editable leave periods (fixed lengths + "as long as possible"). */
+  periods: PeriodSpec[];
+  onPeriodsChange: (periods: PeriodSpec[]) => void;
+  periodBudgets: Record<"A" | "B", number>;
 }) {
   // The dials each period block drives, keyed by caregiver.
   const rowFor = (id: "A" | "B") => {
@@ -211,6 +220,14 @@ export function Results({
           />
         );
       })()}
+
+      {/* Editable leave periods — add / split / reorder / edit lengths. */}
+      <PeriodEditor
+        periods={periods}
+        onChange={onPeriodsChange}
+        budgets={periodBudgets}
+        deadlines={deadlines}
+      />
 
       {/* The centrepiece: each stretch of leave as a block to flip through,
           with directly editable dates. */}
