@@ -107,7 +107,13 @@ export function PeriodEditor({
         </div>
       )}
 
-      <ol className="space-y-2">
+      {dated.length === 0 ? (
+        <p className="bg-muted text-muted-foreground rounded-lg p-3 text-xs">
+          Inga perioder ännu. Lägg till minst två så kan du byta ordning på dem
+          med <strong>Upp</strong>/<strong>Ner</strong>-knapparna.
+        </p>
+      ) : (
+        <ol className="space-y-2">
         {dated.map((p, i) => (
           <li
             key={p.id}
@@ -199,7 +205,8 @@ export function PeriodEditor({
             </div>
           </li>
         ))}
-      </ol>
+        </ol>
+      )}
 
       {periods.length > 0 && (unused.A || unused.B ? (
         <p className="text-muted-foreground text-xs">
