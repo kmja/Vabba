@@ -145,6 +145,43 @@ export function solvePeriods(input: SolvePeriodsInput): SolvePeriodsResult {
   return { allocations, unused: remaining, warnings };
 }
 
+/**
+ * Emit the plan as a period list — the SAME format edited periods use. This is
+ * the goal method's only output: a list of periods, ordered in time, that the
+ * plan then runs through the identical rules. So generated and hand-edited
+ * periods are indistinguishable.
+ *
+ * Order: the locked birth window first (overlaps the start via buildPlanPeriods),
+ * then the shared dubbeldagar window, then each caregiver's income stretch
+ * followed by their lägstanivå stretch, the leading caregiver first.
+ */
+export function periodsFromPlan(split: PlanDaySplit): PeriodSpec[] {
+  const other: "A" | "B" = split.first === "A" ? "B" : "A";
+  const out: PeriodSpec[] = [];
+  if (split.birthDays > 0) {
+    out.push({ id: "birth", caregiver: other, kind: "birth", days: split.birthDays, tier: "income", locked: true });
+  }
+  if (split.doubleDays > 0) {
+    out.push({ id: "dubbeldagar-0", caregiver: split.first, kind: "dubbeldagar", days: split.doubleDays, tier: "income" });
+  }
+  for (const id of [split.first, other] as const) {
+    const inc = Math.max(0, Math.round(split.incomeDays[id]));
+    const lag = Math.max(0, Math.round(split.lagstaDays[id]));
+    if (inc > 0) out.push({ id: `${id}-income`, caregiver: id, kind: "fixed", days: inc, tier: "income" });
+    if (lag > 0) out.push({ id: `${id}-lagsta`, caregiver: id, kind: "fixed", days: lag, tier: "lagsta" });
+  }
+  return out;
+}
+
+/** The day split a plan was generated from (see periodsFromPlan). */
+export interface PlanDaySplit {
+  incomeDays: Record<"A" | "B", number>;
+  lagstaDays: Record<"A" | "B", number>;
+  doubleDays: number;
+  birthDays: number;
+  first: "A" | "B";
+}
+
 /** A period dated into the calendar by the stretch resolver. */
 export interface DatedPeriod extends PeriodAllocation {
   startsAt: Date;

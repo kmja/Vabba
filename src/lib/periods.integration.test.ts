@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { buildPlanPeriods, solvePeriods } from "@/lib/periods";
+import { buildPlanPeriods, periodsFromPlan, solvePeriods } from "@/lib/periods";
 import { resolveStretch, SGI_MIN_DAYS_PER_WEEK } from "@/lib/stretch";
 import type { PeriodSpec } from "@/lib/share";
 
@@ -101,8 +101,49 @@ describe("buildPlanPeriods (state → dated plan)", () => {
   });
 });
 
-describe("periods → stretches (end to end)", () => {
-  it("fixed periods are scheduled first, then the leftover fills the remainder", () => {
+describe("periodsFromPlan (goal output = editable period list)", () => {
+  it("emits birth (locked) first, then dubbeldagar, then income before lagsta per caregiver", () => {
+    const r = periodsFromPlan({
+      incomeDays: { A: 150, B: 140 },
+      lagstaDays: { A: 90, B: 90 },
+      doubleDays: 10,
+      birthDays: 10,
+      first: "A",
+    });
+    expect(r.map((p) => p.kind)).toEqual([
+      "birth", "dubbeldagar", "fixed", "fixed", "fixed", "fixed",
+    ]);
+    expect(r[0]).toMatchObject({ caregiver: "B", kind: "birth", locked: true });
+    expect(r[2]).toMatchObject({ caregiver: "A", tier: "income", days: 150 });
+    expect(r[3]).toMatchObject({ caregiver: "A", tier: "lagsta", days: 90 });
+    expect(r[5]).toMatchObject({ caregiver: "B", tier: "lagsta", days: 90 });
+  });
+
+  it("omits zero-day stretches and the dubbeldagar/birth windows when absent", () => {
+    const r = periodsFromPlan({
+      incomeDays: { A: 240, B: 0 },
+      lagstaDays: { A: 0, B: 0 },
+      doubleDays: 0,
+      birthDays: 0,
+      first: "A",
+    });
+    expect(r.map((p) => p.kind)).toEqual(["fixed"]);
+    expect(r[0]).toMatchObject({ caregiver: "A", tier: "income", days: 240 });
+  });
+
+  it("rounds fractional day counts", () => {
+    const r = periodsFromPlan({
+      incomeDays: { A: 149.6, B: 0 },
+      lagstaDays: { A: 90, B: 0 },
+      doubleDays: 0,
+      birthDays: 0,
+      first: "A",
+    });
+    expect(r[0].days).toBe(150);
+  });
+});
+
+describe("periods → stretches (end to end)", () => {  it("fixed periods are scheduled first, then the leftover fills the remainder", () => {
     const solved = solvePeriods({
       periods: [
         { id: "a-fixed", caregiver: "A", kind: "fixed", days: 70 },
