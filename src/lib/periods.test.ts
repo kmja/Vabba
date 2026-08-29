@@ -71,4 +71,43 @@ describe("solvePeriods", () => {
     expect(r.unused.A).toBe(140);
     expect(r.unused.B).toBe(240);
   });
+
+  it("dubbeldagar draws a day from both caregivers' budgets", () => {
+    const r = solvePeriods({
+      periods: [{ id: "d", caregiver: "A", kind: "dubbeldagar", days: 20 }],
+      budgets: { A: 240, B: 240 },
+    });
+    expect(r.allocations[0].days).toBe(20);
+    expect(r.unused.A).toBe(220);
+    expect(r.unused.B).toBe(220);
+  });
+
+  it("a birth period is locked and draws from its caregiver", () => {
+    const r = solvePeriods({
+      periods: [
+        { id: "birth", caregiver: "B", kind: "birth", days: 10, locked: true },
+        { id: "a", caregiver: "A", kind: "fixed", days: 60 },
+      ],
+      budgets: { A: 240, B: 240 },
+    });
+    const byId = Object.fromEntries(r.allocations.map((p) => [p.id, p]));
+    expect(byId["birth"].days).toBe(10);
+    expect(byId["birth"].locked).toBe(true);
+    expect(byId["birth"].kind).toBe("birth");
+    expect(r.unused.B).toBe(230);
+    expect(byId["a"].days).toBe(60);
+  });
+
+  it("propagates the tip: income by default, lägstanivå when set", () => {
+    const r = solvePeriods({
+      periods: [
+        { id: "inc", caregiver: "A", kind: "fixed", days: 10 },
+        { id: "flat", caregiver: "A", kind: "fixed", days: 10, tier: "lagsta" },
+      ],
+      budgets: { A: 240, B: 240 },
+    });
+    const byId = Object.fromEntries(r.allocations.map((p) => [p.id, p]));
+    expect(byId["inc"].tier).toBe("income");
+    expect(byId["flat"].tier).toBe("lagsta");
+  });
 });

@@ -25,7 +25,7 @@
 import type { PeriodSpec } from "@/lib/share";
 import { resolveStretch } from "@/lib/stretch";
 
-export type PeriodKind = "fixed" | "leftover";
+export type PeriodKind = "fixed" | "leftover" | "dubbeldagar" | "birth";
 
 export interface PeriodInput {
   id: string;
@@ -33,6 +33,8 @@ export interface PeriodInput {
   kind: PeriodKind;
   /** Days of leave for a `fixed` period (ignored for `leftover`). */
   days: number;
+  tier?: "income" | "lagsta";
+  locked?: boolean;
 }
 
 export interface PeriodAllocation {
@@ -41,6 +43,8 @@ export interface PeriodAllocation {
   kind: PeriodKind;
   /** Days actually allocated after the solve (never negative). */
   days: number;
+  tier: "income" | "lagsta";
+  locked?: boolean;
 }
 
 export interface SolvePeriodsInput {
@@ -61,11 +65,32 @@ export function solvePeriods(input: SolvePeriodsInput): SolvePeriodsResult {
   const budgets = { A: Math.max(0, input.budgets.A), B: Math.max(0, input.budgets.B) };
   const remaining = { A: budgets.A, B: budgets.B };
   const warnings: string[] = [];
+  const keep = (p: PeriodInput): PeriodAllocation => ({
+    ...p,
+    days: Math.max(0, Math.floor(p.days)),
+    tier: p.tier ?? "income",
+  });
 
-  // 1. Fixed periods first, drawing from their own caregiver's budget.
+  // 1. Explicit-length periods first, drawing from their caregiver's budget.
+  //    `birth` is locked; `dubbeldagar` draws a day from BOTH caregivers.
   const allocations: PeriodAllocation[] = [];
   for (const p of input.periods) {
-    if (p.kind !== "fixed") continue;
+    if (p.kind === "leftover") continue;
+    if (p.kind === "dubbeldagar") {
+      const want = Math.max(0, Math.floor(p.days));
+      const takeA = Math.min(want, remaining.A);
+      const takeB = Math.min(want, remaining.B);
+      if (takeA < want || takeB < want) {
+        warnings.push(
+          `Dubbeldagar (${p.id}) kräver ${want} dagar men bara ${takeA} hos ${p.caregiver === "A" ? "den andra" : "den andra vårdnadshavaren"} / ${takeB} finns kvar.`,
+        );
+      }
+      allocations.push({ ...p, kind: "dubbeldagar", days: want, tier: p.tier ?? "income" });
+      remaining.A -= takeA;
+      remaining.B -= takeB;
+      continue;
+    }
+    // fixed / birth: from the period's own caregiver.
     const want = Math.max(0, Math.floor(p.days));
     const take = Math.min(want, remaining[p.caregiver]);
     if (take < want) {
@@ -73,7 +98,8 @@ export function solvePeriods(input: SolvePeriodsInput): SolvePeriodsResult {
         `Perioden "${p.id}" kräver ${want} dagar men bara ${take} finns kvar.`,
       );
     }
-    allocations.push({ ...p, kind: "fixed", days: take });
+    allocations.push(keep(p));
+    allocations[allocations.length - 1].days = take;
     remaining[p.caregiver] -= take;
   }
 
@@ -88,7 +114,7 @@ export function solvePeriods(input: SolvePeriodsInput): SolvePeriodsResult {
       const d = leftovers[0];
       const cap = remaining[d.caregiver];
       const give = Math.min(leftoverTotal, cap);
-      allocations.push({ ...d, kind: "leftover", days: give });
+      allocations.push({ ...keep(d), kind: "leftover", days: give });
       remaining[d.caregiver] -= give;
     } else {
       // Even split in intent; the shortfall from a capped side is given to
@@ -104,15 +130,15 @@ export function solvePeriods(input: SolvePeriodsInput): SolvePeriodsResult {
       if (b > capB) { a += b - capB; b = capB; }
       const da = leftovers.find((p) => p.caregiver === "A");
       const db = leftovers.find((p) => p.caregiver === "B");
-      if (da) { allocations.push({ ...da, kind: "leftover", days: a }); remaining.A -= a; }
-      if (db) { allocations.push({ ...db, kind: "leftover", days: b }); remaining.B -= b; }
+      if (da) { allocations.push({ ...keep(da), kind: "leftover", days: a }); remaining.A -= a; }
+      if (db) { allocations.push({ ...keep(db), kind: "leftover", days: b }); remaining.B -= b; }
     }
   }
 
   // For each leftover period that got nothing (e.g. no days left), report it.
   for (const p of leftovers) {
     if (!allocations.some((al) => al.id === p.id)) {
-      allocations.push({ ...p, kind: "leftover", days: 0 });
+      allocations.push({ ...keep(p), kind: "leftover", days: 0 });
     }
   }
 

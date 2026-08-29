@@ -9,12 +9,30 @@ import type { GoalMode } from "@/lib/goal-seek";
  *   - `leftover`: "as long as possible" — absorbs the days left over from the
  *     fixed periods.
  */
+export type PeriodKind = "fixed" | "leftover" | "dubbeldagar" | "birth";
+
+/**
+ * One editable leave period in the plan. The list is ordered — order is the
+ * order the leave runs in time, except `birth` which always overlaps the very
+ * start.
+ *   - `fixed`: a specific LENGTH (days of leave) — draws its days from the
+ *     caregiver's budget.
+ *   - `leftover`: "as long as possible" — absorbs the days left over.
+ *   - `dubbeldagar`: both caregivers are home at once — one window that draws
+ *     a day from EACH caregiver's budget.
+ *   - `birth`: the locked days at birth (the other parent). Not editable / not
+ *     movable; overlaps the birth giver's first period.
+ */
 export interface PeriodSpec {
   id: string;
   caregiver: "A" | "B";
-  kind: "fixed" | "leftover";
-  /** Days of leave for a `fixed` period (ignored for `leftover`). */
+  kind: PeriodKind;
+  /** Days of leave for `fixed` / the window length for `dubbeldagar` / `birth`. */
   days: number;
+  /** Which rate applies — income-based (default) or the flat lägstanivå. */
+  tier?: "income" | "lagsta";
+  /** E.g. `birth` — cannot be reordered, split, or deleted. */
+  locked?: boolean;
 }
 
 /**

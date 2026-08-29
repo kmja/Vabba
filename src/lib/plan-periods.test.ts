@@ -9,6 +9,7 @@ describe("periodIntervals", () => {
     caregiver: "A",
     kind: "fixed",
     days: 30,
+    tier: "income",
     startsAt: new Date(Date.UTC(2025, 0, 1)),
     endsAt: new Date(Date.UTC(2025, 3, 15)),
     pace: { phase1: 0.5, phase2: 5 },
