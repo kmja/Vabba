@@ -36,6 +36,69 @@ describe("buildPlanPeriods (state → dated plan)", () => {
     expect(r.warnings.length).toBeGreaterThan(0);
     expect(r.periods[0].days).toBe(240);
   });
+
+  it("dates a locked birth window overlapping the start without advancing it", () => {
+    const r = buildPlanPeriods({
+      periods: [
+        { id: "birth", caregiver: "B", kind: "birth", days: 10, locked: true },
+        { id: "a", caregiver: "A", kind: "fixed", days: 70 },
+      ],
+      budgets: { A: 240, B: 240 },
+      start,
+      oneYear,
+      incomeDeadline,
+    });
+    const birth = r.periods.find((p) => p.id === "birth")!;
+    const a = r.periods.find((p) => p.id === "a")!;
+    // Birth overlaps the very start and is locked.
+    expect(birth.startsAt.getTime()).toBe(start.getTime());
+    expect(birth.locked).toBe(true);
+    // The birth giver still starts AT the birth — not after the 10 days.
+    expect(a.startsAt.getTime()).toBe(start.getTime());
+  });
+
+  it("dates a dubbeldagar window sequentially, drawing from both budgets", () => {
+    const r = buildPlanPeriods({
+      periods: [
+        { id: "d", caregiver: "A", kind: "dubbeldagar", days: 20 },
+        { id: "a", caregiver: "A", kind: "fixed", days: 60 },
+      ],
+      budgets: { A: 240, B: 240 },
+      start,
+      oneYear,
+      incomeDeadline,
+    });
+    const d = r.periods.find((p) => p.id === "d")!;
+    const a = r.periods.find((p) => p.id === "a")!;
+    expect(d.startsAt.getTime()).toBe(start.getTime());
+    expect(a.startsAt.getTime()).toBe(d.endsAt.getTime());
+  });
+
+  it("reordering fixed periods changes their date order", () => {
+    const base = {
+      budgets: { A: 240, B: 240 },
+      start,
+      oneYear,
+      incomeDeadline,
+    };
+    const ab = buildPlanPeriods({
+      ...base,
+      periods: [
+        { id: "a", caregiver: "A", kind: "fixed", days: 60 },
+        { id: "b", caregiver: "B", kind: "fixed", days: 60 },
+      ],
+    });
+    const ba = buildPlanPeriods({
+      ...base,
+      periods: [
+        { id: "b", caregiver: "B", kind: "fixed", days: 60 },
+        { id: "a", caregiver: "A", kind: "fixed", days: 60 },
+      ],
+    });
+    // Swapped order ⇒ the leading caregiver is swapped.
+    expect(ab.periods[0].caregiver).toBe("A");
+    expect(ba.periods[0].caregiver).toBe("B");
+  });
 });
 
 describe("periods → stretches (end to end)", () => {

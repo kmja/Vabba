@@ -169,18 +169,45 @@ export interface BuildPeriodsResult {
 }
 
 /**
- * Allocate the period list, then date each period sequentially from `start`,
- * so the whole calendar is known. The stretch resolver enforces the SGI
- * 5-days/week floor and the age-4 income-day deadline per period.
+ * Allocate the period list, then date each period. `birth` is locked and
+ * overlaps the very start (the birth giver's leave starts AT the birth date),
+ * so it never advances the cursor. Everything else is dated sequentially from
+ * the birth in allocation order (fixed/birth/dubbeldagar in list order, then
+ * leftover), so reordering fixed periods reschedules them. The stretch resolver
+ * enforces the SGI 5-days/week floor and the age-4 income-day deadline.
  */
 export function buildPlanPeriods(input: BuildPeriodsInput): BuildPeriodsResult {
   const { allocations, unused, warnings } = solvePeriods({
     periods: input.periods.map((p) => ({ ...p })),
     budgets: input.budgets,
   });
-  let cursor = input.start;
+  const start = input.start;
+  let cursor = start;
   const periods: DatedPeriod[] = [];
+
+  // 1. Locked birth window(s) first — they overlap the start, so they never
+  //    move the cursor. The birth giver's leave still begins at `start`.
   for (const al of allocations) {
+    if (al.kind !== "birth") continue;
+    const stretch = resolveStretch({
+      days: al.days,
+      start: cursor,
+      oneYear: input.oneYear,
+      incomeDeadline: input.incomeDeadline,
+    });
+    periods.push({
+      ...al,
+      locked: true,
+      startsAt: cursor,
+      endsAt: stretch.endsAt,
+      pace: stretch.pace,
+      overrunDays: stretch.overrunDays,
+    });
+  }
+
+  // 2. Everything else in allocation order, each advancing the cursor.
+  for (const al of allocations) {
+    if (al.kind === "birth") continue;
     const stretch = resolveStretch({
       days: al.days,
       start: cursor,
