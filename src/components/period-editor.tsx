@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type PointerEvent as PointerEventType } from "react";
 import {
   IconArrowDown,
   IconArrowUp,
@@ -24,6 +24,7 @@ import { buildPlanPeriods } from "@/lib/periods";
 import type { PeriodSpec } from "@/lib/share";
 import { formatDate, formatDays } from "@/lib/format";
 import type { PlanDeadlines } from "@/lib/calc";
+import { cn } from "@/lib/utils";
 
 /**
  * Editable leave periods. Reads/writes the plan's `periods` list (via
@@ -48,6 +49,69 @@ export function PeriodEditor({
   const [adding, setAdding] = useState<"A" | "B" | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
   const [splitDays, setSplitDays] = useState(0);
+
+  // Long-press drag-and-drop reorder (move up/down buttons remain as a
+  // reliable fallback). A 350ms hold starts the drag; moving the pointer picks
+  // a target slot; releasing reorders.
+  const listRef = useRef<HTMLOListElement>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const pressTimer = useRef<number | null>(null);
+  const dragFrom = useRef(-1);
+
+  const cancelLongPress = () => {
+    if (pressTimer.current !== null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
+  const onDragPointerDown = (idx: number) => (e: PointerEventType) => {
+    const t = e.target as HTMLElement;
+    // Let the inner buttons/inputs behave normally; only non-interactive
+    // clicks (the row body) can start a long-press drag.
+    if (t.closest("button, input, select, a")) return;
+    dragFrom.current = idx;
+    cancelLongPress();
+    pressTimer.current = window.setTimeout(() => {
+      setDragId(periods[idx]?.id ?? null);
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      navigator.vibrate?.(12);
+    }, 350);
+  };
+
+  const onDragPointerMove = (e: PointerEventType) => {
+    if (dragId === null) return;
+    const ol = listRef.current;
+    if (!ol) return;
+    const items = Array.from(ol.querySelectorAll(":scope > li"));
+    let idx = 0;
+    const y = e.clientY;
+    for (let i = 0; i < items.length; i++) {
+      const r = items[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) {
+        idx = i;
+        break;
+      }
+      idx = i;
+    }
+    setDragOver(idx);
+  };
+
+  const onDragEnd = () => {
+    cancelLongPress();
+    if (
+      dragId !== null &&
+      dragOver !== null &&
+      dragFrom.current >= 0 &&
+      dragOver !== dragFrom.current
+    ) {
+      onChange(reorderPeriods(periods, dragFrom.current, dragOver));
+    }
+    setDragId(null);
+    setDragOver(null);
+    dragFrom.current = -1;
+  };
 
   const oneYear = useMemo(() => {
     const d = new Date(deadlines.birth);
@@ -102,11 +166,22 @@ export function PeriodEditor({
         </div>
       )}
 
-      <ol className="space-y-2">
+      <ol ref={listRef} className="space-y-2">
         {dated.map((p, i) => (
           <li
             key={p.id}
-            className="bg-card flex flex-wrap items-center gap-3 rounded-lg border p-3"
+            onPointerDown={onDragPointerDown(i)}
+            onPointerMove={onDragPointerMove}
+            onPointerUp={onDragEnd}
+            onPointerCancel={onDragEnd}
+            className={cn(
+              "bg-card flex flex-wrap items-center gap-3 rounded-lg border p-3",
+              dragId === p.id
+                ? "border-primary opacity-90 shadow-lg"
+                : dragOver === i
+                  ? "ring-2 ring-primary/50"
+                  : undefined,
+            )}
           >
             <div className="flex items-center gap-1">
               <Button
