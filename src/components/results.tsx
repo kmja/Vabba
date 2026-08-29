@@ -227,6 +227,10 @@ export function Results({
         onChange={onPeriodsChange}
         budgets={periodBudgets}
         deadlines={deadlines}
+        names={{
+          A: plan.parents.A.name?.trim() || "Vårdnadshavare A",
+          B: plan.parents.B.name?.trim() || "Vårdnadshavare B",
+        }}
       />
 
       {/* The centrepiece: each stretch of leave as a block to flip through,

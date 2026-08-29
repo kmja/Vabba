@@ -39,12 +39,15 @@ export function PeriodEditor({
   onChange,
   budgets,
   deadlines,
+  names,
 }: {
   periods: PeriodSpec[];
   onChange: (periods: PeriodSpec[]) => void;
   /** Total days each caregiver may draw. */
   budgets: Record<"A" | "B", number>;
   deadlines: PlanDeadlines;
+  /** Caregiver display names (fall back to "Vårdnadshavare A/B"). */
+  names: Record<"A" | "B", string>;
 }) {
   const [adding, setAdding] = useState<"A" | "B" | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
@@ -136,16 +139,16 @@ export function PeriodEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="space-y-2">
         <h3 className="text-lg font-semibold">Ledighetens perioder</h3>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => setAdding("A")}
           >
-            <IconPlus /> Lägg till (A)
+            <IconPlus /> Lägg till {names.A}
           </Button>
           <Button
             type="button"
@@ -153,7 +156,7 @@ export function PeriodEditor({
             variant="outline"
             onClick={() => setAdding("B")}
           >
-            <IconPlus /> Lägg till (B)
+            <IconPlus /> Lägg till {names.B}
           </Button>
         </div>
       </div>
@@ -209,7 +212,7 @@ export function PeriodEditor({
             <div className="min-w-0 flex-1 space-y-0.5">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold">
-                  {p.caregiver === "A" ? "Vårdnadshavare A" : "Vårdnadshavare B"}
+                  {names[p.caregiver]}
                 </span>
                 <span className="bg-secondary text-muted-foreground rounded-full px-2 py-0.5 text-xs">
                   {p.kind === "fixed" ? "Fast längd" : "Så länge som möjligt"}
@@ -271,13 +274,13 @@ export function PeriodEditor({
         ))}
       </ol>
 
-      {unused.A || unused.B ? (
+      {periods.length > 0 && (unused.A || unused.B ? (
         <p className="text-muted-foreground text-xs">
-          {unused.A > 0 && `${formatDays(unused.A)} oanvända hos A `}
-          {unused.B > 0 && `${formatDays(unused.B)} oanvända hos B`} — lägg till
-          en period (fast eller ”så länge”) för att använda dem.
+          {unused.A > 0 && `${formatDays(unused.A)} oanvända hos ${names.A} `}
+          {unused.B > 0 && `${formatDays(unused.B)} oanvända hos ${names.B}`} — lägg
+          till en period (fast eller ”så länge”) för att använda dem.
         </p>
-      ) : null}
+      ) : null)}
 
       {/* Split dialog */}
       {splitting !== null && (
