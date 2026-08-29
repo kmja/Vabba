@@ -86,6 +86,7 @@ const DEFAULT_STATE: ShareableState = {
     A: defaultParentPrefs(),
     B: defaultParentPrefs(),
   },
+  periods: [],
   customSplitA: 0.5,
   childNumber: 1,
   includeLagsta: false,

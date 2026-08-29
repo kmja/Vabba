@@ -22,6 +22,9 @@
  * precedence rules are unit-testable in isolation.
  */
 
+import type { PeriodSpec } from "@/lib/share";
+import { resolveStretch } from "@/lib/stretch";
+
 export type PeriodKind = "fixed" | "leftover";
 
 export interface PeriodInput {
@@ -114,4 +117,58 @@ export function solvePeriods(input: SolvePeriodsInput): SolvePeriodsResult {
   }
 
   return { allocations, unused: remaining, warnings };
+}
+
+/** A period dated into the calendar by the stretch resolver. */
+export interface DatedPeriod extends PeriodAllocation {
+  startsAt: Date;
+  endsAt: Date;
+  pace: { phase1: number; phase2: number };
+  overrunDays: number;
+}
+
+export interface BuildPeriodsInput {
+  periods: PeriodSpec[];
+  budgets: Record<"A" | "B", number>;
+  /** Calendar day the plan begins (the birth, or the first caregiver's start). */
+  start: Date;
+  oneYear: Date;
+  incomeDeadline: Date;
+}
+
+export interface BuildPeriodsResult {
+  periods: DatedPeriod[];
+  unused: Record<"A" | "B", number>;
+  warnings: string[];
+}
+
+/**
+ * Allocate the period list, then date each period sequentially from `start`,
+ * so the whole calendar is known. The stretch resolver enforces the SGI
+ * 5-days/week floor and the age-4 income-day deadline per period.
+ */
+export function buildPlanPeriods(input: BuildPeriodsInput): BuildPeriodsResult {
+  const { allocations, unused, warnings } = solvePeriods({
+    periods: input.periods.map((p) => ({ ...p })),
+    budgets: input.budgets,
+  });
+  let cursor = input.start;
+  const periods: DatedPeriod[] = [];
+  for (const al of allocations) {
+    const stretch = resolveStretch({
+      days: al.days,
+      start: cursor,
+      oneYear: input.oneYear,
+      incomeDeadline: input.incomeDeadline,
+    });
+    periods.push({
+      ...al,
+      startsAt: cursor,
+      endsAt: stretch.endsAt,
+      pace: stretch.pace,
+      overrunDays: stretch.overrunDays,
+    });
+    cursor = stretch.endsAt;
+  }
+  return { periods, unused, warnings };
 }

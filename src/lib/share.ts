@@ -3,14 +3,28 @@ import type { Objective } from "@/lib/optimizer";
 import type { GoalMode } from "@/lib/goal-seek";
 
 /**
+ * One editable leave period in the plan.
+ *   - `fixed`: a specific LENGTH (days of leave) the user set — takes
+ *     precedence and draws its days from the caregiver's budget.
+ *   - `leftover`: "as long as possible" — absorbs the days left over from the
+ *     fixed periods.
+ */
+export interface PeriodSpec {
+  id: string;
+  caregiver: "A" | "B";
+  kind: "fixed" | "leftover";
+  /** Days of leave for a `fixed` period (ignored for `leftover`). */
+  days: number;
+}
+
+/**
  * Per-caregiver planning preferences, keyed by parent. The old flat `goalModeA`
  * / `goalModeB` … fields live here now, under one map — so the two caregivers
  * never drift apart in naming.
  */
 export interface ShareParentPrefs {
   /** Target gross monthly for the "förläng ledigheten" goal. */
-  minMonthly?: number;
-  /** Take days at the full schedule ("full") or stretch to a floor ("prolong"). */
+  minMonthly?: number;  /** Take days at the full schedule ("full") or stretch to a floor ("prolong"). */
   paceMode?: "full" | "prolong";
   /** Optional second leave period: switch pace at the child's 1st birthday. */
   switchAt1?: boolean;
@@ -55,6 +69,8 @@ export interface ShareableState {
   detailedUsed: boolean;
   /** Per-caregiver preferences (goal, pace, save-days, föräldralön …). */
   parents: Record<ParentId, ShareParentPrefs>;
+  /** Editable leave periods (fixed lengths + "as long as possible"). */
+  periods?: PeriodSpec[];
   /** Benefit days drawn per week — stretches the leave's calendar duration. */
   daysPerWeek?: number;
   /** Requested dubbeldagar (both parents home the same day). */
