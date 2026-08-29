@@ -51,6 +51,8 @@ import {
   solvePlan,
   type CaregiverPlanSpec,
 } from "@/lib/goal-seek";
+import { buildPlanPeriods } from "@/lib/periods";
+import { periodIntervals } from "@/lib/plan-periods";
 import {
   computeSupplement,
   SUPPLEMENT_WINDOW_MONTHS,
@@ -667,12 +669,41 @@ export function Planner() {
     goalModeB,
   ]);
 
+  // If the user has configured leave periods, drive the timeline from those
+  // (dates / days / SGI pace) instead of the goal-based solve.
+  const periodPlan = useMemo(() => {
+    const list = form.periods ?? [];
+    if (list.length === 0 || !deadlines) return null;
+    const birth = deadlines.birth;
+    const budgets = {
+      A: DAY_BUDGET.perParent.total,
+      B: DAY_BUDGET.perParent.total,
+    };
+    const built = buildPlanPeriods({
+      periods: list,
+      budgets,
+      start: birth,
+      oneYear: addYears(birth, 1),
+      incomeDeadline: deadlines.sjukpenningDeadline,
+    });
+    const names: Record<"A" | "B", string> = { A: nameA, B: nameB };
+    const rateOf = (cg: "A" | "B") => (cg === "A" ? rateA : rateB);
+    return {
+      periods: built.periods,
+      unused: built.unused,
+      warnings: built.warnings,
+      intervals: periodIntervals(built.periods, names, rateOf),
+    };
+  }, [form.periods, deadlines, nameA, nameB, rateA, rateB]);
+
   const projection: LeaveProjection | null = useMemo(
     () =>
-      planSolve && planSolve.intervals.length > 0
-        ? { segments: planSolve.intervals }
-        : null,
-    [planSolve],
+      periodPlan
+        ? { segments: periodPlan.intervals }
+        : planSolve && planSolve.intervals.length > 0
+          ? { segments: planSolve.intervals }
+          : null,
+    [periodPlan, planSolve],
   );
 
   // Per-caregiver goal warnings: an unreachable target date, a budget floor
