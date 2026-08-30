@@ -23,7 +23,7 @@ const DAYS_PER_MONTH = 30.4;
 export interface SupplementResult {
   /** Top-up per calendar month, at the caregiver's leave pace. */
   monthly: number;
-  /** Total top-up collected over the whole duration. */
+  /** Total top-up actually collected (after the window / leave-length cap). */
   total: number;
   /** How many calendar months it lasts at this pace. */
   months: number;
@@ -43,6 +43,13 @@ export interface SupplementInput {
   fkDailyRate: number;
   /** The caregiver's leave pace, days/week. The top-up scales with it. */
   pace: number;
+  /**
+   * The caregiver's whole leave length, in calendar months. The top-up is paid
+   * on leave days, so it can never run longer than the leave itself — and the
+   * leave is bounded by the SGI pace floor after the 1st birthday. Pass the
+   * leave length so a slow pace can't stretch the top-up past reality.
+   */
+  leaveMonths?: number;
 }
 
 /**
@@ -66,14 +73,12 @@ export function computeSupplement(input: SupplementInput): SupplementResult | nu
   const pace = input.pace > 0 ? Math.min(7, input.pace) : 7;
   const monthly = Math.round(topUpFull * (pace / 7));
 
-  // The agreement pays a fixed number of leave days' worth, so a half pace
-  // stretches that top-up over twice the calendar time — for as long as the
-  // user's entered months imply. No extra post-birth cutoff is assumed.
+  // The agreement pays a fixed number of leave days' worth, so a low pace
+  // stretches that money over more calendar months. It can't outlast the
+  // leave itself — which the SGI pace floor after the 1st birthday already
+  // bounds, so no unrealistic multi-year stretch.
   const stretched = (input.months * 7) / pace;
-  // Kept to one decimal rather than whole months: rounding 8,4 months down
-  // to 8 quietly lost 5 % of the total, so the breakdown stopped adding up
-  // to the headline.
-  const months = Math.round(stretched * 10) / 10;
+  const months = Math.round((input.leaveMonths ? Math.min(stretched, input.leaveMonths) : stretched) * 10) / 10;
 
   return {
     monthly,

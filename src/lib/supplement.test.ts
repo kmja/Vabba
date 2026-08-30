@@ -81,31 +81,22 @@ describe("computeSupplement", () => {
     }
   });
 
-  it("trusts the entered months — a slow pace stretches the top-up, no cutoff", () => {
-    // A six-month top-up drawn at half a day a week covers (per the entered
-    // months) a long calendar stretch; the app doesn't assume a post-birth
-    // limit on top of what the user entered.
-    const slow = computeSupplement({
+  it("bounds the top-up by the actual leave length", () => {
+    const base = {
       grossMonthlySalary: 45_000,
       incomeAboveCap: false,
       pct: 90,
       months: 6,
       fkDailyRate: sjukpenningnivaDailyAmount(45_000),
       pace: 0.5,
-    })!;
-    expect(slow.months).toBe(6 * 7 / 0.5); // 84 months, full stretch
-    expect(slow.total).toBe(Math.round(slow.monthly * slow.months));
-    // The same entered months at full pace is much shorter.
-    const full = computeSupplement({
-      grossMonthlySalary: 45_000,
-      incomeAboveCap: false,
-      pct: 90,
-      months: 6,
-      fkDailyRate: sjukpenningnivaDailyAmount(45_000),
-      pace: 7,
-    })!;
-    expect(full.months).toBe(6);
-    expect(slow.total).toBeCloseTo(full.total, -2);
+    };
+    // A short leave can't be out-stretched.
+    expect(computeSupplement({ ...base, leaveMonths: 12 })!.months).toBe(12);
+    // A long leave: the top-up follows the entered months, bounded by the
+    // leave (SGI floor), not stretched without limit.
+    expect(computeSupplement({ ...base, leaveMonths: 30 })!.months).toBe(30);
+    // Leave length < stretched → capped at the leave length.
+    expect(computeSupplement({ ...base, leaveMonths: 20 })!.months).toBe(20);
   });
 
   it("returns null when it does not apply", () => {

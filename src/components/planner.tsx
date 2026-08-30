@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconDeviceFloppy } from "@tabler/icons-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -594,6 +594,17 @@ export function Planner() {
     planSolve?.perCaregiver.find((o) => o.name === nameB)?.paces.phase1 ??
     paceB;
 
+  // A caregiver's whole leave, in calendar months — bounds the top-up so a
+  // slow pace can't stretch it past the actual (SGI-floor-bounded) leave.
+  const leaveMonthsOf = useCallback(
+    (name: string): number | undefined => {
+      const o = planSolve?.perCaregiver.find((x) => x.name === name);
+      if (!o?.startsAt || !o?.endsAt) return undefined;
+      return Math.max(0, differenceInDays(o.startsAt, o.endsAt) / 30.4);
+    },
+    [planSolve],
+  );
+
   const supplementA = useMemo(
     () =>
       (form.parents.A.supplement ?? true)
@@ -604,9 +615,10 @@ export function Planner() {
             months: form.parents.A.supplementMonths ?? 6,
             fkDailyRate: rateA,
             pace: solvedPaceA,
+            leaveMonths: leaveMonthsOf(nameA),
           })
         : null,
-    [form.parents.A.supplement, form.parents.A.supplementPct, form.parents.A.supplementMonths, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, solvedPaceA],
+    [form.parents.A.supplement, form.parents.A.supplementPct, form.parents.A.supplementMonths, plan.parents.A.grossMonthlyIncome, aboveCapA, rateA, solvedPaceA, nameA, leaveMonthsOf],
   );
   const supplementB = useMemo(
     () =>
@@ -618,9 +630,10 @@ export function Planner() {
             months: form.parents.B.supplementMonths ?? 6,
             fkDailyRate: rateB,
             pace: solvedPaceB,
+            leaveMonths: leaveMonthsOf(nameB),
           })
         : null,
-    [soloMode, form.parents.B.supplement, form.parents.B.supplementPct, form.parents.B.supplementMonths, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, solvedPaceB],
+    [soloMode, form.parents.B.supplement, form.parents.B.supplementPct, form.parents.B.supplementMonths, plan.parents.B.grossMonthlyIncome, aboveCapB, rateB, solvedPaceB, nameB, leaveMonthsOf],
   );
 
   // Employer top-up at full-time pace, so the levers can fold it into the
