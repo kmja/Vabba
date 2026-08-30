@@ -27,6 +27,24 @@ export function Landing({
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  // Saved plans, grouped by which child they're for (first, second, …).
+  const groups: Array<[number, SavedPlan[]]> = (() => {
+    const by = new Map<number, SavedPlan[]>();
+    for (const p of savedPlans) {
+      const n = Math.min(4, Math.max(1, p.state.childNumber ?? 1));
+      if (!by.has(n)) by.set(n, []);
+      by.get(n)!.push(p);
+    }
+    return [...by.entries()].sort((a, b) => a[0] - b[0]);
+  })();
+  const childLabel = (n: number) =>
+    n <= 1
+      ? "Första barnet"
+      : n === 2
+        ? "Andra barnet"
+        : n === 3
+          ? "Tredje barnet"
+          : "Fjärde barnet eller senare";
   return (
     <div className="space-y-8">
       <div className="space-y-2">
@@ -61,43 +79,52 @@ export function Landing({
       </Button>
 
       {savedPlans.length > 0 && (
-        <div className="space-y-3">
+        <div className="space-y-5">
           <h2 className="text-muted-foreground text-sm font-medium">
             Sparade planer
           </h2>
-          <ul className="space-y-2">
-            {savedPlans.map((p) => (
-              <li key={p.id}>
-                <Card className="py-0">
-                  <CardContent className="flex items-center gap-2 px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() => onOpen(p.id)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <p className="truncate text-sm font-medium">{p.name}</p>
-                      <p className="text-muted-foreground text-xs">
-                        Sparad {formatDate(new Date(p.savedAt))}
-                      </p>
-                    </button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Ta bort ${p.name}`}
-                      onClick={() => {
-                        if (window.confirm(`Ta bort "${p.name}"?`)) {
-                          onDelete(p.id);
-                        }
-                      }}
-                    >
-                      <IconTrash />
-                    </Button>
-                  </CardContent>
-                </Card>
-              </li>
-            ))}
-          </ul>
+          {groups.map(([child, plans]) => (
+            <div key={child} className="space-y-2">
+              <h3 className="text-muted-foreground text-xs font-semibold">
+                {childLabel(child)}
+              </h3>
+              <ul className="space-y-2">
+                {plans.map((p) => (
+                  <li key={p.id}>
+                    <Card className="py-0">
+                      <CardContent className="flex items-center gap-2 px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => onOpen(p.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-sm font-medium">
+                            {p.name}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            Sparad {formatDate(new Date(p.savedAt))}
+                          </p>
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Ta bort ${p.name}`}
+                          onClick={() => {
+                            if (window.confirm(`Ta bort "${p.name}"?`)) {
+                              onDelete(p.id);
+                            }
+                          }}
+                        >
+                          <IconTrash />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
     </div>
