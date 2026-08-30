@@ -78,7 +78,7 @@ export function PeriodEditor({
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold">Ledighetens perioder</h3>
+        <h3 className="text-lg font-semibold">Redigera perioderna</h3>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"

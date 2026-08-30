@@ -72,6 +72,8 @@ export function Results({
   periods,
   onPeriodsChange,
   periodBudgets,
+  editingPeriods,
+  onTogglePeriodsEditing,
 }: {
   soloMode: boolean;
   plan: PlanInput;
@@ -130,6 +132,9 @@ export function Results({
   periods: PeriodSpec[];
   onPeriodsChange: (periods: PeriodSpec[]) => void;
   periodBudgets: Record<"A" | "B", number>;
+  /** Whether the single Perioder section is in "Redigera" mode. */
+  editingPeriods: boolean;
+  onTogglePeriodsEditing: () => void;
 }) {
   // The dials each period block drives, keyed by caregiver.
   const rowFor = (id: "A" | "B") => {
@@ -225,43 +230,65 @@ export function Results({
         );
       })()}
 
-      {/* Editable leave periods — add / split / reorder / edit lengths. */}
-      <PeriodEditor
-        periods={periods}
-        onChange={onPeriodsChange}
-        budgets={periodBudgets}
-        deadlines={deadlines}
-        names={{
-          A: plan.parents.A.name?.trim() || "Vårdnadshavare A",
-          B: plan.parents.B.name?.trim() || "Vårdnadshavare B",
-        }}
-      />
+      {/* One "Perioder" section: the plan's schedule, with a "Redigera" swap
+          that lets you tweak it (add / split / reorder / change length). */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onTogglePeriodsEditing}
+          >
+            {editingPeriods ? (
+              <>
+                <IconCheck /> Klar
+              </>
+            ) : (
+              <>
+                <IconPencil /> Redigera
+              </>
+            )}
+          </Button>
+        </div>
 
-      {/* The centrepiece: each stretch of leave as a block to flip through,
-          with directly editable dates. */}
-      <PeriodPager
-        projection={projection ?? undefined}
-        rows={monthlyRows}
-        deadlines={deadlines}
-        editing={periodEdit}
-        levers={levers}
-        municipalRate={municipalRate}
-        oneYear={oneYear}
-        sgiLiftedNames={sgiLiftedNames}
-        birthDays={
-          birthDays && birthDays.days > 0
-            ? {
-                result: birthDays,
-                name: birthDaysName,
-                // The days go to whoever is not home first, and are taxed
-                // at the margin of the salary they sit on top of.
-                salary: firstCaregiver === "A" ? salaryB : salaryA,
-                municipalRate,
-              }
-            : undefined
-        }
-        doubleDaysWindow={doubleDaysWindow ?? undefined}
-      />
+        {editingPeriods ? (
+          <PeriodEditor
+            periods={periods}
+            onChange={onPeriodsChange}
+            budgets={periodBudgets}
+            deadlines={deadlines}
+            names={{
+              A: plan.parents.A.name?.trim() || "Vårdnadshavare A",
+              B: plan.parents.B.name?.trim() || "Vårdnadshavare B",
+            }}
+          />
+        ) : (
+          <PeriodPager
+            projection={projection ?? undefined}
+            rows={monthlyRows}
+            deadlines={deadlines}
+            editing={periodEdit}
+            levers={levers}
+            municipalRate={municipalRate}
+            oneYear={oneYear}
+            sgiLiftedNames={sgiLiftedNames}
+            birthDays={
+              birthDays && birthDays.days > 0
+                ? {
+                    result: birthDays,
+                    name: birthDaysName,
+                    // The days go to whoever is not home first, and are taxed
+                    // at the margin of the salary they sit on top of.
+                    salary: firstCaregiver === "A" ? salaryB : salaryA,
+                    municipalRate,
+                  }
+                : undefined
+            }
+            doubleDaysWindow={doubleDaysWindow ?? undefined}
+          />
+        )}
+      </div>
 
       {vabResult && (
         <VabResultCard

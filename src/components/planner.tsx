@@ -51,8 +51,9 @@ import {
   solvePlan,
   type CaregiverPlanSpec,
 } from "@/lib/goal-seek";
-import { buildPlanPeriods } from "@/lib/periods";
+import { buildPlanPeriods, type PlanDaySplit } from "@/lib/periods";
 import { periodIntervals } from "@/lib/plan-periods";
+import type { PeriodSpec } from "@/lib/share";
 import {
   computeSupplement,
   SUPPLEMENT_WINDOW_MONTHS,
@@ -169,6 +170,8 @@ export function Planner() {
   const [savedCaregivers, setSavedCaregivers] = useLocalStorage<
     CaregiverProfile[]
   >(CAREGIVERS_KEY, []);
+  // "Redigera" swap on the single Perioder section.
+  const [editingPeriods, setEditingPeriods] = useState(false);
 
   // "Today" is read on the client only (avoids SSR/timezone hydration mismatch).
   useEffect(() => {
@@ -675,19 +678,27 @@ export function Planner() {
     goalModeB,
   ]);
 
+  // The 480 is a shared pool: one caregiver may legally hold up to
+  // income+flat days (390), plus days carried over from earlier children, so a
+  // flat 240 cap wrongly warns when a parent holds a transferred share. This is
+  // the per-caregiver ceiling for the period model and the editor.
+  const periodBudgets: Record<"A" | "B", number> = useMemo(() => {
+    const base = DAY_BUDGET.sjukpenningDays + DAY_BUDGET.lagstaDays;
+    return {
+      A: base + (form.parents.A.extraDays ?? 0),
+      B: base + (form.parents.B.extraDays ?? 0),
+    };
+  }, [form.parents.A.extraDays, form.parents.B.extraDays]);
+
   // If the user has configured leave periods, drive the timeline from those
   // (dates / days / SGI pace) instead of the goal-based solve.
   const periodPlan = useMemo(() => {
     const list = form.periods ?? [];
     if (list.length === 0 || !deadlines) return null;
     const birth = deadlines.birth;
-    const budgets = {
-      A: DAY_BUDGET.perParent.total,
-      B: DAY_BUDGET.perParent.total,
-    };
     const built = buildPlanPeriods({
       periods: list,
-      budgets,
+      budgets: periodBudgets,
       start: birth,
       oneYear: addYears(birth, 1),
       incomeDeadline: deadlines.sjukpenningDeadline,
@@ -700,7 +711,7 @@ export function Planner() {
       warnings: built.warnings,
       intervals: periodIntervals(built.periods, names, rateOf, lagstanivaDailyAmount()),
     };
-  }, [form.periods, deadlines, nameA, nameB, rateA, rateB]);
+  }, [form.periods, periodBudgets, deadlines, nameA, nameB, rateA, rateB]);
 
   const projection: LeaveProjection | null = useMemo(
     () =>
@@ -1145,6 +1156,53 @@ export function Planner() {
     setSavedCaregivers((list) => list.filter((p) => p.id !== id));
   };
 
+  // The plan's generated schedule is the starting point. The first time you
+  // open "Redigera", snapshot it into editable periods (income + lägstanivå
+  // runs per caregiver) so the edit view starts from what the plan produced.
+  const periodsFromSplit = (): PlanDaySplit | null => {
+    if (soloMode && solo) {
+      return {
+        incomeDays: { A: solo.payout.sjukpenningDays + extraA, B: 0 },
+        lagstaDays: { A: solo.payout.lagstaDays, B: 0 },
+        doubleDays: 0,
+        birthDays: 0,
+        first: "A",
+      };
+    }
+    if (twoParent) {
+      const rec = twoParent.recommended;
+      return {
+        incomeDays: {
+          A: rec.allocation.A.sjukpenning + extraA,
+          B: rec.allocation.B.sjukpenning + extraB,
+        },
+        lagstaDays: { A: rec.allocation.A.lagsta, B: rec.allocation.B.lagsta },
+        doubleDays: rec.doubleDays ?? 0,
+        birthDays: birthDays?.days ?? 0,
+        first: firstCaregiver,
+      };
+    }
+    return null;
+  };
+  const snapshotPeriods = () => {
+    if ((form.periods ?? []).length > 0) return;
+    const split = periodsFromSplit();
+    if (!split) return;
+    const other: "A" | "B" = split.first === "A" ? "B" : "A";
+    const out: PeriodSpec[] = [];
+    for (const id of [split.first, other] as const) {
+      const inc = Math.round(split.incomeDays[id]);
+      const lag = Math.round(split.lagstaDays[id]);
+      if (inc > 0) out.push({ id: `${id}-income`, caregiver: id, kind: "fixed", days: inc, tier: "income" });
+      if (lag > 0) out.push({ id: `${id}-lagsta`, caregiver: id, kind: "fixed", days: lag, tier: "lagsta" });
+    }
+    if (out.length > 0) setForm((f) => ({ ...f, periods: out }));
+  };
+  const togglePeriodEditing = () => {
+    if (!editingPeriods) snapshotPeriods();
+    setEditingPeriods((v) => !v);
+  };
+
   // The header's "+" starts a fresh plan — register the handler with it.
   useEffect(() => {
     setNewPlan(() => startNewPlan);
@@ -1314,10 +1372,9 @@ export function Planner() {
         onPeriodsChange={(p) =>
           setForm((f) => ({ ...f, periods: p }))
         }
-        periodBudgets={{
-          A: DAY_BUDGET.perParent.total,
-          B: DAY_BUDGET.perParent.total,
-        }}
+        periodBudgets={periodBudgets}
+        editingPeriods={editingPeriods}
+        onTogglePeriodsEditing={togglePeriodEditing}
       />
       {quickEditId && (
         <CaregiverEditDialog
