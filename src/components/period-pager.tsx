@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   IconArrowDown,
   IconArrowsSplit,
@@ -679,6 +679,49 @@ export function PeriodPager({
   const [pagerReady, setPagerReady] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time flag so only later-inserted blocks animate in
   useEffect(() => setPagerReady(true), []);
+  // Reorder animation: positions are captured at the click, then the FLIP
+  // slide runs on the next layout — and ONLY for an explicit reorder, so
+  // expanding/collapsing a block never makes the list "respawn".
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const beforeRectsRef = useRef<Map<string, { top: number; left: number }>>(new Map());
+  const reorderPendingRef = useRef(false);
+  const doReorder = (periodId: string, dir: -1 | 1) => {
+    if (!listRef.current) return;
+    const before = new Map<string, { top: number; left: number }>();
+    listRef.current
+      .querySelectorAll<HTMLElement>("[data-flip]")
+      .forEach((el) => {
+        const r = el.getBoundingClientRect();
+        before.set(el.dataset.flip ?? "", { top: r.top, left: r.left });
+      });
+    beforeRectsRef.current = before;
+    reorderPendingRef.current = true;
+    onReorder?.(periodId, dir);
+  };
+
+  useLayoutEffect(() => {
+    if (!reorderPendingRef.current || !listRef.current) return;
+    const ease = "transform 450ms cubic-bezier(0.22, 1, 0.36, 1)";
+    listRef.current
+      .querySelectorAll<HTMLElement>("[data-flip]")
+      .forEach((el) => {
+        const prev = beforeRectsRef.current.get(el.dataset.flip ?? "");
+        if (!prev) return;
+        const r = el.getBoundingClientRect();
+        const dx = prev.left - r.left;
+        const dy = prev.top - r.top;
+        if (dx !== 0 || dy !== 0) {
+          el.style.transition = "none";
+          el.style.transform = `translate(${dx}px, ${dy}px)`;
+          requestAnimationFrame(() => {
+            el.style.transition = ease;
+            el.style.transform = "";
+          });
+        }
+      });
+    beforeRectsRef.current = new Map();
+    reorderPendingRef.current = false;
+  });
   const segments = projection?.segments ?? [];
   const periods = toPeriods(segments);
   // Stable colour per person (A one colour, B another) so reordering never
@@ -816,7 +859,7 @@ export function PeriodPager({
         </span>
       </div>
 
-      <div className="space-y-2">
+      <div ref={listRef} className="space-y-2">
         {birth && birthDays && overlap && (
           <>
             <DateMarker
@@ -1026,7 +1069,7 @@ export function PeriodPager({
                       variant="ghost"
                       size="icon"
                       aria-label="Flytta upp"
-                      onClick={() => onReorder?.(p.segments[0]!.periodId!, -1)}
+                      onClick={() => doReorder(p.segments[0]!.periodId!, -1)}
                     >
                       <IconArrowUp />
                     </Button>
@@ -1035,7 +1078,7 @@ export function PeriodPager({
                       variant="ghost"
                       size="icon"
                       aria-label="Flytta ner"
-                      onClick={() => onReorder?.(p.segments[0]!.periodId!, 1)}
+                      onClick={() => doReorder(p.segments[0]!.periodId!, 1)}
                     >
                       <IconArrowDown />
                     </Button>
