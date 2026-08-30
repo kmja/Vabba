@@ -51,9 +51,8 @@ import {
   solvePlan,
   type CaregiverPlanSpec,
 } from "@/lib/goal-seek";
-import { buildPlanPeriods, periodsFromPlan, type PlanDaySplit } from "@/lib/periods";
+import { buildPlanPeriods } from "@/lib/periods";
 import { periodIntervals } from "@/lib/plan-periods";
-import type { PeriodSpec } from "@/lib/share";
 import {
   computeSupplement,
   SUPPLEMENT_WINDOW_MONTHS,
@@ -61,6 +60,8 @@ import {
 import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
 import { useLocalStorage } from "@/lib/use-local-storage";
+import type { CaregiverProfile } from "@/lib/saved-caregivers";
+import { CAREGIVERS_KEY, profileFromForm, upsertProfile, applyProfile } from "@/lib/saved-caregivers";
 import {
   decodeState,
   encodeState,
@@ -164,6 +165,10 @@ export function Planner() {
   const [activeSavedPlanId, setActiveSavedPlanId] = useLocalStorage<
     string | null
   >(ACTIVE_SAVED_PLAN_KEY, null);
+  // Caregiver info you can drop into a new plan, so you skip re-entering it.
+  const [savedCaregivers, setSavedCaregivers] = useLocalStorage<
+    CaregiverProfile[]
+  >(CAREGIVERS_KEY, []);
 
   // "Today" is read on the client only (avoids SSR/timezone hydration mismatch).
   useEffect(() => {
@@ -670,42 +675,10 @@ export function Planner() {
     goalModeB,
   ]);
 
-  // Seeded period list before the user edits: the goal method's output is an
-  // editable PeriodSpec list (periodsFromPlan), so generated == edited.
-  const effectivePeriods: PeriodSpec[] | null = useMemo(() => {
-    const list = form.periods ?? [];
-    if (list.length > 0) return list;
-    if (soloMode && solo) {
-      const split: PlanDaySplit = {
-        incomeDays: { A: solo.payout.sjukpenningDays + extraA, B: 0 },
-        lagstaDays: { A: solo.payout.lagstaDays, B: 0 },
-        doubleDays: 0,
-        birthDays: 0,
-        first: "A",
-      };
-      return periodsFromPlan(split);
-    }
-    if (twoParent) {
-      const rec = twoParent.recommended;
-      const split: PlanDaySplit = {
-        incomeDays: {
-          A: rec.allocation.A.sjukpenning + extraA,
-          B: rec.allocation.B.sjukpenning + extraB,
-        },
-        lagstaDays: { A: rec.allocation.A.lagsta, B: rec.allocation.B.lagsta },
-        doubleDays: rec.doubleDays ?? 0,
-        birthDays: birthDays?.days ?? 0,
-        first: firstCaregiver,
-      };
-      return periodsFromPlan(split);
-    }
-    return list;
-  }, [form.periods, soloMode, solo, twoParent, extraA, extraB, firstCaregiver, birthDays]);
-
   // If the user has configured leave periods, drive the timeline from those
   // (dates / days / SGI pace) instead of the goal-based solve.
   const periodPlan = useMemo(() => {
-    const list = effectivePeriods ?? [];
+    const list = form.periods ?? [];
     if (list.length === 0 || !deadlines) return null;
     const birth = deadlines.birth;
     const budgets = {
@@ -727,7 +700,7 @@ export function Planner() {
       warnings: built.warnings,
       intervals: periodIntervals(built.periods, names, rateOf, lagstanivaDailyAmount()),
     };
-  }, [effectivePeriods, deadlines, nameA, nameB, rateA, rateB]);
+  }, [form.periods, deadlines, nameA, nameB, rateA, rateB]);
 
   const projection: LeaveProjection | null = useMemo(
     () =>
@@ -1150,6 +1123,28 @@ export function Planner() {
     setView("plan");
   };
 
+  // Save the current caregiver (A or B) as a reusable profile.
+  const saveCaregiver = (id: "A" | "B") => {
+    const profile = profileFromForm(form, id);
+    if (!profile.name.trim()) {
+      window.alert("Ge vårdnadshavaren ett namn först.");
+      return;
+    }
+    setSavedCaregivers((list) => upsertProfile(list, profile, () => newPlanId()));
+  };
+
+  // Create a fresh plan pre-filled with one saved caregiver in the chosen slot.
+  const applyCaregiver = (profile: CaregiverProfile, slot: "A" | "B") => {
+    setForm(applyProfile(DEFAULT_STATE, slot, profile));
+    setActiveSavedPlanId(null);
+    setEditStep(1);
+    setView("plan");
+  };
+
+  const deleteCaregiver = (id: string) => {
+    setSavedCaregivers((list) => list.filter((p) => p.id !== id));
+  };
+
   // The header's "+" starts a fresh plan — register the handler with it.
   useEffect(() => {
     setNewPlan(() => startNewPlan);
@@ -1219,6 +1214,7 @@ export function Planner() {
     return (
       <Landing
         savedPlans={savedPlans}
+        savedCaregivers={savedCaregivers}
         hasProgress={hasProgress}
         progressLabel={progressLabel}
         progressDone={submitted}
@@ -1231,6 +1227,8 @@ export function Planner() {
         }}
         onOpen={openSavedPlan}
         onDelete={deleteSavedPlan}
+        onApplyCaregiver={applyCaregiver}
+        onDeleteCaregiver={deleteCaregiver}
       />
     );
   }
@@ -1251,6 +1249,7 @@ export function Planner() {
         soloMode={soloMode}
         plan={plan}
         soloName={soloName}
+        onSaveCaregiver={saveCaregiver}
         planName={
           activeSavedPlanId
             ? savedPlans.find((p) => p.id === activeSavedPlanId)?.name ?? null
@@ -1311,7 +1310,7 @@ export function Planner() {
         onSave={openSaveDialog}
         canSave={canSave}
         saved={saved}
-        periods={effectivePeriods ?? []}
+        periods={form.periods ?? []}
         onPeriodsChange={(p) =>
           setForm((f) => ({ ...f, periods: p }))
         }
