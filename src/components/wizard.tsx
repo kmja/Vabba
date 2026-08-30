@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import type { CaregiverProfile } from "@/lib/saved-caregivers";
 import { Separator } from "@/components/ui/separator";
 import { NumberField } from "@/components/number-field";
 import { FkSourceHint } from "@/components/fk-source-hint";
@@ -267,6 +268,8 @@ export function Wizard({
   onSubmit,
   onReset,
   onStepChange,
+  savedCaregivers = [],
+  onApplySavedCaregiver,
 }: {
   form: ShareableState;
   setForm: Dispatch<SetStateAction<ShareableState>>;
@@ -282,6 +285,10 @@ export function Wizard({
   onReset: () => void;
   /** Called whenever the step changes, so resuming later can pick it up. */
   onStepChange?: (step: number) => void;
+  /** Saved caregiver profiles, offered as a quick-fill dropdown. */
+  savedCaregivers?: CaregiverProfile[];
+  /** Apply a saved caregiver into the current form for the chosen parent. */
+  onApplySavedCaregiver?: (profile: CaregiverProfile, id: ParentId) => void;
 }) {
   const [step, setStep] = useState(initialStep);
   // The wizard's three question steps, or the standalone advanced-settings
@@ -1071,6 +1078,25 @@ export function Wizard({
           visited={seen(`${prefix}-q-name`)}
           onOpen={() => openQ(`${prefix}-q-name`, true)}
         >
+          {savedCaregivers.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Fyll från sparad vårdnadshavare</Label>
+              <Select
+                value=""
+                onChange={(e) => {
+                  const profile = savedCaregivers.find((c) => c.id === e.target.value);
+                  if (profile) onApplySavedCaregiver?.(profile, id);
+                }}
+              >
+                <option value="">Välj …</option>
+                {savedCaregivers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor={`${prefix}-name`}>Namn (valfritt)</Label>
             <Input

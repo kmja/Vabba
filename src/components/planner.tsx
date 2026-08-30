@@ -1156,6 +1156,44 @@ export function Planner() {
     setSavedCaregivers((list) => list.filter((p) => p.id !== id));
   };
 
+  // Apply a saved caregiver into the CURRENT (in-progress) form, mid-wizard.
+  const applySavedCaregiver = (profile: CaregiverProfile, id: "A" | "B") => {
+    setForm((f) => applyProfile(f, id, profile));
+  };
+
+  // Auto-save a caregiver as a profile whenever their wizard step is filled
+  // in (name + income). Upsert-by-name keeps it idempotent; identical data is
+  // left untouched so we don't churn state.
+  useEffect(() => {
+    for (const id of ["A", "B"] as const) {
+      const p = form.plan.parents[id];
+      const name = p.name?.trim();
+      const complete =
+        !!name && (p.grossMonthlyIncome > 0 || p.incomeAboveCap === true);
+      if (!complete) continue;
+      const profile = profileFromForm(form, id);
+      setSavedCaregivers((list) => {
+        const existing = list.find(
+          (x) => x.name.toLowerCase() === name.toLowerCase(),
+        );
+        if (
+          existing &&
+          existing.grossMonthlyIncome === profile.grossMonthlyIncome &&
+          existing.incomeAboveCap === profile.incomeAboveCap &&
+          existing.meets240DayRule === profile.meets240DayRule &&
+          existing.supplement === profile.supplement &&
+          existing.supplementMonths === profile.supplementMonths &&
+          existing.supplementPct === profile.supplementPct &&
+          existing.worksPartTime === profile.worksPartTime &&
+          existing.extraDays === profile.extraDays
+        ) {
+          return list; // unchanged
+        }
+        return upsertProfile(list, profile, () => newPlanId());
+      });
+    }
+  }, [form, setSavedCaregivers]);
+
   // The plan's generated schedule is the starting point. The first time you
   // open "Redigera", snapshot it into editable periods (income + lägstanivå
   // runs per caregiver) so the edit view starts from what the plan produced.
@@ -1447,6 +1485,8 @@ export function Planner() {
         onStepChange={(s) =>
           setForm((f) => (f.wizardStep === s ? f : { ...f, wizardStep: s }))
         }
+        savedCaregivers={savedCaregivers}
+        onApplySavedCaregiver={applySavedCaregiver}
       />
       <Dialog
         open={homeConfirmOpen}
