@@ -29,7 +29,6 @@ export function Results({
   soloMode,
   plan,
   soloName,
-  onSaveCaregiver,
   planName,
   deadlines,
   paceA,
@@ -76,8 +75,6 @@ export function Results({
   soloMode: boolean;
   plan: PlanInput;
   soloName: string;
-  /** Save the current caregiver's info as a reusable template. */
-  onSaveCaregiver?: (id: "A" | "B") => void;
   /** The saved plan's name, when this plan is (or was) a saved one. */
   planName?: string | null;
   deadlines: PlanDeadlines;
@@ -215,7 +212,6 @@ export function Results({
             row: monthlyRows.find((r) => r.name === name),
             goalText: id === "A" ? goalTextA : goalTextB,
             onEdit: () => onQuickEdit(id),
-            onSaveTemplate: () => onSaveCaregiver?.(id),
           };
         };
         const second: "A" | "B" | undefined = order[1];

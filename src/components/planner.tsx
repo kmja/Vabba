@@ -1142,27 +1142,6 @@ export function Planner() {
   };
 
   // Save the current caregiver (A or B) as a reusable profile.
-  const saveCaregiver = (id: "A" | "B") => {
-    const profile = profileFromForm(form, id);
-    if (!profile.name.trim()) {
-      window.alert("Ge vårdnadshavaren ett namn först.");
-      return;
-    }
-    setSavedCaregivers((list) => upsertProfile(list, profile, () => newPlanId()));
-  };
-
-  // Create a fresh plan pre-filled with one saved caregiver in the chosen slot.
-  const applyCaregiver = (profile: CaregiverProfile, slot: "A" | "B") => {
-    setForm(applyProfile(DEFAULT_STATE, slot, profile));
-    setActiveSavedPlanId(null);
-    setEditStep(1);
-    setView("plan");
-  };
-
-  const deleteCaregiver = (id: string) => {
-    setSavedCaregivers((list) => list.filter((p) => p.id !== id));
-  };
-
   // Apply a saved caregiver into the CURRENT (in-progress) form, mid-wizard.
   const applySavedCaregiver = (profile: CaregiverProfile, id: "A" | "B") => {
     setForm((f) => applyProfile(f, id, profile));
@@ -1347,7 +1326,6 @@ export function Planner() {
     return (
       <Landing
         savedPlans={savedPlans}
-        savedCaregivers={savedCaregivers}
         hasProgress={hasProgress}
         progressLabel={progressLabel}
         progressDone={submitted}
@@ -1360,8 +1338,6 @@ export function Planner() {
         }}
         onOpen={openSavedPlan}
         onDelete={deleteSavedPlan}
-        onApplyCaregiver={applyCaregiver}
-        onDeleteCaregiver={deleteCaregiver}
       />
     );
   }
@@ -1382,7 +1358,6 @@ export function Planner() {
         soloMode={soloMode}
         plan={plan}
         soloName={soloName}
-        onSaveCaregiver={saveCaregiver}
         planName={
           activeSavedPlanId
             ? savedPlans.find((p) => p.id === activeSavedPlanId)?.name ?? null

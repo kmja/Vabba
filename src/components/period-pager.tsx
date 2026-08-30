@@ -1011,46 +1011,48 @@ export function PeriodPager({
                 atBirth={i === 0 && !birth}
                 reason={reason}
               />
-              {editMode && p.segments[0]?.periodId && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-label="Flytta upp"
-                    onClick={() => onReorder?.(p.segments[0]!.periodId!, -1)}
-                  >
-                    <IconArrowUp /> Upp
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-label="Flytta ner"
-                    onClick={() => onReorder?.(p.segments[0]!.periodId!, 1)}
-                  >
-                    <IconArrowDown /> Ner
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-label="Dela perioden"
-                    onClick={() => onSplit?.(p.segments[0]!.periodId!)}
-                  >
-                    <IconArrowsSplit /> Dela
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Ta bort perioden"
-                    onClick={() => onDelete?.(p.segments[0]!.periodId!)}
-                  >
-                    <IconTrash />
-                  </Button>
-                </div>
-              )}
+              <div className="flex items-stretch gap-2">
+                {editMode && p.segments[0]?.periodId && (
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Flytta upp"
+                      onClick={() => onReorder?.(p.segments[0]!.periodId!, -1)}
+                    >
+                      <IconArrowUp />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Flytta ner"
+                      onClick={() => onReorder?.(p.segments[0]!.periodId!, 1)}
+                    >
+                      <IconArrowDown />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Dela perioden"
+                      onClick={() => onSplit?.(p.segments[0]!.periodId!)}
+                    >
+                      <IconArrowsSplit />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Ta bort perioden"
+                      onClick={() => onDelete?.(p.segments[0]!.periodId!)}
+                    >
+                      <IconTrash />
+                    </Button>
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
               <Block
                 colorIdx={colorIdx}
                 title={p.caregiver}
@@ -1137,6 +1139,8 @@ export function PeriodPager({
                 </div>
               )}
               </Block>
+                </div>
+              </div>
             </Fragment>
           );
         })}

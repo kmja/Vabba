@@ -1085,7 +1085,18 @@ export function Wizard({
                 value=""
                 onChange={(e) => {
                   const profile = savedCaregivers.find((c) => c.id === e.target.value);
-                  if (profile) onApplySavedCaregiver?.(profile, id);
+                  if (!profile) return;
+                  onApplySavedCaregiver?.(profile, id);
+                  // The profile fills name + income; advance to the next
+                  // question this caregiver still needs to answer.
+                  const qid = id.toLowerCase();
+                  const next = cgFlow(id).find(
+                    (q) =>
+                      q !== `${qid}-q-name` &&
+                      q !== `${qid}-q-income` &&
+                      !isAnswered(q),
+                  );
+                  if (next) openQ(next, true);
                 }}
               >
                 <option value="">Välj …</option>

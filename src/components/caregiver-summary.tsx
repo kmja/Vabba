@@ -1,4 +1,4 @@
-import { IconBookmark, IconPencil } from "@tabler/icons-react";
+import { IconPencil } from "@tabler/icons-react";
 
 import type { MonthlyRow } from "@/components/monthly-estimate";
 import { formatSek } from "@/lib/format";
@@ -12,8 +12,6 @@ export interface CaregiverInfo {
   /** What drives their length ("Hemma till 1 aug 2028"); null = manual. */
   goalText: string | null;
   onEdit: () => void;
-  /** Save this caregiver's info as a reusable template. */
-  onSaveTemplate?: () => void;
 }
 
 /**
@@ -28,7 +26,6 @@ export function CaregiverSummary({
   row,
   goalText,
   onEdit,
-  onSaveTemplate,
 }: CaregiverInfo) {
   return (
     <div className="space-y-0.5">
@@ -43,15 +40,6 @@ export function CaregiverSummary({
           className="text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0 rounded-md p-1"
         >
           <IconPencil className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={onSaveTemplate}
-          aria-label={`Mall för ${name}`}
-          title={`Spara ${name} som mall`}
-          className="text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0 rounded-md p-1"
-        >
-          <IconBookmark className="size-3.5" />
         </button>
       </div>
       {salary > 0 && (
