@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   IconArrowDown,
   IconArrowsSplit,
@@ -9,6 +9,7 @@ import {
 } from "@tabler/icons-react";
 
 import { Button } from "@/components/ui/button";
+import { Flippable } from "@/components/flippable";
 
 import {
   CG_BAR,
@@ -673,6 +674,11 @@ export function PeriodPager({
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut. All start collapsed.
   const [openIdx, setOpenIdx] = useState<number | null>(null);
+  // True after the first paint, so only blocks that appear later (a split, an
+  // add) animate in — the whole initial list doesn't animate at once.
+  const [pagerReady, setPagerReady] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time flag so only later-inserted blocks animate in
+  useEffect(() => setPagerReady(true), []);
   const segments = projection?.segments ?? [];
   const periods = toPeriods(segments);
   // Stable colour per person (A one colour, B another) so reordering never
@@ -1003,8 +1009,9 @@ export function PeriodPager({
                     ? null
                     : "Barnet föds.";
 
+          const periodId = p.segments[0]?.periodId ?? `blk${i}`;
           return (
-            <Fragment key={i}>
+            <Flippable key={periodId} flipKey={periodId} animateEnter={pagerReady}>
               <DateMarker
                 date={p.startsAt}
                 gapDays={gapBefore > 3 ? gapBefore : 0}
@@ -1141,7 +1148,7 @@ export function PeriodPager({
               </Block>
                 </div>
               </div>
-            </Fragment>
+            </Flippable>
           );
         })}
       </div>
