@@ -239,10 +239,9 @@ describe("<Planner /> wizard", () => {
     expect(headers()[0].textContent).toContain("vid födseln");
     expect(headers()[1].textContent).toContain("Vårdnadshavare A");
     expect(headers()[2].textContent).toContain("Vårdnadshavare B");
-    // The topmost block starts open.
-    expect(headers()[0].getAttribute("aria-expanded")).toBe("true");
+    // All blocks start collapsed.
+    expect(headers()[0].getAttribute("aria-expanded")).toBe("false");
     expect(headers()[2].getAttribute("aria-expanded")).toBe("false");
-    // Opening another shuts the one before it.
     fireEvent.click(headers()[2]);
     expect(headers()[0].getAttribute("aria-expanded")).toBe("false");
     expect(headers()[2].getAttribute("aria-expanded")).toBe("true");

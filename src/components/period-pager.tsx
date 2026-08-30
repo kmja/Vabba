@@ -671,16 +671,13 @@ export function PeriodPager({
   onDelete?: (periodId: string) => void;
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
-  // open one can be clicked shut.
-  const [openIdx, setOpenIdx] = useState<number | null>(
-    // The topmost block starts open — the 10-dagar one when there is one.
-    birthDays && birthDays.result.days > 0 ? BIRTH_IDX : 0,
-  );
+  // open one can be clicked shut. All start collapsed.
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const segments = projection?.segments ?? [];
   const periods = toPeriods(segments);
-  const cgOrder = periods
-    .map((p) => p.caregiver)
-    .filter((name, i, arr) => arr.indexOf(name) === i);
+  // Stable colour per person (A one colour, B another) so reordering never
+  // swaps which colour a caregiver has.
+  const colorOf = (name: string) => (editing.idByName[name] === "B" ? 1 : 0);
 
   // No dated periods (e.g. no days left) — fall back to plain cards.
   if (periods.length === 0) {
@@ -823,8 +820,8 @@ export function PeriodPager({
               reason="Barnet föds."
             />
             <Block
-              colorIdx={Math.max(0, cgOrder.indexOf(overlap.caregiver1))}
-              colorIdx2={Math.max(0, cgOrder.indexOf(overlap.caregiver2))}
+              colorIdx={colorOf(overlap.caregiver1)}
+              colorIdx2={colorOf(overlap.caregiver2)}
               title={`${overlap.caregiver1} & ${overlap.caregiver2}`}
               subtitle={
                 <>
@@ -889,7 +886,7 @@ export function PeriodPager({
               result={birthDays.result}
               salary={birthDays.salary}
               municipalRate={birthDays.municipalRate}
-              colorIdx={Math.max(0, cgOrder.indexOf(birth.caregiver))}
+              colorIdx={colorOf(birth.caregiver)}
               open={openIdx === BIRTH_IDX}
               onToggle={() =>
                 setOpenIdx(openIdx === BIRTH_IDX ? null : BIRTH_IDX)
@@ -912,14 +909,8 @@ export function PeriodPager({
               }
             />
             <Block
-              colorIdx={Math.max(
-                0,
-                cgOrder.indexOf(doubleDaysMerge.caregiver1),
-              )}
-              colorIdx2={Math.max(
-                0,
-                cgOrder.indexOf(doubleDaysMerge.caregiver2),
-              )}
+              colorIdx={colorOf(doubleDaysMerge.caregiver1)}
+              colorIdx2={colorOf(doubleDaysMerge.caregiver2)}
               title={`${doubleDaysMerge.caregiver1} & ${doubleDaysMerge.caregiver2}`}
               subtitle={
                 <>
@@ -966,11 +957,11 @@ export function PeriodPager({
           const sources = row ? incomeSources(row, municipalRate) : [];
           const id = editing.idByName[p.caregiver];
           const mode: GoalMode = id ? editing.modeById[id] : "budget";
-          const colorIdx = Math.max(0, cgOrder.indexOf(p.caregiver));
+          const colorIdx = colorOf(p.caregiver);
           const months = formatMonths(
             differenceInDays(p.startsAt, p.endsAt) / 30.4,
           );
-          const paceValue = row?.daysPerWeek ?? p.segments[0]?.pace ?? 0;
+          const paceValue = p.segments[0]?.pace ?? row?.daysPerWeek ?? 0;
           const paceText = `${formatPace(paceValue)} dagar/vecka`;
           const pace =
             p.phase === "lägstanivå" ? `lägstanivå · ${paceText}` : paceText;

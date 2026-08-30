@@ -710,7 +710,13 @@ export function Planner() {
       periods: built.periods,
       unused: built.unused,
       warnings: built.warnings,
-      intervals: periodIntervals(built.periods, names, rateOf, lagstanivaDailyAmount()),
+      intervals: periodIntervals(
+        built.periods,
+        names,
+        rateOf,
+        lagstanivaDailyAmount(),
+        addYears(birth, 1),
+      ),
     };
   }, [form.periods, periodBudgets, deadlines, nameA, nameB, rateA, rateB]);
 
