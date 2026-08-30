@@ -57,7 +57,6 @@ import { reorderPeriods, splitPeriod } from "@/lib/period-ops";
 import type { PeriodSpec } from "@/lib/share";
 import {
   computeSupplement,
-  SUPPLEMENT_WINDOW_MONTHS,
 } from "@/lib/supplement";
 import { DEFAULT_MUNICIPAL_RATE } from "@/lib/tax";
 import { birthDaysFor, computeBirthDays } from "@/lib/birth-days";
@@ -778,28 +777,8 @@ export function Planner() {
         message: `Ungefär ${planSolve.incomeDaysPastDeadline} inkomstbaserade dagar hinner inte tas ut före 4-årsdagen (${formatDate(deadlines.sjukpenningDeadline)}) ens i full takt, och går då förlorade. Börja tidigare, eller lägg fler dagar på den andra vårdnadshavaren.`,
       });
     }
-    // Föräldralön runs out on the agreement's clock, not the plan's. One
-    // warning for the household, not one per caregiver — it is the same
-    // fact about the same agreement either way.
-    const stretchedSupp = (
-      soloMode
-        ? ([[soloName, supplementA]] as const)
-        : ([
-            [nameA, supplementA],
-            [nameB, supplementB],
-          ] as const)
-    )
-      .filter(([, supp]) => supp?.cutShortByWindow)
-      .map(([name]) => name);
-    if (stretchedSupp.length > 0) {
-      out.push({
-        level: "warning",
-        code: "supplementWindow",
-        message: `I den här takten skulle föräldralönen till ${stretchedSupp.join(" och ")} räcka längre än de ${SUPPLEMENT_WINDOW_MONTHS} månader efter födseln som kollektivavtal brukar betala ut den inom. Beloppen här räknar bara med det som hinner betalas ut — kontrollera vad ert avtal säger.`,
-      });
-    }
     return out;
-  }, [planSolve, deadlines, soloMode, soloName, nameA, nameB, supplementA, supplementB, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB]);
+  }, [planSolve, deadlines, soloMode, nameA, goalModeA, goalModeB, goalTargetA, goalTargetB, goalBudgetA, goalBudgetB]);
 
   const warnings = [...baseWarnings, ...goalWarnings];
 
