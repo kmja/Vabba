@@ -1,5 +1,14 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { IconChevronDown, IconInfoCircle } from "@tabler/icons-react";
+import {
+  IconArrowDown,
+  IconArrowsSplit,
+  IconArrowUp,
+  IconChevronDown,
+  IconInfoCircle,
+  IconTrash,
+} from "@tabler/icons-react";
+
+import { Button } from "@/components/ui/button";
 
 import {
   CG_BAR,
@@ -624,6 +633,10 @@ export function PeriodPager({
   sgiLiftedNames,
   birthDays,
   doubleDaysWindow,
+  editMode = false,
+  onReorder,
+  onSplit,
+  onDelete,
 }: {
   projection?: LeaveProjection;
   rows?: MonthlyRow[];
@@ -651,6 +664,11 @@ export function PeriodPager({
   oneYear?: Date;
   /** Caregivers whose pace that floor raised. */
   sgiLiftedNames?: Set<string>;
+  /** In "Redigera" mode: add per-block reorder + split + delete controls. */
+  editMode?: boolean;
+  onReorder?: (periodId: string, dir: -1 | 1) => void;
+  onSplit?: (periodId: string) => void;
+  onDelete?: (periodId: string) => void;
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut.
@@ -1002,6 +1020,46 @@ export function PeriodPager({
                 atBirth={i === 0 && !birth}
                 reason={reason}
               />
+              {editMode && p.segments[0]?.periodId && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Flytta upp"
+                    onClick={() => onReorder?.(p.segments[0]!.periodId!, -1)}
+                  >
+                    <IconArrowUp /> Upp
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Flytta ner"
+                    onClick={() => onReorder?.(p.segments[0]!.periodId!, 1)}
+                  >
+                    <IconArrowDown /> Ner
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label="Dela perioden"
+                    onClick={() => onSplit?.(p.segments[0]!.periodId!)}
+                  >
+                    <IconArrowsSplit /> Dela
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Ta bort perioden"
+                    onClick={() => onDelete?.(p.segments[0]!.periodId!)}
+                  >
+                    <IconTrash />
+                  </Button>
+                </div>
+              )}
               <Block
                 colorIdx={colorIdx}
                 title={p.caregiver}

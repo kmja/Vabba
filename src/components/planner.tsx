@@ -53,6 +53,7 @@ import {
 } from "@/lib/goal-seek";
 import { buildPlanPeriods, type PlanDaySplit } from "@/lib/periods";
 import { periodIntervals } from "@/lib/plan-periods";
+import { reorderPeriods, splitPeriod } from "@/lib/period-ops";
 import type { PeriodSpec } from "@/lib/share";
 import {
   computeSupplement,
@@ -1241,6 +1242,36 @@ export function Planner() {
     setEditingPeriods((v) => !v);
   };
 
+  // Per-block edit actions on the single Perioder list (reorder / split).
+  const reorderPeriod = (periodId: string, dir: -1 | 1) => {
+    const list = form.periods ?? [];
+    const idx = list.findIndex((p) => p.id === periodId);
+    if (idx === -1) return;
+    setForm((f) => ({
+      ...f,
+      periods: reorderPeriods(f.periods ?? [], idx, idx + dir),
+    }));
+  };
+  const splitPeriodBlock = (periodId: string) => {
+    const list = form.periods ?? [];
+    const p = list.find((x) => x.id === periodId);
+    if (!p) return;
+    const allocated =
+      periodPlan?.periods.find((d) => d.id === periodId)?.days ?? p.days;
+    const half =
+      p.kind === "fixed" ? Math.floor(p.days / 2) : Math.floor(allocated / 2);
+    setForm((f) => ({
+      ...f,
+      periods: splitPeriod(f.periods ?? [], periodId, half),
+    }));
+  };
+  const deletePeriodBlock = (periodId: string) => {
+    setForm((f) => ({
+      ...f,
+      periods: (f.periods ?? []).filter((p) => p.id !== periodId),
+    }));
+  };
+
   // The header's "+" starts a fresh plan — register the handler with it.
   useEffect(() => {
     setNewPlan(() => startNewPlan);
@@ -1406,13 +1437,11 @@ export function Planner() {
         onSave={openSaveDialog}
         canSave={canSave}
         saved={saved}
-        periods={form.periods ?? []}
-        onPeriodsChange={(p) =>
-          setForm((f) => ({ ...f, periods: p }))
-        }
-        periodBudgets={periodBudgets}
         editingPeriods={editingPeriods}
         onTogglePeriodsEditing={togglePeriodEditing}
+        onReorderPeriod={reorderPeriod}
+        onSplitPeriod={splitPeriodBlock}
+        onDeletePeriod={deletePeriodBlock}
       />
       {quickEditId && (
         <CaregiverEditDialog

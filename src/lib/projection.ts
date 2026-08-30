@@ -39,6 +39,8 @@ export interface LeaveInterval {
   monthly: number;
   tier: "income" | "lagsta";
   caregiver?: string;
+  /** The editable period this interval belongs to (period-model-driven plans). */
+  periodId?: string;
 }
 
 function monthlyAt(rate: number, pace: number): number {

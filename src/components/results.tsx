@@ -9,8 +9,6 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { FamilySummary } from "@/components/family-summary";
-import { PeriodEditor } from "@/components/period-editor";
-import type { PeriodSpec } from "@/lib/share";
 import type {
   PeriodControls,
   PhaseControls,
@@ -69,11 +67,11 @@ export function Results({
   onSave,
   canSave,
   saved,
-  periods,
-  onPeriodsChange,
-  periodBudgets,
   editingPeriods,
   onTogglePeriodsEditing,
+  onReorderPeriod,
+  onSplitPeriod,
+  onDeletePeriod,
 }: {
   soloMode: boolean;
   plan: PlanInput;
@@ -128,13 +126,12 @@ export function Results({
   /** Whether the working plan differs from the saved copy (so it can be saved). */
   canSave: boolean;
   saved: boolean;
-  /** Editable leave periods (fixed lengths + "as long as possible"). */
-  periods: PeriodSpec[];
-  onPeriodsChange: (periods: PeriodSpec[]) => void;
-  periodBudgets: Record<"A" | "B", number>;
   /** Whether the single Perioder section is in "Redigera" mode. */
   editingPeriods: boolean;
   onTogglePeriodsEditing: () => void;
+  onReorderPeriod?: (periodId: string, dir: -1 | 1) => void;
+  onSplitPeriod?: (periodId: string) => void;
+  onDeletePeriod?: (periodId: string) => void;
 }) {
   // The dials each period block drives, keyed by caregiver.
   const rowFor = (id: "A" | "B") => {
@@ -253,16 +250,38 @@ export function Results({
         </div>
 
         {editingPeriods ? (
-          <PeriodEditor
-            periods={periods}
-            onChange={onPeriodsChange}
-            budgets={periodBudgets}
-            deadlines={deadlines}
-            names={{
-              A: plan.parents.A.name?.trim() || "Vårdnadshavare A",
-              B: plan.parents.B.name?.trim() || "Vårdnadshavare B",
-            }}
-          />
+          <div className="space-y-1.5">
+            <p className="text-muted-foreground text-xs">
+              Anpassa perioderna — flytta, dela eller ta bort.
+            </p>
+            <PeriodPager
+              projection={projection ?? undefined}
+              rows={monthlyRows}
+              deadlines={deadlines}
+              editing={periodEdit}
+              levers={levers}
+              municipalRate={municipalRate}
+              oneYear={oneYear}
+              sgiLiftedNames={sgiLiftedNames}
+              birthDays={
+                birthDays && birthDays.days > 0
+                  ? {
+                      result: birthDays,
+                      name: birthDaysName,
+                      // The days go to whoever is not home first, and are taxed
+                      // at the margin of the salary they sit on top of.
+                      salary: firstCaregiver === "A" ? salaryB : salaryA,
+                      municipalRate,
+                    }
+                  : undefined
+              }
+              doubleDaysWindow={doubleDaysWindow ?? undefined}
+              editMode
+              onReorder={onReorderPeriod}
+              onSplit={onSplitPeriod}
+              onDelete={onDeletePeriod}
+            />
+          </div>
         ) : (
           <PeriodPager
             projection={projection ?? undefined}

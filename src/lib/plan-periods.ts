@@ -38,6 +38,7 @@ export function periodIntervals(
         monthly: Math.round((daily * pace * DAYS_PER_MONTH) / 7),
         tier: p.tier,
         caregiver: names[p.caregiver],
+        periodId: p.id,
       };
     });
 }
