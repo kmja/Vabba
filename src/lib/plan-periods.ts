@@ -25,7 +25,7 @@ export function periodIntervals(
   lagstaRate: number,
 ): LeaveInterval[] {
   return periods
-    .filter((p) => p.days > 0)
+    .filter((p) => p.days > 0 && p.kind !== "birth")
     .map((p) => {
       const pace = Math.max(0.5, p.pace.phase2);
       const daily = p.tier === "lagsta" ? lagstaRate : rateOf(p.caregiver);
