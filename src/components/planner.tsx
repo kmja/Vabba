@@ -51,8 +51,9 @@ import {
   solvePlan,
   type CaregiverPlanSpec,
 } from "@/lib/goal-seek";
-import { buildPlanPeriods } from "@/lib/periods";
+import { buildPlanPeriods, periodsFromPlan, type PlanDaySplit } from "@/lib/periods";
 import { periodIntervals } from "@/lib/plan-periods";
+import type { PeriodSpec } from "@/lib/share";
 import {
   computeSupplement,
   SUPPLEMENT_WINDOW_MONTHS,
@@ -669,10 +670,42 @@ export function Planner() {
     goalModeB,
   ]);
 
+  // Seeded period list before the user edits: the goal method's output is an
+  // editable PeriodSpec list (periodsFromPlan), so generated == edited.
+  const effectivePeriods: PeriodSpec[] | null = useMemo(() => {
+    const list = form.periods ?? [];
+    if (list.length > 0) return list;
+    if (soloMode && solo) {
+      const split: PlanDaySplit = {
+        incomeDays: { A: solo.payout.sjukpenningDays + extraA, B: 0 },
+        lagstaDays: { A: solo.payout.lagstaDays, B: 0 },
+        doubleDays: 0,
+        birthDays: 0,
+        first: "A",
+      };
+      return periodsFromPlan(split);
+    }
+    if (twoParent) {
+      const rec = twoParent.recommended;
+      const split: PlanDaySplit = {
+        incomeDays: {
+          A: rec.allocation.A.sjukpenning + extraA,
+          B: rec.allocation.B.sjukpenning + extraB,
+        },
+        lagstaDays: { A: rec.allocation.A.lagsta, B: rec.allocation.B.lagsta },
+        doubleDays: rec.doubleDays ?? 0,
+        birthDays: birthDays?.days ?? 0,
+        first: firstCaregiver,
+      };
+      return periodsFromPlan(split);
+    }
+    return list;
+  }, [form.periods, soloMode, solo, twoParent, extraA, extraB, firstCaregiver, birthDays]);
+
   // If the user has configured leave periods, drive the timeline from those
   // (dates / days / SGI pace) instead of the goal-based solve.
   const periodPlan = useMemo(() => {
-    const list = form.periods ?? [];
+    const list = effectivePeriods ?? [];
     if (list.length === 0 || !deadlines) return null;
     const birth = deadlines.birth;
     const budgets = {
@@ -694,7 +727,7 @@ export function Planner() {
       warnings: built.warnings,
       intervals: periodIntervals(built.periods, names, rateOf, lagstanivaDailyAmount()),
     };
-  }, [form.periods, deadlines, nameA, nameB, rateA, rateB]);
+  }, [effectivePeriods, deadlines, nameA, nameB, rateA, rateB]);
 
   const projection: LeaveProjection | null = useMemo(
     () =>
@@ -998,7 +1031,7 @@ export function Planner() {
   // per active caregiver using their own rate/salary/supplement so the pager's
   // per-period cards (computed from each segment) land on the right figures.
   const periodRows: MonthlyRow[] = useMemo(() => {
-    if (!periodPlan) return [];
+    if (!periodPlan || !oneYear) return [];
     const rows: MonthlyRow[] = [];
     for (const id of ["A", "B"] as const) {
       const name = id === "A" ? nameA : nameB;
@@ -1010,23 +1043,34 @@ export function Planner() {
       const totalDays = Math.round(cgPeriods.reduce((a, p) => a + p.days, 0));
       const first = cgPeriods[0];
       const last = cgPeriods[cgPeriods.length - 1];
+      const crossesYear =
+        first.startsAt.getTime() < oneYear.getTime() &&
+        last.endsAt.getTime() > oneYear.getTime();
+      const paceUp = first.pace.phase2 - first.pace.phase1;
       rows.push({
         name,
         dailyRate: rate,
         days: totalDays,
-        daysPerWeek: first.pace.phase2,
+        daysPerWeek: first.pace.phase1,
         leaveMonths: Math.max(1, differenceInDays(first.startsAt, last.endsAt) / 30.4),
+        secondPhase:
+          crossesYear && Math.abs(paceUp) > 0.05
+            ? {
+                daysPerWeek: first.pace.phase2,
+                monthly: approxMonthlyGross(rate, first.pace.phase2),
+              }
+            : undefined,
         extraDays: id === "A" ? extraA : extraB,
         goalLabel: "Perioder",
         aboveCap: id === "A" ? aboveCapA : aboveCapB,
         supplement: (id === "A" ? supplementA : supplementB) ?? undefined,
         householdBase: id === "A" ? householdBaseA : householdBaseB,
         partnerWorking: soloMode ? undefined : id === "A" ? nameB : nameA,
-        partTimeSalary: works ? Math.round(partTimeSalaryAt(salary, first.pace.phase2)) : 0,
+        partTimeSalary: works ? Math.round(partTimeSalaryAt(salary, first.pace.phase1)) : 0,
       });
     }
     return rows;
-  }, [periodPlan, nameA, nameB, rateA, rateB, extraA, extraB, aboveCapA, aboveCapB, supplementA, supplementB, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB, soloMode]);
+  }, [periodPlan, oneYear, nameA, nameB, rateA, rateB, extraA, extraB, aboveCapA, aboveCapB, supplementA, supplementB, householdBaseA, householdBaseB, salaryA, salaryB, worksPartTimeA, worksPartTimeB, soloMode]);
 
   const rows: MonthlyRow[] = periodPlan ? periodRows : monthlyRows;
 
@@ -1267,7 +1311,7 @@ export function Planner() {
         onSave={openSaveDialog}
         canSave={canSave}
         saved={saved}
-        periods={form.periods ?? []}
+        periods={effectivePeriods ?? []}
         onPeriodsChange={(p) =>
           setForm((f) => ({ ...f, periods: p }))
         }

@@ -17,23 +17,22 @@ describe("periodIntervals", () => {
     ...over,
   });
 
-  it("maps each period to an interval at its SGI pace with the caregiver name", () => {
+  it("maps each non-birth period to one interval at its phase-1 pace", () => {
     const r = periodIntervals(
-      [p({ caregiver: "A" }), p({ caregiver: "B", days: 0 })],
+      [p({ caregiver: "A" }), p({ caregiver: "B", days: 0 }), p({ kind: "birth" })],
       { A: "Niki", B: "Kalle" },
       () => 600,
       180,
     );
-    expect(r).toHaveLength(1); // the 0-day one is dropped
+    expect(r).toHaveLength(1); // 0-day + birth are dropped
     expect(r[0].caregiver).toBe("Niki");
-    expect(r[0].pace).toBe(5);
-    expect(r[0].monthly).toBe(Math.round((600 * 5 * 30.4) / 7));
+    expect(r[0].pace).toBe(0.5);
     expect(r[0].startsAt.getTime()).toBe(Date.UTC(2025, 0, 1));
   });
 
   it("values the monthly from the caregiver's own rate", () => {
     const r = periodIntervals([p({ caregiver: "B" })], { A: "Niki", B: "Kalle" }, () => 900, 180);
-    expect(r[0].monthly).toBe(Math.round((900 * 5 * 30.4) / 7));
+    expect(r[0].monthly).toBe(Math.round((900 * 0.5 * 30.4) / 7));
   });
 
   it("uses the flat lägstanivå rate for a lagsta period", () => {

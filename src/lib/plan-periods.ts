@@ -2,10 +2,12 @@
  * plan-periods.ts — Bridge between the editable period list and the plan's
  * dated intervals shown on the results page.
  *
- * When the user has configured periods, we build the "Perioder" list from
- * those (via lib/periods + lib/stretch) instead of the goal-based solver. Each
- * period becomes a LeaveInterval: the dated stretch at its SGI-compliant post-
- * 1-year pace, with a monthly estimate from the caregiver's daily rate.
+ * Each period becomes one LeaveInterval at the pace the leave actually starts
+ * at (phase 1 before the child's 1st birthday, or the SGI floor if it starts
+ * later). The pager keeps one block per stretch and notes the post-1-year pace
+ * lift via the row's `secondPhase`, exactly as the goal path does. Income-
+ * based periods use the caregiver's daily rate; lägstanivå periods use the
+ * flat rate.
  */
 import type { DatedPeriod } from "@/lib/periods";
 import type { LeaveInterval } from "@/lib/projection";
@@ -15,8 +17,8 @@ const DAYS_PER_MONTH = 30.4;
 /**
  * Turn allocated, dated periods into the segments the period pager renders.
  * `caregiver` is set to the display name so the pager can group blocks and
- * match income rows; the pace used is the post-1-year (SGI) pace. Income-based
- * periods use the caregiver's daily rate; lägstanivå periods use the flat rate.
+ * match income rows. The birth window is owned by the pager's `birthDays`
+ * logic, so it is not emitted here.
  */
 export function periodIntervals(
   periods: DatedPeriod[],
@@ -27,7 +29,7 @@ export function periodIntervals(
   return periods
     .filter((p) => p.days > 0 && p.kind !== "birth")
     .map((p) => {
-      const pace = Math.max(0.5, p.pace.phase2);
+      const pace = Math.max(0.5, p.pace.phase1);
       const daily = p.tier === "lagsta" ? lagstaRate : rateOf(p.caregiver);
       return {
         startsAt: p.startsAt,
