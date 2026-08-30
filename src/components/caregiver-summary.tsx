@@ -43,11 +43,11 @@ export function CaregiverSummary({
         </button>
       </div>
       {salary > 0 && (
-        <p className="text-muted-foreground text-sm tabular-nums">
+        <p className="text-muted-foreground text-xs tabular-nums">
           {formatSek(salary)}/mån
         </p>
       )}
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground text-xs">
         {goalText ?? row?.goalLabel ?? "Full takt — justera i perioderna."}
       </p>
     </div>

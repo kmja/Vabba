@@ -44,7 +44,10 @@ export function FamilySummary({
         <div className="relative z-10 h-44 w-20 sm:h-56 sm:w-28">
           <CaregiverPortrait second={false} holding cover />
         </div>
-        <div className="relative -ml-5 h-44 w-20 sm:h-56 sm:-ml-6 sm:w-28">
+        {/* The two figures aren't drawn to the same height in their canvases
+            (caregiver 2 has more empty headroom), so give the second box a
+            little extra height so the people match in size. */}
+        <div className="relative -ml-5 h-[11.7rem] w-20 sm:h-[14.9rem] sm:-ml-6 sm:w-28">
           <CaregiverPortrait second holding={false} cover />
         </div>
       </div>
