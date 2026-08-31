@@ -718,6 +718,14 @@ export function Wizard({
       return;
     }
     if (current < stepCount) {
+      // A choice here that can't produce a working plan blocks leaving the
+      // step — the banner above shows why and the way out.
+      const firstIssue = flowOf(current).flatMap(issuesOn)[0];
+      if (firstIssue) {
+        setTriedNext(true);
+        openQ(firstIssue.questionId, true);
+        return;
+      }
       if (canAdvance) {
         goTo(current + 1, true);
       } else {
