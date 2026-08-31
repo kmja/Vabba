@@ -38,6 +38,8 @@ export function periodIntervals(
       tier: p.tier,
       caregiver: names[p.caregiver],
       periodId: p.id,
+      kind: p.kind,
+      days: p.days,
     });
   };
 

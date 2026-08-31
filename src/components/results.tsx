@@ -71,6 +71,8 @@ export function Results({
   onReorderPeriod,
   onSplitPeriod,
   onDeletePeriod,
+  onEditPeriodDays,
+  onAddPeriod,
 }: {
   soloMode: boolean;
   plan: PlanInput;
@@ -129,6 +131,8 @@ export function Results({
   onReorderPeriod?: (periodId: string, dir: -1 | 1) => void;
   onSplitPeriod?: (periodId: string) => void;
   onDeletePeriod?: (periodId: string) => void;
+  onEditPeriodDays?: (periodId: string, days: number) => void;
+  onAddPeriod?: (caregiver: "A" | "B") => void;
 }) {
   // The dials each period block drives, keyed by caregiver.
   const rowFor = (id: "A" | "B") => {
@@ -276,6 +280,8 @@ export function Results({
               onReorder={onReorderPeriod}
               onSplit={onSplitPeriod}
               onDelete={onDeletePeriod}
+              onEditDays={onEditPeriodDays}
+              onAdd={onAddPeriod}
             />
           </div>
         ) : (

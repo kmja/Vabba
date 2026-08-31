@@ -41,6 +41,10 @@ export interface LeaveInterval {
   caregiver?: string;
   /** The editable period this interval belongs to (period-model-driven plans). */
   periodId?: string;
+  /** The period's kind, so the editor can offer edit-length only for fixed. */
+  kind?: string;
+  /** Allocated days of leave in this period (edit-length). */
+  days?: number;
 }
 
 function monthlyAt(rate: number, pace: number): number {

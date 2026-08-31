@@ -5,6 +5,7 @@ import {
   IconArrowUp,
   IconChevronDown,
   IconInfoCircle,
+  IconPlus,
   IconTrash,
 } from "@tabler/icons-react";
 
@@ -641,6 +642,8 @@ export function PeriodPager({
   onReorder,
   onSplit,
   onDelete,
+  onEditDays,
+  onAdd,
 }: {
   projection?: LeaveProjection;
   rows?: MonthlyRow[];
@@ -673,6 +676,8 @@ export function PeriodPager({
   onReorder?: (periodId: string, dir: -1 | 1) => void;
   onSplit?: (periodId: string) => void;
   onDelete?: (periodId: string) => void;
+  onEditDays?: (periodId: string, days: number) => void;
+  onAdd?: (caregiver: "A" | "B") => void;
 }) {
   // Which block is expanded. One at a time keeps the list scannable; the
   // open one can be clicked shut. All start collapsed.
@@ -861,6 +866,22 @@ export function PeriodPager({
           {total} totalt
         </span>
       </div>
+
+      {editMode && (
+        <div className="flex flex-wrap gap-2">
+          {Object.keys(editing.idByName).map((name) => (
+            <Button
+              key={name}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onAdd?.(editing.idByName[name])}
+            >
+              <IconPlus /> Lägg till {name}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <div ref={listRef} className="space-y-2">
         {birth && birthDays && overlap && (
@@ -1103,6 +1124,25 @@ export function PeriodPager({
                     >
                       <IconTrash />
                     </Button>
+                    {p.segments[0]?.kind === "fixed" && (
+                      <label className="flex flex-col items-center gap-0.5 pt-1">
+                        <input
+                          type="number"
+                          min={0}
+                          value={p.segments[0]?.days ?? 0}
+                          onChange={(e) =>
+                            onEditDays?.(
+                              p.segments[0]!.periodId!,
+                              Number(e.target.value),
+                            )
+                          }
+                          className="bg-transparent border-input focus-visible:ring-ring h-7 w-12 rounded-md border text-center text-xs tabular-nums"
+                        />
+                        <span className="text-muted-foreground text-[10px]">
+                          dagar
+                        </span>
+                      </label>
+                    )}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">

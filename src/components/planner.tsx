@@ -54,6 +54,7 @@ import {
 import { buildPlanPeriods, type PlanDaySplit } from "@/lib/periods";
 import { periodIntervals } from "@/lib/plan-periods";
 import { reorderPeriods, splitPeriod } from "@/lib/period-ops";
+import { addPeriod, editPeriodDays } from "@/lib/period-ops";
 import type { PeriodSpec } from "@/lib/share";
 import {
   computeSupplement,
@@ -1253,6 +1254,19 @@ export function Planner() {
       periods: (f.periods ?? []).filter((p) => p.id !== periodId),
     }));
   };
+  const editPeriodBlockDays = (periodId: string, days: number) => {
+    setForm((f) => ({
+      ...f,
+      periods: editPeriodDays(f.periods ?? [], periodId, days),
+    }));
+  };
+  const addPeriodBlock = (caregiver: "A" | "B") => {
+    snapshotPeriods();
+    setForm((f) => ({
+      ...f,
+      periods: addPeriod(f.periods ?? [], caregiver, "fixed", 30),
+    }));
+  };
 
   // The header's "+" starts a fresh plan — register the handler with it.
   useEffect(() => {
@@ -1420,6 +1434,8 @@ export function Planner() {
         onReorderPeriod={reorderPeriod}
         onSplitPeriod={splitPeriodBlock}
         onDeletePeriod={deletePeriodBlock}
+        onEditPeriodDays={editPeriodBlockDays}
+        onAddPeriod={addPeriodBlock}
       />
       {quickEditId && (
         <CaregiverEditDialog
