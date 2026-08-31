@@ -587,10 +587,13 @@ function BirthDaysBlock({
       subtitle={
         <>
           <span className="block">vid födseln</span>
-          <span className="block">
-            ≈ {formatSek(net)} · {formatDays(result.days)}
-          </span>
+          <span className="block">{formatDays(result.days)}</span>
         </>
+      }
+      headerRight={
+        <span className="text-foreground shrink-0 text-base font-bold tabular-nums">
+          ≈ {formatSek(net)}
+        </span>
       }
       open={open}
       onToggle={onToggle}

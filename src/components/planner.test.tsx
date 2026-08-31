@@ -907,8 +907,10 @@ describe("<Planner /> wizard", () => {
     fillToResults(container);
     showPlan();
     const headers = periodHeaders(container);
-    // The birth-days block: a lump sum, not a monthly rate.
-    expect(headers[0].textContent).toMatch(/≈ [\d\s]+kr · \d+ dagar/);
+    // The birth-days block: a lump sum in the header (not a monthly rate).
+    expect(headers[0].textContent).toMatch(/≈ [\d\s]+kr/);
+    expect(headers[0].textContent).not.toMatch(/\/mån/);
+    expect(headers[0].textContent).toMatch(/\d+ dagar/);
     // A caregiver's own stretch: net per month (headline), the length, and
     // the pace — no start/end dates baked into the row itself.
     expect(headers[1].textContent).toMatch(/≈ [\d\s]+kr\s*\/mån/);
