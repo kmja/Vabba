@@ -37,19 +37,23 @@ export function FamilySummary({
         <CaregiverSummary {...first} />
       </div>
       {/* The two figures stand close and overlap — one family huddled
-          together. `cover` crops the artwork's transparent padding so the
-          figures meet; the first (holding the baby) is in front, the second
-          behind. Equal-height boxes keep the pair level. */}
+          together. Each is cropped to its own figure (see the *_full.png
+          assets) so both render the same height with their feet on the same
+          baseline; the first (holding the baby) is in front, the second
+          behind. */}
       <div className="flex shrink-0 items-end">
-        <div className="relative z-10 h-44 w-20 sm:h-56 sm:w-28">
-          <CaregiverPortrait second={false} holding cover />
-        </div>
-        {/* The two figures aren't drawn to the same height in their canvases
-            (caregiver 2 has more empty headroom), so give the second box a
-            little extra height so the people match in size. */}
-        <div className="relative -ml-5 h-[11.7rem] w-20 sm:h-[14.9rem] sm:-ml-6 sm:w-28">
-          <CaregiverPortrait second holding={false} cover />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element -- static export, decorative illustration */}
+        <img
+          src="/Caregiver1_full.png"
+          alt=""
+          className="pointer-events-none relative z-10 h-44 w-auto select-none sm:h-56"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element -- static export, decorative illustration */}
+        <img
+          src="/Caregiver2_empty_full.png"
+          alt=""
+          className="pointer-events-none relative -ml-4 h-44 w-auto select-none sm:-ml-5 sm:h-56"
+        />
       </div>
       <div className="min-w-0 flex-1">
         <CaregiverSummary {...second} />
