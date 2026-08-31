@@ -1163,7 +1163,12 @@ export function Planner() {
           existing.supplementMonths === profile.supplementMonths &&
           existing.supplementPct === profile.supplementPct &&
           existing.worksPartTime === profile.worksPartTime &&
-          existing.extraDays === profile.extraDays
+          existing.extraDays === profile.extraDays &&
+          existing.goalMode === profile.goalMode &&
+          existing.goalDate === profile.goalDate &&
+          existing.goalMonths === profile.goalMonths &&
+          existing.goalBudget === profile.goalBudget &&
+          existing.saveDays === profile.saveDays
         ) {
           return list; // unchanged
         }

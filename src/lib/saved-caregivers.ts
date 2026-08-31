@@ -1,10 +1,11 @@
 import type { ShareableState, ShareParentPrefs } from "@/lib/share";
+import type { GoalMode } from "@/lib/goal-seek";
 import type { ParentId, ParentInput } from "@/lib/calc";
 
 /**
- * A reusable slice of a caregiver's info, so you don't retype name, income
- * and föräldralön settings for every new plan. Kept alongside saved plans in
- * localStorage (its own key), and applied to a parent when you create a plan.
+ * A reusable slice of a caregiver's info, so you don't retype name, income,
+ * föräldralön and goal settings for every new plan. Kept alongside saved plans
+ * in localStorage (its own key), and applied to a parent when you create a plan.
  */
 export interface CaregiverProfile {
   id: string;
@@ -18,6 +19,11 @@ export interface CaregiverProfile {
   supplementPct: number;
   worksPartTime: boolean;
   extraDays: number;
+  goalMode: GoalMode;
+  goalDate: string;
+  goalMonths: number;
+  goalBudget: number;
+  saveDays: number;
   savedAt: string;
 }
 
@@ -38,6 +44,11 @@ export function profileFromForm(form: ShareableState, id: ParentId): CaregiverPr
     supplementPct: p.supplementPct ?? 90,
     worksPartTime: p.worksPartTime ?? false,
     extraDays: p.extraDays ?? 0,
+    goalMode: p.goalMode ?? "budget",
+    goalDate: p.goalDate ?? "",
+    goalMonths: p.goalMonths ?? 6,
+    goalBudget: p.goalBudget ?? 0,
+    saveDays: p.saveDays ?? 20,
     savedAt: new Date().toISOString(),
   };
 }
@@ -72,6 +83,11 @@ export function applyProfile(
         supplementPct: profile.supplementPct,
         worksPartTime: profile.worksPartTime,
         extraDays: profile.extraDays,
+        goalMode: profile.goalMode,
+        goalDate: profile.goalDate,
+        goalMonths: profile.goalMonths,
+        goalBudget: profile.goalBudget,
+        saveDays: profile.saveDays,
       },
     },
   };

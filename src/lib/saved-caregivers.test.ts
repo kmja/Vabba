@@ -38,10 +38,35 @@ const form: ShareableState = {
       supplementPct: 95,
       worksPartTime: true,
       extraDays: 30,
+      goalMode: "untilDate",
+      goalDate: "2027-06-01",
+      goalMonths: 6,
+      goalBudget: 0,
+      saveDays: 40,
     },
     B: {},
   },
 };
+
+const profile = (over: Partial<CaregiverProfile> = {}): CaregiverProfile => ({
+  id: "p1",
+  name: "Niki",
+  grossMonthlyIncome: 42000,
+  incomeAboveCap: false,
+  meets240DayRule: true,
+  supplement: true,
+  supplementMonths: 9,
+  supplementPct: 95,
+  worksPartTime: true,
+  extraDays: 30,
+  goalMode: "budget",
+  goalDate: "",
+  goalMonths: 6,
+  goalBudget: 0,
+  saveDays: 20,
+  savedAt: "2026-01-01T00:00:00.000Z",
+  ...over,
+});
 
 describe("saved caregiver profiles", () => {
   it("extracts a profile from the plan and its prefs", () => {
@@ -52,70 +77,35 @@ describe("saved caregiver profiles", () => {
     expect(p.worksPartTime).toBe(true);
     expect(p.extraDays).toBe(30);
     expect(p.meets240DayRule).toBe(true);
+    expect(p.goalMode).toBe("untilDate");
+    expect(p.goalDate).toBe("2027-06-01");
+    expect(p.saveDays).toBe(40);
   });
 
   it("applies a profile onto a fresh plan's caregiver", () => {
-    const profile: CaregiverProfile = {
-      id: "p1",
-      name: "Niki",
-      grossMonthlyIncome: 42000,
-      incomeAboveCap: false,
-      meets240DayRule: true,
-      supplement: true,
-      supplementMonths: 9,
-      supplementPct: 95,
-      worksPartTime: true,
-      extraDays: 30,
-      savedAt: "2026-01-01T00:00:00.000Z",
-    };
     const fresh: ShareableState = {
       ...form,
       plan: defaultPlanInput(""),
       parents: { A: {}, B: {} },
     };
-    const out = applyProfile(fresh, "A", profile);
+    const out = applyProfile(fresh, "A", profile());
     expect(out.plan.parents.A.name).toBe("Niki");
     expect(out.plan.parents.A.grossMonthlyIncome).toBe(42000);
     expect(out.parents.A.supplementMonths).toBe(9);
+    expect(out.parents.A.goalMode).toBe("budget");
+    expect(out.parents.A.saveDays).toBe(20);
     expect(out.plan.parents.B.name).toBeUndefined();
   });
 
   it("upserts by name so the same person isn't duplicated", () => {
-    const base: CaregiverProfile[] = [
-      {
-        id: "old",
-        name: "Niki",
-        grossMonthlyIncome: 100,
-        incomeAboveCap: false,
-        meets240DayRule: true,
-        supplement: true,
-        supplementMonths: 6,
-        supplementPct: 90,
-        worksPartTime: false,
-        extraDays: 0,
-        savedAt: "2026-01-01T00:00:00.000Z",
-      },
-    ];
-    const next = upsertProfile(base, { ...base[0], grossMonthlyIncome: 42000 }, () => "new");
+    const next = upsertProfile([profile({ grossMonthlyIncome: 100 })], profile({ grossMonthlyIncome: 42000 }), () => "new");
     expect(next).toHaveLength(1);
-    expect(next[0].id).toBe("old"); // updated in place, same id
+    expect(next[0].id).toBe("p1"); // updated in place, same id
     expect(next[0].grossMonthlyIncome).toBe(42000);
   });
 
   it("adds a genuinely new person to the end of the list", () => {
-    const next = upsertProfile([], {
-      id: "",
-      name: "Kalle",
-      grossMonthlyIncome: 30000,
-      incomeAboveCap: false,
-      meets240DayRule: true,
-      supplement: true,
-      supplementMonths: 6,
-      supplementPct: 90,
-      worksPartTime: false,
-      extraDays: 0,
-      savedAt: "2026-01-01T00:00:00.000Z",
-    }, () => "fresh");
+    const next = upsertProfile([], profile({ id: "", name: "Kalle" }), () => "fresh");
     expect(next).toHaveLength(1);
     expect(next[0].id).toBe("fresh");
   });

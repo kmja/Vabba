@@ -1095,16 +1095,9 @@ export function Wizard({
                   const profile = savedCaregivers.find((c) => c.id === e.target.value);
                   if (!profile) return;
                   onApplySavedCaregiver?.(profile, id);
-                  // The profile fills name + income; advance to the next
-                  // question this caregiver still needs to answer.
-                  const qid = id.toLowerCase();
-                  const next = cgFlow(id).find(
-                    (q) =>
-                      q !== `${qid}-q-name` &&
-                      q !== `${qid}-q-income` &&
-                      !isAnswered(q),
-                  );
-                  if (next) openQ(next, true);
+                  // Auto-apply fills this caregiver's whole step — go on to
+                  // the next caregiver's questions.
+                  flushSync(() => goTo(Math.min(current + 1, stepCount), true));
                 }}
               >
                 <option value="">Välj …</option>
