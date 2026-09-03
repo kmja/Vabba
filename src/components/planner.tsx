@@ -728,7 +728,6 @@ export function Planner() {
         names,
         rateOf,
         lagstanivaDailyAmount(),
-        addYears(birth, 1),
       ),
     };
   }, [form.periods, periodBudgets, deadlines, nameA, nameB, rateA, rateB]);

@@ -16,7 +16,6 @@ describe("periodIntervals", () => {
     overrunDays: 0,
     ...over,
   });
-  const oneYear = new Date(Date.UTC(2025, 10, 1));
 
   it("skips birth and zero-day periods", () => {
     const r = periodIntervals(
@@ -24,7 +23,6 @@ describe("periodIntervals", () => {
       { A: "Niki", B: "Kalle" },
       () => 600,
       180,
-      oneYear,
     );
     expect(r).toHaveLength(1); // the 0-day + birth are dropped
     expect(r[0].caregiver).toBe("Niki");
@@ -33,7 +31,7 @@ describe("periodIntervals", () => {
   });
 
   it("uses the phase-1 pace entirely before the birthday", () => {
-    const r = periodIntervals([p({ caregiver: "B" })], { A: "Niki", B: "Kalle" }, () => 900, 180, oneYear);
+    const r = periodIntervals([p({ caregiver: "B" })], { A: "Niki", B: "Kalle" }, () => 900, 180);
     expect(r[0].pace).toBe(0.5);
     expect(r[0].monthly).toBe(Math.round((900 * 0.5 * 30.4) / 7));
   });
@@ -44,7 +42,6 @@ describe("periodIntervals", () => {
       { A: "Niki", B: "Kalle" },
       () => 900,
       180,
-      oneYear,
     );
     expect(r[0].tier).toBe("lagsta");
     expect(r[0].monthly).toBe(Math.round((180 * 5 * 30.4) / 7));
@@ -56,7 +53,6 @@ describe("periodIntervals", () => {
       { A: "Niki", B: "Kalle" },
       () => 600,
       180,
-      oneYear,
     );
     // A single block per stretch, at the start pace — the SGI lift is shown by
     // the pager, not by splitting into a second block (matches the goal view).

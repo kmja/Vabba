@@ -25,7 +25,6 @@ export function periodIntervals(
   names: Record<"A" | "B", string>,
   rateOf: (cg: "A" | "B") => number,
   lagstaRate: number,
-  _oneYear: Date | null,
 ): LeaveInterval[] {
   return periods
     .filter((p) => p.days > 0 && p.kind !== "birth")
