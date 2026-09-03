@@ -51,7 +51,7 @@ import {
   solvePlan,
   type CaregiverPlanSpec,
 } from "@/lib/goal-seek";
-import { buildPlanPeriods, type PlanDaySplit } from "@/lib/periods";
+import { buildPlanPeriods, periodsFromPlan, type PlanDaySplit } from "@/lib/periods";
 import { periodIntervals } from "@/lib/plan-periods";
 import { reorderPeriods, splitPeriod } from "@/lib/period-ops";
 import { addPeriod, editPeriodDays } from "@/lib/period-ops";
@@ -706,16 +706,59 @@ export function Planner() {
 
   // If the user has configured leave periods, drive the timeline from those
   // (dates / days / SGI pace) instead of the goal-based solve.
+  // The goal optimiser's output is an editable period list (periodsFromPlan),
+  // seeded as the default so the schedule always runs through ONE period model.
+  const split: PlanDaySplit | null = useMemo(() => {
+    if (soloMode && solo) {
+      return {
+        incomeDays: { A: solo.payout.sjukpenningDays + extraA, B: 0 },
+        lagstaDays: { A: solo.payout.lagstaDays, B: 0 },
+        doubleDays: 0,
+        birthDays: 0,
+        first: "A",
+      };
+    }
+    if (twoParent) {
+      const rec = twoParent.recommended;
+      return {
+        incomeDays: {
+          A: rec.allocation.A.sjukpenning + extraA,
+          B: rec.allocation.B.sjukpenning + extraB,
+        },
+        lagstaDays: { A: rec.allocation.A.lagsta, B: rec.allocation.B.lagsta },
+        doubleDays: rec.doubleDays ?? 0,
+        birthDays: birthDays?.days ?? 0,
+        first: firstCaregiver,
+      };
+    }
+    return null;
+  }, [soloMode, solo, twoParent, extraA, extraB, firstCaregiver, birthDays]);
+
   const periodPlan = useMemo(() => {
-    const list = form.periods ?? [];
+    const list =
+      (form.periods && form.periods.length > 0 ? form.periods : null) ??
+      (split ? periodsFromPlan(split) : null) ??
+      [];
     if (list.length === 0 || !deadlines) return null;
     const birth = deadlines.birth;
+    const phases = {
+      A: (() => {
+        const o = planSolve?.perCaregiver.find((x) => x.name === nameA);
+        return o ? { phase1: o.paces.phase1, phase2: o.paces.phase2 } : undefined;
+      })(),
+      B: (() => {
+        const o = planSolve?.perCaregiver.find((x) => x.name === nameB);
+        return o ? { phase1: o.paces.phase1, phase2: o.paces.phase2 } : undefined;
+      })(),
+    };
     const built = buildPlanPeriods({
       periods: list,
       budgets: periodBudgets,
       start: birth,
       oneYear: addYears(birth, 1),
       incomeDeadline: deadlines.sjukpenningDeadline,
+      phases,
+      dubbeldagarDelay: birthDays?.days ?? 0,
     });
     const names: Record<"A" | "B", string> = { A: nameA, B: nameB };
     const rateOf = (cg: "A" | "B") => (cg === "A" ? rateA : rateB);
@@ -730,7 +773,7 @@ export function Planner() {
         lagstanivaDailyAmount(),
       ),
     };
-  }, [form.periods, periodBudgets, deadlines, nameA, nameB, rateA, rateB]);
+  }, [form.periods, split, periodBudgets, deadlines, nameA, nameB, rateA, rateB, planSolve, birthDays]);
 
   const projection: LeaveProjection | null = useMemo(
     () =>

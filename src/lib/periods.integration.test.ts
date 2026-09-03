@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { buildPlanPeriods, periodsFromPlan, solvePeriods } from "@/lib/periods";
+import { addDays } from "@/lib/dates";
 import { resolveStretch, SGI_MIN_DAYS_PER_WEEK } from "@/lib/stretch";
 import type { PeriodSpec } from "@/lib/share";
 
@@ -57,7 +58,7 @@ describe("buildPlanPeriods (state → dated plan)", () => {
     expect(a.startsAt.getTime()).toBe(start.getTime());
   });
 
-  it("dates a dubbeldagar window sequentially, drawing from both budgets", () => {
+  it("dates a dubbeldagar window overlapping the start without advancing the cursor", () => {
     const r = buildPlanPeriods({
       periods: [
         { id: "d", caregiver: "A", kind: "dubbeldagar", days: 20 },
@@ -70,8 +71,12 @@ describe("buildPlanPeriods (state → dated plan)", () => {
     });
     const d = r.periods.find((p) => p.id === "d")!;
     const a = r.periods.find((p) => p.id === "a")!;
+    // The shared window starts at the start (no delay) and is a fixed calendar
+    // window; it overlaps rather than chaining — the next period still begins
+    // at the start.
     expect(d.startsAt.getTime()).toBe(start.getTime());
-    expect(a.startsAt.getTime()).toBe(d.endsAt.getTime());
+    expect(d.endsAt.getTime()).toBe(addDays(start, 20).getTime());
+    expect(a.startsAt.getTime()).toBe(start.getTime());
   });
 
   it("reordering fixed periods changes their date order", () => {
@@ -102,7 +107,7 @@ describe("buildPlanPeriods (state → dated plan)", () => {
 });
 
 describe("periodsFromPlan (goal output = editable period list)", () => {
-  it("emits birth (locked) first, then dubbeldagar, then income before lagsta per caregiver", () => {
+  it("emits birth, leading caregiver, dubbeldagar, then the other — income before lagsta", () => {
     const r = periodsFromPlan({
       incomeDays: { A: 150, B: 140 },
       lagstaDays: { A: 90, B: 90 },
@@ -111,11 +116,12 @@ describe("periodsFromPlan (goal output = editable period list)", () => {
       first: "A",
     });
     expect(r.map((p) => p.kind)).toEqual([
-      "birth", "dubbeldagar", "fixed", "fixed", "fixed", "fixed",
+      "birth", "fixed", "fixed", "dubbeldagar", "fixed", "fixed",
     ]);
     expect(r[0]).toMatchObject({ caregiver: "B", kind: "birth", locked: true });
-    expect(r[2]).toMatchObject({ caregiver: "A", tier: "income", days: 150 });
-    expect(r[3]).toMatchObject({ caregiver: "A", tier: "lagsta", days: 90 });
+    expect(r[1]).toMatchObject({ caregiver: "A", tier: "income", days: 150 });
+    expect(r[2]).toMatchObject({ caregiver: "A", tier: "lagsta", days: 90 });
+    expect(r[3]).toMatchObject({ caregiver: "B", kind: "dubbeldagar" });
     expect(r[5]).toMatchObject({ caregiver: "B", tier: "lagsta", days: 90 });
   });
 

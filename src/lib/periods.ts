@@ -23,7 +23,8 @@
  */
 
 import type { PeriodSpec } from "@/lib/share";
-import { resolveStretch } from "@/lib/stretch";
+import { addDays } from "@/lib/dates";
+import { resolveStretch, YEAR1_PACE } from "@/lib/stretch";
 
 export type PeriodKind = "fixed" | "leftover" | "dubbeldagar" | "birth";
 
@@ -161,15 +162,23 @@ export function periodsFromPlan(split: PlanDaySplit): PeriodSpec[] {
   if (split.birthDays > 0) {
     out.push({ id: "birth", caregiver: other, kind: "birth", days: split.birthDays, tier: "income", locked: true });
   }
-  if (split.doubleDays > 0) {
-    out.push({ id: "dubbeldagar-0", caregiver: split.first, kind: "dubbeldagar", days: split.doubleDays, tier: "income" });
-  }
-  for (const id of [split.first, other] as const) {
+  // The leading caregiver's income (+ lägstanivå) comes first — matching how
+  // the solver orders the first block — then the shared dubbeldagar window,
+  // then the other caregiver's.
+  for (const id of [split.first] as const) {
     const inc = Math.max(0, Math.round(split.incomeDays[id]));
     const lag = Math.max(0, Math.round(split.lagstaDays[id]));
     if (inc > 0) out.push({ id: `${id}-income`, caregiver: id, kind: "fixed", days: inc, tier: "income" });
     if (lag > 0) out.push({ id: `${id}-lagsta`, caregiver: id, kind: "fixed", days: lag, tier: "lagsta" });
   }
+  if (split.doubleDays > 0) {
+    out.push({ id: "dubbeldagar-0", caregiver: other, kind: "dubbeldagar", days: split.doubleDays, tier: "income" });
+  }
+  const otherCg: "A" | "B" = other;
+  const inc = Math.max(0, Math.round(split.incomeDays[otherCg]));
+  const lag = Math.max(0, Math.round(split.lagstaDays[otherCg]));
+  if (inc > 0) out.push({ id: `${otherCg}-income`, caregiver: otherCg, kind: "fixed", days: inc, tier: "income" });
+  if (lag > 0) out.push({ id: `${otherCg}-lagsta`, caregiver: otherCg, kind: "fixed", days: lag, tier: "lagsta" });
   return out;
 }
 
@@ -197,6 +206,13 @@ export interface BuildPeriodsInput {
   start: Date;
   oneYear: Date;
   incomeDeadline: Date;
+  /**
+   * Goal-derived paces per caregiver, so seeded periods run at the pace the
+   * plan actually implies (e.g. a 3-month goal) instead of the slowest one.
+   */
+  phases?: Partial<Record<"A" | "B", { phase1: number; phase2: number }>>;
+  /** How many calendar days after the start a dubbeldagar window begins. */
+  dubbeldagarDelay?: number;
 }
 
 export interface BuildPeriodsResult {
@@ -226,11 +242,14 @@ export function buildPlanPeriods(input: BuildPeriodsInput): BuildPeriodsResult {
   //    move the cursor. The birth giver's leave still begins at `start`.
   for (const al of allocations) {
     if (al.kind !== "birth") continue;
+    const ph = input.phases?.[al.caregiver];
     const stretch = resolveStretch({
       days: al.days,
       start: cursor,
       oneYear: input.oneYear,
       incomeDeadline: input.incomeDeadline,
+      phase1: ph?.phase1,
+      minPhase2: ph?.phase2,
     });
     periods.push({
       ...al,
@@ -245,11 +264,29 @@ export function buildPlanPeriods(input: BuildPeriodsInput): BuildPeriodsResult {
   // 2. Everything else in allocation order, each advancing the cursor.
   for (const al of allocations) {
     if (al.kind === "birth") continue;
+    const ph = input.phases?.[al.caregiver];
+    // Dubbeldagar is a shared calendar window both caregivers are home for,
+    // overlapping the first caregiver's leave — dated as its own block, delayed
+    // past the birth-days, and it does not advance the main cursor.
+    if (al.kind === "dubbeldagar") {
+      const wStart = addDays(start, input.dubbeldagarDelay ?? 0);
+      const pace = ph?.phase1 ?? YEAR1_PACE;
+      periods.push({
+        ...al,
+        startsAt: wStart,
+        endsAt: addDays(wStart, al.days),
+        pace: { phase1: pace, phase2: pace },
+        overrunDays: 0,
+      });
+      continue;
+    }
     const stretch = resolveStretch({
       days: al.days,
       start: cursor,
       oneYear: input.oneYear,
       incomeDeadline: input.incomeDeadline,
+      phase1: ph?.phase1,
+      minPhase2: ph?.phase2,
     });
     periods.push({
       ...al,
@@ -259,6 +296,33 @@ export function buildPlanPeriods(input: BuildPeriodsInput): BuildPeriodsResult {
       overrunDays: stretch.overrunDays,
     });
     cursor = stretch.endsAt;
+  }
+
+  // The lead caregiver draws a FULL day (MAX_PACE) during the dubbeldagar
+  // window — both are home. That creates a pace-break segment at the window,
+  // which the pager merges with the second caregiver's into the "both home"
+  // block. Emit it for the leading caregiver (the one whose open leave the
+  // window overlaps).
+  const dd = allocations.find((a) => a.kind === "dubbeldagar");
+  if (dd) {
+    const wStart = addDays(start, input.dubbeldagarDelay ?? 0);
+    const wEnd = addDays(wStart, dd.days);
+    const leading = allocations.find(
+      (a) => a.kind === "fixed" && a.caregiver !== dd.caregiver,
+    );
+    if (leading) {
+      periods.push({
+        id: `${leading.id}-leadwindow`,
+        caregiver: leading.caregiver,
+        kind: "fixed",
+        days: dd.days,
+        tier: leading.tier,
+        startsAt: wStart,
+        endsAt: wEnd,
+        pace: { phase1: 7, phase2: 7 },
+        overrunDays: 0,
+      });
+    }
   }
   return { periods, unused, warnings };
 }
