@@ -25,40 +25,23 @@ export function periodIntervals(
   names: Record<"A" | "B", string>,
   rateOf: (cg: "A" | "B") => number,
   lagstaRate: number,
-  oneYear: Date | null,
+  _oneYear: Date | null,
 ): LeaveInterval[] {
-  const out: LeaveInterval[] = [];
-  const append = (p: DatedPeriod, startsAt: Date, endsAt: Date, pace: number) => {
-    const daily = p.tier === "lagsta" ? lagstaRate : rateOf(p.caregiver);
-    out.push({
-      startsAt,
-      endsAt,
-      pace,
-      monthly: Math.round((daily * pace * DAYS_PER_MONTH) / 7),
-      tier: p.tier,
-      caregiver: names[p.caregiver],
-      periodId: p.id,
-      kind: p.kind,
-      days: p.days,
+  return periods
+    .filter((p) => p.days > 0 && p.kind !== "birth")
+    .map((p) => {
+      const pace = Math.max(0.5, p.pace.phase1);
+      const daily = p.tier === "lagsta" ? lagstaRate : rateOf(p.caregiver);
+      return {
+        startsAt: p.startsAt,
+        endsAt: p.endsAt,
+        pace,
+        monthly: Math.round((daily * pace * DAYS_PER_MONTH) / 7),
+        tier: p.tier,
+        caregiver: names[p.caregiver],
+        periodId: p.id,
+        kind: p.kind,
+        days: p.days,
+      };
     });
-  };
-
-  for (const p of periods) {
-    if (p.days <= 0 || p.kind === "birth") continue;
-    const p1 = Math.max(0.5, p.pace.phase1);
-    const p2 = Math.max(0.5, p.pace.phase2);
-    const s = p.startsAt.getTime();
-    const e = p.endsAt.getTime();
-    const one = oneYear?.getTime() ?? null;
-
-    if (one != null && s < one && one < e) {
-      append(p, p.startsAt, new Date(one), p1);
-      append(p, new Date(one), p.endsAt, p2);
-    } else if (one != null && e <= one) {
-      append(p, p.startsAt, p.endsAt, p1);
-    } else {
-      append(p, p.startsAt, p.endsAt, p2);
-    }
-  }
-  return out;
 }

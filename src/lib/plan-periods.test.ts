@@ -50,7 +50,7 @@ describe("periodIntervals", () => {
     expect(r[0].monthly).toBe(Math.round((180 * 5 * 30.4) / 7));
   });
 
-  it("splits at the 1st birthday so the pace lifts to the SGI floor", () => {
+  it("keeps a crossing period as ONE interval at the phase-1 pace (one block)", () => {
     const r = periodIntervals(
       [p({ startsAt: new Date(Date.UTC(2025, 0, 1)), endsAt: new Date(Date.UTC(2026, 3, 1)), pace: { phase1: 0.5, phase2: 5 } })],
       { A: "Niki", B: "Kalle" },
@@ -58,13 +58,11 @@ describe("periodIntervals", () => {
       180,
       oneYear,
     );
-    expect(r).toHaveLength(2);
+    // A single block per stretch, at the start pace — the SGI lift is shown by
+    // the pager, not by splitting into a second block (matches the goal view).
+    expect(r).toHaveLength(1);
     expect(r[0].pace).toBe(0.5);
-    expect(r[0].endsAt.getTime()).toBe(oneYear.getTime());
-    expect(r[1].pace).toBe(5);
-    expect(r[1].startsAt.getTime()).toBe(oneYear.getTime());
-    // Same period id on both halves, so edit controls still target it.
     expect(r[0].periodId).toBe("x");
-    expect(r[1].periodId).toBe("x");
+    expect(r[0].kind).toBe("fixed");
   });
 });
